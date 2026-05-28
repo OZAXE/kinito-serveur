@@ -257,6 +257,8 @@ async def traiter_message(code_salon, joueur, message):
         await kinito_annoncer(code_salon, joueur, message.get("score"))
     elif type_msg == "reaction":
         await kinito_reaction(code_salon, joueur, message.get("choix"), message.get("score_cite"))
+    elif type_msg == "abandonner":
+        await kinito_abandonner(code_salon, joueur)
     elif type_msg == "nouvelle_manche":
         await kinito_nouvelle_manche(code_salon, joueur)
 
@@ -439,6 +441,24 @@ async def kinito_reaction(code_salon, joueur, choix, score_cite=None):
                 await fin_manche(code_salon, index_reacteur, False,
                                  f"{nom_reacteur} a accuse a tort", gorgees, None, score_annonce)
 
+
+async def kinito_abandonner(code_salon, joueur):
+    """Le joueur courant assume avoir fait moins que le score a battre."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+
+    # Seul le joueur courant peut abandonner, et seulement s il y a
+    # une annonce a battre (pas a la premiere annonce de la manche).
+    if joueur["index"] != etat["joueur_courant"]:
+        return
+    if etat["premiere_annonce"]:
+        return
+
+    nom = salon["joueurs"][etat["joueur_courant"]]["nom"]
+    # Il boit la colonne simple du score qu il devait battre.
+    gorgees = penalite(etat["annonce_precedente"], False)
+    await fin_manche(code_salon, etat["joueur_courant"], False,
+                     f"{nom} assume avoir fait moins", gorgees, None, etat["annonce_precedente"])
 
 async def fin_manche(code_salon, index_perdant, menteur, message, gorgees, score_reel, score_base):
     """Envoie le resultat d une manche perdue a tous les joueurs."""
