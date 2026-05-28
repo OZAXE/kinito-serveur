@@ -271,6 +271,8 @@ async def traiter_message(code_salon, joueur, message):
         await bb_deplacer(code_salon, salons, diffuser, joueur, message.get("ligne"), message.get("colonne"), message.get("via_carte"), message.get("index_carte"))
     elif type_msg == "bb_attaquer":
         await bb_attaquer(code_salon, salons, diffuser, joueur, message.get("cible"), message.get("index_carte"), message.get("type_attaque"))
+    elif type_msg == "bb_as_deplacer":
+        await bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, message.get("ligne"), message.get("colonne"), message.get("cible"), message.get("index_carte"))
     elif type_msg == "bb_poser_arme":
         await bb_poser_arme(code_salon, salons, diffuser, joueur, message.get("index_carte"))
     elif type_msg == "bb_dame":
@@ -764,6 +766,50 @@ async def bb_deplacer(code_salon, salons, diffuser, joueur, ligne, colonne, via_
     await bb_envoyer_mains(code_salon, salons)
     await bb_envoyer_carte_case(code_salon, salons)
  
+
+async def bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, ligne, colonne, cible, index_carte):
+    """
+    L As : se deplacer d une case vers une cible, puis la frapper en mi-verre.
+    ligne/colonne = destination ; cible = joueur a frapper ; index_carte = l As.
+    """
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    idx = joueur["index"]
+    if etat["phase"] != "jeu" or idx != etat["joueur_courant"] or etat["action_faite"]:
+        return
+
+    # On verifie que la destination est bien a 1 case (deplacement As)
+    moi = etat["positions"][idx]
+    dist = abs(ligne - moi["ligne"]) + abs(colonne - moi["colonne"])
+    if dist > 1:
+        return
+
+    # On se deplace sur la case
+    etat["positions"][idx] = {"ligne": ligne, "colonne": colonne}
+
+    # On verifie que la cible est bien sur cette case
+    pos_cible = etat["positions"][cible]
+    if not pos_cible or pos_cible["ligne"] != ligne or pos_cible["colonne"] != colonne:
+        # Pas de cible valide ici : on annule en remettant la position ? Non,
+        # le deplacement reste valable, on ne frappe juste pas.
+        etat["action_faite"] = True
+        await diffuser(code_salon, bb_etat_public(salon))
+        await bb_envoyer_mains(code_salon, salons)
+        await bb_envoyer_carte_case(code_salon, salons)
+        return
+
+    # Mi-verre sur la cible
+    bb_mi_verre(etat, cible)
+    etat["mains"][idx].pop(index_carte)
+    etat["action_faite"] = True
+    etat["message"] = f"{salon['joueurs'][idx]['nom']} fonce à l'As sur {salon['joueurs'][cible]['nom']}"
+
+    if await bb_verifier_victoire(code_salon, salons, diffuser):
+        return
+    await diffuser(code_salon, bb_etat_public(salon))
+    await bb_envoyer_mains(code_salon, salons)
+    await bb_envoyer_carte_case(code_salon, salons)
+
  
 async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, type_attaque):
     """
