@@ -659,6 +659,8 @@ def bb_etat_public(salon):
         "armes": [[a["type"] for a in armes_j] for armes_j in etat["armes"]],
         "joueur_courant": etat["joueur_courant"],
         "joueur_en_placement": etat["joueur_en_placement"],
+        "action_faite": etat["action_faite"],
+        "max_cartes": etat["max_cartes"],
         "verre_max": BB_VERRE_MAX,
         "message": etat.get("message", ""),
     }
