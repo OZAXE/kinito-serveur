@@ -702,6 +702,27 @@ async def bb_envoyer_mains(code_salon, salons):
             except Exception:
                 pass
  
+
+async def bb_envoyer_carte_case(code_salon, salons):
+    """Envoie au joueur courant le contenu de sa case (a lui seul)."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    import json
+    idx = etat["joueur_courant"]
+    pos = etat["positions"][idx]
+    carte_sol = etat["plateau"][pos["ligne"]][pos["colonne"]]
+    # On retrouve le joueur courant dans la liste des connectes
+    for joueur in salon["joueurs"]:
+        if joueur["index"] == idx:
+            try:
+                await joueur["ws"].send_text(json.dumps({
+                    "type": "bb_carte_case",
+                    "carte": carte_sol,   # None s il n y a pas de carte
+                }))
+            except Exception:
+                pass
+            break
+
  
 async def bb_placer(code_salon, salons, diffuser, joueur, ligne, colonne):
     """Place un joueur sur sa case de depart."""
@@ -741,6 +762,7 @@ async def bb_deplacer(code_salon, salons, diffuser, joueur, ligne, colonne, via_
     etat["action_faite"] = True
     await diffuser(code_salon, bb_etat_public(salon))
     await bb_envoyer_mains(code_salon, salons)
+    await bb_envoyer_carte_case(code_salon, salons)
  
  
 async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, type_attaque):
@@ -807,6 +829,7 @@ async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, 
         return
     await diffuser(code_salon, bb_etat_public(salon))
     await bb_envoyer_mains(code_salon, salons)
+    await bb_envoyer_carte_case(code_salon, salons)
  
  
 async def bb_poser_arme(code_salon, salons, diffuser, joueur, index_carte):
@@ -824,6 +847,7 @@ async def bb_poser_arme(code_salon, salons, diffuser, joueur, index_carte):
     etat["action_faite"] = True
     await diffuser(code_salon, bb_etat_public(salon))
     await bb_envoyer_mains(code_salon, salons)
+    await bb_envoyer_carte_case(code_salon, salons)
  
  
 async def bb_dame(code_salon, salons, diffuser, joueur, cible, index_carte):
@@ -839,7 +863,7 @@ async def bb_dame(code_salon, salons, diffuser, joueur, cible, index_carte):
     etat["message"] = f"{salon['joueurs'][idx]['nom']} remet à zéro le verre de {salon['joueurs'][cible]['nom']}"
     await diffuser(code_salon, bb_etat_public(salon))
     await bb_envoyer_mains(code_salon, salons)
- 
+    await bb_envoyer_carte_case(code_salon, salons)
  
 async def bb_ne_rien_faire(code_salon, salons, diffuser, joueur):
     """Le joueur passe son action."""
@@ -849,6 +873,7 @@ async def bb_ne_rien_faire(code_salon, salons, diffuser, joueur):
         return
     etat["action_faite"] = True
     await diffuser(code_salon, bb_etat_public(salon))
+    await bb_envoyer_carte_case(code_salon, salons)
  
  
 async def bb_ramasser(code_salon, salons, diffuser, joueur, decision, index_echange):
