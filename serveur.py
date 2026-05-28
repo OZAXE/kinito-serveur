@@ -339,6 +339,7 @@ async def kinito_lancer(code_salon, joueur):
         "type": "ton_score",
         "score": score,
         "scores_possibles": ECHELLE,
+        "premiere_annonce": etat["premiere_annonce"],
     }))
 
 
