@@ -8,7 +8,7 @@ Architecture :
 - Chaque action est envoyee au serveur via WebSocket
 - Le serveur met a jour l etat et le renvoie a tous les joueurs
 """
-
+import math
 import asyncio
 import json
 import random
@@ -1011,7 +1011,6 @@ async def bb_verifier_victoire(code_salon, salons, diffuser):
 # vote pour les choix moraux, gestion des classes et avatars,
 # resolution des tests (de + competence vs difficulte).
 
-import math
 
 # Coefficients de difficulte (memes que cote page, par paliers nommes)
 AV_DIFFICULTES = {
@@ -1021,42 +1020,50 @@ AV_DIFFICULTES = {
     "difficile": 2.0,
     "cirrhose": 5.0,
 }
-
-# Histoires cote serveur : on stocke juste les ids des scenes et leur type,
-# le contenu narratif (textes, succes, echec) reste cote page. Le serveur
-# n a besoin que de la mecanique (compet, difficulte, gorgees, choix moral).
-# C est la page qui envoie les details quand un test est resolu.
-
-
+ 
+ 
+def _av_pv_max_classe(avatar):
+    """PV max selon la classe (ou 5 par defaut)."""
+    classe = avatar.get("classe")
+    if classe == "Chevalier" or classe == "Sergent d'armes":
+        return 6
+    if classe == "Archer" or classe == "Moine guerrier":
+        return 4
+    if classe == "Éclaireur":
+        return 5
+    return 5
+ 
+ 
 def av_initialiser(nb_joueurs, histoire_id):
     """Initialise l etat d une partie d aventure."""
     return {
-        "phase": "config",          # config (choix classes), jeu, fin
+        "phase": "config",
         "histoire_id": histoire_id,
         "nb_joueurs": nb_joueurs,
         "scene_index": 0,
-        "scene_etape": "lecture",   # lecture, choix_attente, test_attente, vote_attente, resolution
-        "avatars": [],              # rempli pendant la config
-        "classes_choisies": [],     # par index de joueur, None si pas encore
-        "config_joueur": 0,         # joueur en cours de config de classe
+        "scene_etape": "lecture",
+        "avatars": [],
+        "classes_choisies": [],
+        "config_joueur": 0,
         "mode_competences": "aleatoire",
-        "points_supp": [],          # points supplementaires repartis par joueur (mode reparti)
+        "points_supp": [],
         "difficulte": "normal",
         "coef_diff": 1.5,
         "reussites": 0,
         "tests_effectues": 0,
-        # Pour la scene en cours :
-        "scene_courante": None,     # donnees envoyees par l hote au demarrage de chaque scene
-        "qui_tente": None,          # index du joueur qui s est propose
-        "votes": {},                # {index_joueur: index_option} pour les votes
-        "choix_groupe": None,       # option choisie en choix_groupe
-        "resultat_test": None,      # dernier resultat affiche
-        "gorgees": [],              # gorgees cumulees par avatar
+        "scene_courante": None,
+        "qui_tente": None,
+        "votes": {},
+        "choix_groupe": None,
+        "resultat_test": None,
+        "gorgees": [],
+        "pv": [],           # PV courants par joueur (prives sauf si mort)
+        "morts": [],        # liste de booleens, public
     }
-
-
+ 
+ 
 def av_etat_public(salon):
-    """Etat public envoye a tous les joueurs."""
+    """Etat envoye a tous. Les PV restent prives (envoyes separement)."""
     etat = salon["etat"]
     return {
         "type": "av_etat",
@@ -1077,11 +1084,30 @@ def av_etat_public(salon):
         "choix_groupe": etat["choix_groupe"],
         "resultat_test": etat["resultat_test"],
         "gorgees": etat["gorgees"],
+        "morts": etat["morts"],
         "reussites": etat["reussites"],
         "tests_effectues": etat["tests_effectues"],
     }
-
-
+ 
+ 
+async def av_envoyer_pv_prives(code_salon, salons):
+    """Envoie a chaque joueur ses propres PV (cache pour les autres)."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    for joueur in salon["joueurs"]:
+        idx = joueur["index"]
+        if idx >= len(etat["pv"]):
+            continue
+        try:
+            await joueur["ws"].send_text(json.dumps({
+                "type": "av_pv_prive",
+                "pv": etat["pv"][idx],
+                "pv_max": _av_pv_max_classe(etat["avatars"][idx]) if idx < len(etat["avatars"]) else 5,
+            }))
+        except Exception:
+            pass
+ 
+ 
 async def av_demarrer(code_salon, message):
     """Demarre une partie d aventure (envoyee par l hote du salon)."""
     salon = salons[code_salon]
@@ -1092,32 +1118,34 @@ async def av_demarrer(code_salon, message):
     if nb > 5:
         await diffuser(code_salon, {"type": "erreur", "message": "Maximum 5 joueurs."})
         return
-
+ 
     histoire_id = message.get("histoire_id", "akrenos")
     difficulte = message.get("difficulte", "normal")
     mode_compet = message.get("mode_competences", "aleatoire")
-
+ 
     etat = av_initialiser(nb, histoire_id)
     etat["difficulte"] = difficulte
     etat["coef_diff"] = AV_DIFFICULTES.get(difficulte, 1.5)
     etat["mode_competences"] = mode_compet
     etat["classes_choisies"] = [None] * nb
     etat["gorgees"] = [0] * nb
-
-    # Avatars vides au depart, remplis pendant la phase de config
+    etat["pv"] = [5] * nb
+    etat["morts"] = [False] * nb
+ 
     etat["avatars"] = [
         {"nom": j["nom"], "classe": None, "force": 1, "agilite": 1, "ruse": 1}
         for j in salon["joueurs"]
     ]
-
+ 
     salon["jeu"] = "aventure"
     salon["etat"] = etat
     await diffuser(code_salon, {"type": "av_demarree"})
     await diffuser(code_salon, av_etat_public(salon))
-
-
+    await av_envoyer_pv_prives(code_salon, salons)
+ 
+ 
 async def av_choisir_classe(code_salon, joueur, classe_data):
-    """Le joueur en cours de config choisit sa classe (envoyee avec ses stats de base)."""
+    """Le joueur en cours de config choisit sa classe."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "config":
@@ -1125,31 +1153,30 @@ async def av_choisir_classe(code_salon, joueur, classe_data):
     idx = joueur["index"]
     if idx != etat["config_joueur"]:
         return
-
-    # classe_data : {"nom": ..., "force": ..., "agilite": ..., "ruse": ...}
+ 
     av = etat["avatars"][idx]
     av["classe"] = classe_data.get("nom")
     av["force"] = classe_data.get("force", 1)
     av["agilite"] = classe_data.get("agilite", 1)
     av["ruse"] = classe_data.get("ruse", 1)
     etat["classes_choisies"][idx] = classe_data.get("nom")
+    # Ajuste les PV selon la classe
+    etat["pv"][idx] = _av_pv_max_classe(av)
     etat["config_joueur"] += 1
-
+ 
     if etat["config_joueur"] >= etat["nb_joueurs"]:
-        # Tous les joueurs ont choisi leur classe : attribuer les points supplementaires
         await av_attribuer_points(code_salon)
     else:
         await diffuser(code_salon, av_etat_public(salon))
-
-
+        await av_envoyer_pv_prives(code_salon, salons)
+ 
+ 
 async def av_attribuer_points(code_salon):
-    """Attribue les 3 points supplementaires (aleatoire ou debut de repartition)."""
-    import random
+    """Attribue les 3 points supplementaires."""
     salon = salons[code_salon]
     etat = salon["etat"]
-
+ 
     if etat["mode_competences"] == "aleatoire":
-        # Attribution aleatoire de 3 points par joueur
         for av in etat["avatars"]:
             for _ in range(3):
                 stat = random.choice(["force", "agilite", "ruse"])
@@ -1158,16 +1185,17 @@ async def av_attribuer_points(code_salon):
         etat["scene_index"] = 0
         etat["scene_etape"] = "lecture"
         await diffuser(code_salon, av_etat_public(salon))
+        await av_envoyer_pv_prives(code_salon, salons)
     else:
-        # Mode reparti : on passe en phase de repartition
         etat["phase"] = "repartition"
         etat["config_joueur"] = 0
         etat["points_supp"] = [0] * etat["nb_joueurs"]
         await diffuser(code_salon, av_etat_public(salon))
-
-
+        await av_envoyer_pv_prives(code_salon, salons)
+ 
+ 
 async def av_repartir(code_salon, joueur, force, agilite, ruse):
-    """Le joueur en cours de repartition valide ses 3 points supplementaires."""
+    """Repartition de 3 points supplementaires."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "repartition":
@@ -1175,45 +1203,40 @@ async def av_repartir(code_salon, joueur, force, agilite, ruse):
     idx = joueur["index"]
     if idx != etat["config_joueur"]:
         return
-
-    # Verifie que la somme des points ajoutes est exactement 3
     if (force + agilite + ruse) != 3 or force < 0 or agilite < 0 or ruse < 0:
         return
-
+ 
     av = etat["avatars"][idx]
     av["force"] += force
     av["agilite"] += agilite
     av["ruse"] += ruse
     etat["config_joueur"] += 1
-
+ 
     if etat["config_joueur"] >= etat["nb_joueurs"]:
         etat["phase"] = "jeu"
         etat["scene_index"] = 0
         etat["scene_etape"] = "lecture"
-
+ 
     await diffuser(code_salon, av_etat_public(salon))
-
-
+    await av_envoyer_pv_prives(code_salon, salons)
+ 
+ 
 async def av_scene_demarrer(code_salon, joueur, scene_data):
-    """L hote (un joueur) annonce le demarrage d une nouvelle scene.
-    Le contenu de la scene (textes, choix) est envoye par la page de l hote
-    pour que le serveur le rediffuse a tous."""
+    """L hote (un joueur) annonce le demarrage d une nouvelle scene."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu":
         return
-    # Seul le createur du salon (premier joueur) peut faire avancer le rythme
     if joueur["index"] != 0:
         return
-
+ 
     etat["scene_courante"] = scene_data
     etat["qui_tente"] = None
     etat["votes"] = {}
     etat["choix_groupe"] = None
     etat["resultat_test"] = None
     etat["scene_etape"] = "lecture"
-
-    # Selon le type de scene, on change directement d etape
+ 
     scene_type = scene_data.get("type")
     if scene_type == "narration":
         etat["scene_etape"] = "lecture"
@@ -1227,132 +1250,164 @@ async def av_scene_demarrer(code_salon, joueur, scene_data):
         etat["scene_etape"] = "vote_attente"
     elif scene_type == "finale":
         etat["scene_etape"] = "lecture"
-
+ 
     await diffuser(code_salon, av_etat_public(salon))
-
-
+ 
+ 
 async def av_continuer(code_salon, joueur):
-    """Premier-qui-clique pour passer une scene de narration (le 1er valide)."""
+    """Premier-qui-clique pour passer une narration."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu":
         return
-    # Premier-qui-clique : la 1ere personne fait avancer
+    if etat["morts"][joueur["index"]]:
+        return
     etat["scene_index"] += 1
     etat["scene_courante"] = None
     etat["scene_etape"] = "lecture"
     await diffuser(code_salon, av_etat_public(salon))
-
-
+ 
+ 
 async def av_choisir_option(code_salon, joueur, index_option):
-    """Premier-qui-clique pour un choix de groupe (combat ou ruse)."""
+    """Premier-qui-clique pour un choix de groupe tactique."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu" or etat["scene_etape"] != "choix_attente":
         return
+    if etat["morts"][joueur["index"]]:
+        return
     etat["choix_groupe"] = index_option
     etat["scene_etape"] = "test_attente"
     await diffuser(code_salon, av_etat_public(salon))
-
-
+ 
+ 
 async def av_je_le_fais(code_salon, joueur):
-    """Premier-qui-clique : un joueur se propose pour tenter le test."""
+    """Premier-qui-clique : un joueur se propose pour le test."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu" or etat["scene_etape"] != "test_attente":
         return
+    if etat["morts"][joueur["index"]]:
+        return
     if etat["qui_tente"] is not None:
-        return  # quelqu un s est deja propose
+        return
     etat["qui_tente"] = joueur["index"]
     etat["scene_etape"] = "lancer_attente"
     await diffuser(code_salon, av_etat_public(salon))
-
-
+ 
+ 
 async def av_lancer_de(code_salon, joueur, scene_data, compet_valeur, difficulte):
-    """Le joueur qui s est propose (ou n importe qui pour test de groupe) lance le de.
-    La page envoie compet_valeur (valeur de la competence du tentant, ou calcul de groupe)
-    et difficulte (deja calculee selon le contexte)."""
-    import random
+    """Lance le de et applique les 4 paliers de consequences."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu":
         return
-
-    # Pour test_solo : seul qui_tente peut lancer
-    # Pour test_groupe : premier-qui-clique
+    if etat["morts"][joueur["index"]]:
+        return
+ 
     scene_type = scene_data.get("type", "")
     if scene_type == "test_solo" and joueur["index"] != etat["qui_tente"]:
         return
-
     if scene_type == "test_groupe" and etat["qui_tente"] is None:
         etat["qui_tente"] = joueur["index"]
-
+ 
     de = random.randint(1, 6)
     total = de + compet_valeur
-    reussi = total >= difficulte
-
-    # Application des gorgees (cote serveur : on stocke juste, la page affiche le detail)
+    ecart = total - difficulte
+ 
+    if ecart >= 3:
+        palier = "reussite_franche"; reussi = True
+    elif ecart >= 0:
+        palier = "reussite_limite"; reussi = True
+    elif ecart >= -2:
+        palier = "echec_limite"; reussi = False
+    else:
+        palier = "echec_franc"; reussi = False
+ 
     gorgees_base = scene_data.get("gorgees_base", 3)
-    gorgees_appliquees = []  # liste de (index, gorgees)
-
-    if not reussi:
-        if scene_type == "test_groupe":
-            # Tout le monde boit
-            for i in range(etat["nb_joueurs"]):
-                g = math.ceil(gorgees_base * etat["coef_diff"])
-                etat["gorgees"][i] += g
-                gorgees_appliquees.append([i, g])
-        else:
-            # Le tentant boit
-            idx = etat["qui_tente"]
-            g = math.ceil(gorgees_base * etat["coef_diff"])
-            etat["gorgees"][idx] += g
-            gorgees_appliquees.append([idx, g])
-
+    pas_de_pv = scene_data.get("pas_de_pv", False)
+ 
+    if palier == "reussite_franche":
+        gorgees_par_joueur = 0; pv_perdus = 0
+    elif palier == "reussite_limite":
+        gorgees_par_joueur = 0
+        pv_perdus = 0 if pas_de_pv else 1
+    elif palier == "echec_limite":
+        gorgees_par_joueur = math.ceil(gorgees_base * etat["coef_diff"])
+        pv_perdus = 0 if pas_de_pv else 1
+    else:  # echec_franc
+        gorgees_par_joueur = math.ceil(gorgees_base * 1.5 * etat["coef_diff"])
+        pv_perdus = 0 if pas_de_pv else 2
+ 
+    gorgees_appliquees = []
+    pv_appliques = []
+    morts_publiques = []
+ 
+    cibles = list(range(etat["nb_joueurs"])) if scene_type == "test_groupe" else [etat["qui_tente"]]
+    for idx in cibles:
+        if etat["morts"][idx]:
+            continue
+        if gorgees_par_joueur > 0:
+            etat["gorgees"][idx] += gorgees_par_joueur
+            gorgees_appliquees.append([idx, gorgees_par_joueur])
+        if pv_perdus > 0:
+            etat["pv"][idx] = max(0, etat["pv"][idx] - pv_perdus)
+            pv_appliques.append([idx, pv_perdus, etat["pv"][idx]])
+            if etat["pv"][idx] == 0 and not etat["morts"][idx]:
+                etat["morts"][idx] = True
+                morts_publiques.append(idx)
+ 
     if reussi:
         etat["reussites"] += 1
     etat["tests_effectues"] += 1
-
+ 
     etat["resultat_test"] = {
         "de": de,
         "compet": compet_valeur,
         "total": total,
         "difficulte": difficulte,
         "reussi": reussi,
+        "palier": palier,
         "qui_tente": etat["qui_tente"],
         "gorgees_appliquees": gorgees_appliquees,
+        "pv_appliques": pv_appliques,
+        "morts": morts_publiques,
     }
     etat["scene_etape"] = "resolution"
     await diffuser(code_salon, av_etat_public(salon))
-
-
+    await av_envoyer_pv_prives(code_salon, salons)
+ 
+ 
 async def av_voter(code_salon, joueur, index_option):
-    """Un joueur vote pour un choix libre (choix moral)."""
+    """Vote pour un choix moral. Seuls les vivants votent."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu" or etat["scene_etape"] != "vote_attente":
         return
+    if etat["morts"][joueur["index"]]:
+        return
     etat["votes"][str(joueur["index"])] = index_option
-
-    # Si tout le monde a vote, on resout
-    if len(etat["votes"]) >= etat["nb_joueurs"]:
-        # Comptage des votes
+ 
+    # Nombre de vivants
+    nb_vivants = sum(1 for m in etat["morts"] if not m)
+    if len(etat["votes"]) >= nb_vivants:
         compteurs = {}
         for v in etat["votes"].values():
             compteurs[v] = compteurs.get(v, 0) + 1
-        # Le choix majoritaire l emporte (en cas d egalite : le 1er des choix gagne)
         choix_gagnant = max(compteurs.items(), key=lambda x: x[1])[0]
         etat["choix_groupe"] = choix_gagnant
         etat["scene_etape"] = "resolution"
-
+ 
     await diffuser(code_salon, av_etat_public(salon))
-
-
+ 
+ 
 async def av_terminer_scene(code_salon, joueur):
-    """Premier-qui-clique pour passer a la scene suivante apres une resolution."""
+    """Premier-qui-clique pour passer a la scene suivante."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu" or etat["scene_etape"] != "resolution":
+        return
+    if etat["morts"][joueur["index"]]:
         return
     etat["scene_index"] += 1
     etat["scene_courante"] = None
@@ -1362,10 +1417,10 @@ async def av_terminer_scene(code_salon, joueur):
     etat["resultat_test"] = None
     etat["scene_etape"] = "lecture"
     await diffuser(code_salon, av_etat_public(salon))
-
-
+ 
+ 
 async def av_terminer(code_salon, joueur):
-    """L hote termine la partie (declenche la fin avec bilan)."""
+    """Termine la partie."""
     salon = salons[code_salon]
     etat = salon["etat"]
     if etat["phase"] != "jeu":
@@ -1387,7 +1442,9 @@ async def av_terminer(code_salon, joueur):
         "tests_effectues": etat["tests_effectues"],
         "gorgees": etat["gorgees"],
         "avatars": etat["avatars"],
+        "morts": etat["morts"],
     })
+ 
 
 
 # =============================================================
