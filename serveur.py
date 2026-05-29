@@ -1227,7 +1227,7 @@ async def av_scene_demarrer(code_salon, joueur, scene_data):
     etat = salon["etat"]
     if etat["phase"] != "jeu":
         return
-    if joueur["index"] != 0:
+    if etat["morts"][joueur["index"]]:
         return
  
     etat["scene_courante"] = scene_data
