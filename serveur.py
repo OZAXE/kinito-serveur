@@ -1057,8 +1057,10 @@ def av_initialiser(nb_joueurs, histoire_id):
         "choix_groupe": None,
         "resultat_test": None,
         "gorgees": [],
-        "pv": [],           # PV courants par joueur (prives sauf si mort)
-        "morts": [],        # liste de booleens, public
+        "pv": [],               # PV courants par joueur (prives sauf si mort)
+        "morts": [],            # liste de booleens, public
+        "traitres": [],         # indices secrets des joueurs desigenes traitres
+        "traitres_reveles": [], # indices des traitres dont le role est devoile
     }
  
  
@@ -1085,6 +1087,7 @@ def av_etat_public(salon):
         "resultat_test": etat["resultat_test"],
         "gorgees": etat["gorgees"],
         "morts": etat["morts"],
+        "traitres_reveles": etat.get("traitres_reveles", []),
         "reussites": etat["reussites"],
         "tests_effectues": etat["tests_effectues"],
     }
@@ -1142,8 +1145,22 @@ async def av_demarrer(code_salon, message):
     await diffuser(code_salon, {"type": "av_demarree"})
     await diffuser(code_salon, av_etat_public(salon))
     await av_envoyer_pv_prives(code_salon, salons)
- 
- 
+
+    # Designation aleatoire des traitres si l histoire en prevoit
+    nb_traitres = message.get("nb_traitres", 0)
+    if isinstance(nb_traitres, int) and 0 < nb_traitres < nb:
+        indices = random.sample(range(nb), nb_traitres)
+        etat["traitres"] = indices
+        for idx in indices:
+            for joueur_t in salon["joueurs"]:
+                if joueur_t["index"] == idx:
+                    try:
+                        await joueur_t["ws"].send_text(json.dumps({"type": "av_tu_es_traitre"}))
+                    except Exception:
+                        pass
+                    break
+
+
 async def av_choisir_classe(code_salon, joueur, classe_data):
     """Le joueur en cours de config choisit sa classe."""
     salon = salons[code_salon]
@@ -1425,7 +1442,7 @@ async def av_terminer(code_salon, joueur):
     etat = salon["etat"]
     if etat["phase"] != "jeu":
         return
-    if joueur["index"] != 0:
+    if etat["morts"][joueur["index"]]:
         return
     etat["phase"] = "fin"
     ratio = etat["reussites"] / etat["tests_effectues"] if etat["tests_effectues"] > 0 else 0
