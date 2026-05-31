@@ -303,6 +303,14 @@ async def traiter_message(code_salon, joueur, message):
         await av_voter(code_salon, joueur, message.get("index_option"))
     elif type_msg == "av_terminer_scene":
         await av_terminer_scene(code_salon, joueur)
+    elif type_msg == "av_proposer_alliance":
+        await av_proposer_alliance(code_salon, joueur, message.get("cible"))
+    elif type_msg == "av_trahir":
+        await av_trahir(code_salon, joueur)
+    elif type_msg == "av_passer_trahison":
+        await av_passer_trahison(code_salon, joueur)
+    elif type_msg == "av_confronter":
+        await av_confronter(code_salon, joueur)
     elif type_msg == "av_terminer":
         await av_terminer(code_salon, joueur)
         
@@ -1061,6 +1069,10 @@ def av_initialiser(nb_joueurs, histoire_id):
         "morts": [],            # liste de booleens, public
         "traitres": [],         # indices secrets des joueurs desigenes traitres
         "traitres_reveles": [], # indices des traitres dont le role est devoile
+        "confrontation_acteur": None,
+        "trahison_resultat": None,
+        "alliances": {},             # {index: index} paires mutuelles secretes
+        "alliance_propositions": {}, # {index: target_or_None} pendant la scene
     }
  
  
@@ -1088,6 +1100,8 @@ def av_etat_public(salon):
         "gorgees": etat["gorgees"],
         "morts": etat["morts"],
         "traitres_reveles": etat.get("traitres_reveles", []),
+        "confrontation_acteur": etat.get("confrontation_acteur"),
+        "trahison_resultat": etat.get("trahison_resultat"),
         "reussites": etat["reussites"],
         "tests_effectues": etat["tests_effectues"],
     }
@@ -1146,10 +1160,11 @@ async def av_demarrer(code_salon, message):
     await diffuser(code_salon, av_etat_public(salon))
     await av_envoyer_pv_prives(code_salon, salons)
 
-    # Designation aleatoire des traitres si l histoire en prevoit
+    # Designation aleatoire des traitres si l histoire en prevoit (50 % de chance qu il y en ait)
     nb_traitres = message.get("nb_traitres", 0)
     if isinstance(nb_traitres, int) and 0 < nb_traitres < nb:
-        indices = random.sample(range(nb), nb_traitres)
+        nb_reel = random.randint(0, nb_traitres)
+        indices = random.sample(range(nb), nb_reel) if nb_reel > 0 else []
         etat["traitres"] = indices
         for idx in indices:
             for joueur_t in salon["joueurs"]:
@@ -1267,8 +1282,39 @@ async def av_scene_demarrer(code_salon, joueur, scene_data):
         etat["scene_etape"] = "vote_attente"
     elif scene_type == "finale":
         etat["scene_etape"] = "lecture"
- 
+    elif scene_type == "trahison_possible":
+        etat["confrontation_acteur"] = None
+        etat["trahison_resultat"] = None
+        traitres_actifs = [i for i in etat.get("traitres", []) if not etat["morts"][i]]
+        etat["scene_etape"] = "trahison_attente" if traitres_actifs else "lecture"
+    elif scene_type == "alliance_possible":
+        etat["alliance_propositions"] = {}
+        vivants = [i for i in range(etat["nb_joueurs"]) if not etat["morts"][i]]
+        etat["scene_etape"] = "alliance_attente" if len(vivants) >= 2 else "lecture"
+
     await diffuser(code_salon, av_etat_public(salon))
+
+    if scene_type == "trahison_possible":
+        for idx in etat.get("traitres", []):
+            if not etat["morts"][idx]:
+                for j in salon["joueurs"]:
+                    if j["index"] == idx:
+                        try:
+                            await j["ws"].send_text(json.dumps({"type": "av_trahison_option"}))
+                        except Exception:
+                            pass
+
+    if scene_type == "alliance_possible" and etat["scene_etape"] == "alliance_attente":
+        noms = {j["index"]: j["nom"] for j in salon["joueurs"]}
+        for idx in range(etat["nb_joueurs"]):
+            if not etat["morts"][idx]:
+                autres = [{"index": i, "nom": noms.get(i, "?")} for i in range(etat["nb_joueurs"]) if i != idx and not etat["morts"][i]]
+                for j in salon["joueurs"]:
+                    if j["index"] == idx:
+                        try:
+                            await j["ws"].send_text(json.dumps({"type": "av_alliance_proposer", "autres": autres}))
+                        except Exception:
+                            pass
  
  
 async def av_continuer(code_salon, joueur):
@@ -1432,10 +1478,139 @@ async def av_terminer_scene(code_salon, joueur):
     etat["votes"] = {}
     etat["choix_groupe"] = None
     etat["resultat_test"] = None
+    etat["confrontation_acteur"] = None
+    etat["trahison_resultat"] = None
     etat["scene_etape"] = "lecture"
     await diffuser(code_salon, av_etat_public(salon))
- 
- 
+
+
+async def av_proposer_alliance(code_salon, joueur, cible):
+    """Un joueur propose une alliance (cible = index ou None pour passer)."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    if etat["phase"] != "jeu" or etat["scene_etape"] != "alliance_attente":
+        return
+    if etat["morts"][joueur["index"]]:
+        return
+    if joueur["index"] in etat["alliance_propositions"]:
+        return  # deja vote
+
+    etat["alliance_propositions"][joueur["index"]] = cible
+
+    vivants = [i for i in range(etat["nb_joueurs"]) if not etat["morts"][i]]
+    if len(etat["alliance_propositions"]) >= len(vivants):
+        await _traiter_alliances(code_salon)
+
+
+async def _traiter_alliances(code_salon):
+    """Detecte les paires mutuelles, forme les alliances, avance la scene."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    props = etat["alliance_propositions"]
+    noms = {j["index"]: j["nom"] for j in salon["joueurs"]}
+
+    for a, b in list(props.items()):
+        if b is not None and props.get(b) == a and etat["alliances"].get(a) != b:
+            etat["alliances"][a] = b
+            etat["alliances"][b] = a
+
+    # Notifications privees aux allies
+    for idx, allie in etat["alliances"].items():
+        nom_allie = noms.get(allie, "?")
+        for j in salon["joueurs"]:
+            if j["index"] == idx:
+                try:
+                    await j["ws"].send_text(json.dumps({"type": "av_alliance_formee", "allie_index": allie, "allie_nom": nom_allie}))
+                except Exception:
+                    pass
+
+    etat["alliance_propositions"] = {}
+    etat["scene_index"] += 1
+    etat["scene_courante"] = None
+    etat["scene_etape"] = "lecture"
+    await diffuser(code_salon, av_etat_public(salon))
+
+
+async def av_trahir(code_salon, joueur):
+    """Le traitre decide de passer a l acte : lance la confrontation."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    if etat["phase"] != "jeu" or etat["scene_etape"] != "trahison_attente":
+        return
+    if joueur["index"] not in etat.get("traitres", []):
+        return
+    if etat["morts"][joueur["index"]]:
+        return
+    etat["confrontation_acteur"] = joueur["index"]
+    etat["scene_etape"] = "confrontation"
+    await diffuser(code_salon, av_etat_public(salon))
+
+
+async def av_passer_trahison(code_salon, joueur):
+    """Le traitre renonce (ou timer expire). La scene s avance comme une narration."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    if etat["phase"] != "jeu" or etat["scene_etape"] != "trahison_attente":
+        return
+    if joueur["index"] not in etat.get("traitres", []):
+        return
+    etat["scene_index"] += 1
+    etat["scene_courante"] = None
+    etat["scene_etape"] = "lecture"
+    etat["confrontation_acteur"] = None
+    etat["trahison_resultat"] = None
+    await diffuser(code_salon, av_etat_public(salon))
+
+
+async def av_confronter(code_salon, joueur):
+    """Premier clic pendant la confrontation. Determine si la trahison reussit."""
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    if etat["phase"] != "jeu" or etat["scene_etape"] != "confrontation":
+        return
+    if etat["morts"][joueur["index"]]:
+        return
+
+    traitre_idx = etat["confrontation_acteur"]
+    est_traitre = (joueur["index"] == traitre_idx) or (etat.get("alliances", {}).get(joueur["index"]) == traitre_idx)
+
+    pv_appliques = []
+    morts_publiques = []
+
+    if est_traitre:
+        pv_max = _av_pv_max_classe(etat["avatars"][traitre_idx]) if traitre_idx < len(etat["avatars"]) else 5
+        etat["pv"][traitre_idx] = min(etat["pv"][traitre_idx] + 1, pv_max)
+        for i in range(etat["nb_joueurs"]):
+            if i != traitre_idx and not etat["morts"][i]:
+                etat["pv"][i] = max(0, etat["pv"][i] - 2)
+                pv_appliques.append([i, 2, etat["pv"][i]])
+                if etat["pv"][i] == 0:
+                    etat["morts"][i] = True
+                    morts_publiques.append(i)
+        etat["trahison_resultat"] = "reussie"
+    else:
+        if traitre_idx not in etat["traitres_reveles"]:
+            etat["traitres_reveles"].append(traitre_idx)
+        etat["pv"][traitre_idx] = max(0, etat["pv"][traitre_idx] - 2)
+        pv_appliques.append([traitre_idx, 2, etat["pv"][traitre_idx]])
+        if etat["pv"][traitre_idx] == 0 and not etat["morts"][traitre_idx]:
+            etat["morts"][traitre_idx] = True
+            morts_publiques.append(traitre_idx)
+        etat["trahison_resultat"] = "ratee"
+
+    etat["resultat_test"] = {
+        "trahison": True,
+        "reussi": est_traitre,
+        "qui_tente": traitre_idx,
+        "premier_clic": joueur["index"],
+        "pv_appliques": pv_appliques,
+        "morts": morts_publiques,
+    }
+    etat["scene_etape"] = "resolution"
+    await diffuser(code_salon, av_etat_public(salon))
+    await av_envoyer_pv_prives(code_salon, salons)
+
+
 async def av_terminer(code_salon, joueur):
     """Termine la partie."""
     salon = salons[code_salon]
