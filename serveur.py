@@ -123,6 +123,7 @@ def construire_etat_public(code_salon):
         "phase": etat["phase"],
         "message": etat.get("message", ""),
         "partis": etat.get("partis", []),
+        "difficulte": etat.get("difficulte", DIFFICULTE_DEFAUT),
     }
 
 
@@ -155,6 +156,20 @@ SCORE_ANNULE = 51
 # 31 et 51 se resolvent des le lancer : on ne peut pas les annoncer.
 # 31 reste dans ECHELLE car il sert de plancher au classement.
 SCORES_ANNONCABLES = [s for s in ECHELLE if s != SCORE_CHANGE_SENS]
+
+# Difficulte : multiplicateur applique aux gorgees en fin de manche.
+# Par defaut 1.0, pour que les clients qui n envoient pas de difficulte
+# (la version 2D) gardent exactement le comportement d avant.
+DIFFICULTES = {"facile": 0.5, "normal": 0.75, "difficile": 1.0}
+DIFFICULTE_DEFAUT = "difficile"
+
+
+def appliquer_difficulte(etat, gorgees):
+    """Ajuste le nombre de gorgees selon la difficulte du salon."""
+    if gorgees is None or gorgees <= 0:
+        return gorgees          # None = cul sec, 0 = pas de penalite
+    mult = etat.get("multiplicateur", 1.0)
+    return max(1, math.floor(gorgees * mult + 0.5))
 
 
 def rang(score):
@@ -445,6 +460,12 @@ async def demarrer_kinito(code_salon, message):
 
     etat = initialiser_etat_kinito(nb)
     etat["nb_joueurs"] = nb
+
+    difficulte = (message or {}).get("difficulte", DIFFICULTE_DEFAUT)
+    if difficulte not in DIFFICULTES:
+        difficulte = DIFFICULTE_DEFAUT
+    etat["difficulte"] = difficulte
+    etat["multiplicateur"] = DIFFICULTES[difficulte]
     salon["etat"] = etat
     salon["jeu"] = "kinito"
 
@@ -550,7 +571,12 @@ async def kinito_annoncer(code_salon, joueur, score_annonce):
         "annonceur": nom_annonceur,
         "reacteur": nom_reacteur,
         "index_reacteur": index_reacteur,
-        # On ne donne PAS le score annonce aux autres (regle d attention)
+        # Le score annonce est fourni pour que les clients qui le souhaitent
+        # puissent l afficher brievement a tous (version 3D, ou les joueurs
+        # peuvent etre a distance et ne pas s entendre). Le client 2D ne lit
+        # pas ce champ : il garde sa regle d attention, l annonce y reste
+        # purement verbale.
+        "score_annonce": score_annonce,
     })
 
     # On envoie separement au reacteur pour qu il sache que c est son tour
@@ -651,6 +677,7 @@ async def fin_manche(code_salon, index_perdant, menteur, message, gorgees, score
     salon = salons[code_salon]
     etat = salon["etat"]
     nom_perdant = salon["joueurs"][index_perdant]["nom"]
+    gorgees = appliquer_difficulte(etat, gorgees)
 
     # Le prochain tour repart du joueur apres le perdant
     etat["joueur_courant"] = joueur_suivant(etat, index_perdant)
