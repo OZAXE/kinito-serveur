@@ -333,6 +333,44 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
             pass
         await diffuser(code_salon, construire_etat_public(code_salon))
 
+    elif salon.get("etat") is not None and salon.get("jeu") == "beerbattle":
+        # BeerBattle ne renvoyait RIEN a la reconnexion : le client restait
+        # sur l etat d avant la coupure. Et si c etait le tour du revenant,
+        # personne d autre ne jouait -- donc plus aucune diffusion pour le
+        # reveiller : les autres voyaient "c est son tour", lui voyait
+        # "ce n est pas ton tour", et la partie etait figee pour de bon.
+        # On lui renvoie donc son instantane, a lui seul.
+        etat_bb = salon["etat"]
+        idx = joueur["index"]
+        try:
+            await ws.send_text(json.dumps({
+                "type": "bb_demarree",
+                "joueurs": [j["nom"] for j in salon["joueurs"]],
+            }))
+            await ws.send_text(json.dumps(bb_etat_public(salon)))
+            # Sa main est secrete : elle part sur sa seule WebSocket. Un
+            # arrivant tardif n a pas de place dans l etat (les cartes sont
+            # distribuees au lancement) : il n a donc pas de main.
+            if idx < etat_bb["nb_joueurs"]:
+                await ws.send_text(json.dumps({
+                    "type": "bb_ta_main",
+                    "main": etat_bb["mains"][idx],
+                    "mon_index": idx,
+                }))
+                # S il s etait coupe en plein ramassage, il lui faut aussi le
+                # contenu de sa case pour pouvoir finir son tour.
+                if (etat_bb["phase"] == "jeu"
+                        and etat_bb["joueur_courant"] == idx
+                        and etat_bb["action_faite"]):
+                    pos = etat_bb["positions"][idx]
+                    if pos:
+                        await ws.send_text(json.dumps({
+                            "type": "bb_carte_case",
+                            "carte": etat_bb["plateau"][pos["ligne"]][pos["colonne"]],
+                        }))
+        except Exception:
+            pass
+
     try:
         # Boucle principale : on ecoute les messages de ce joueur
         async for message_brut in ws.iter_text():
@@ -931,11 +969,38 @@ def bb_etat_public(salon):
 # =============================================================
  
 async def bb_demarrer(code_salon, salons, diffuser):
-    """Demarre une partie BeerBattle."""
+    """
+    Demarre (ou relance) une partie BeerBattle.
+
+    C est ici qu un spectateur entre vraiment dans le jeu : quelqu un arrive
+    en cours de partie ne peut pas etre insere (les cartes sont distribuees
+    au lancement), mais il est dans salon["joueurs"], donc la manche suivante
+    le prend en compte comme tout le monde.
+    """
     salon = salons[code_salon]
+
+    # Les places laissees vides en cours de partie ne doivent pas etre
+    # redistribuees : on herisserait la nouvelle partie d un siege que
+    # personne ne joue, et le tour s y bloquerait. Renumeroter est sans
+    # danger ICI, et seulement ici : une nouvelle partie commence, il n y a
+    # plus aucun index a preserver -- contrairement a un depart en plein jeu.
+    if any(j.get("parti") for j in salon["joueurs"]):
+        salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+        for i, j in enumerate(salon["joueurs"]):
+            j["index"] = i
+        await envoyer_indices(code_salon)
+
     nb = len(salon["joueurs"])
     if nb < 3:
         await diffuser(code_salon, {"type": "erreur", "message": "BeerBattle nécessite au moins 3 joueurs."})
+        return
+    # 54 cartes : 36 au sol plus les mains. A six, la distribution deborde du
+    # paquet et bb_initialiser leve une IndexError. On refuse proprement.
+    if nb > 5:
+        await diffuser(code_salon, {
+            "type": "erreur",
+            "message": f"BeerBattle se joue à 5 au maximum ({nb} connectés) : il n'y a pas assez de cartes au-delà.",
+        })
         return
     salon["etat"] = bb_initialiser(nb)
     salon["jeu"] = "beerbattle"
