@@ -1,5 +1,5 @@
 """
-Serveur multijoueur pour le Kinito, BeerBattle et Buckshot.
+Serveur multijoueur pour le Kinito, BeerBattle, Buckshot et Picolopoly.
 Technologie : FastAPI + WebSockets pour la communication temps reel.
 
 Architecture :
@@ -14,8 +14,16 @@ import json
 import random
 import secrets
 import string
+import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+# Le moteur de Picolopoly vit dans son propre fichier : c est un Monopoly
+# complet, et il est pur (ni reseau ni asyncio), donc testable hors ligne.
+from picolopoly import (
+    PP_CASES, PP_JOUEURS_MIN, PP_JOUEURS_MAX,
+    pp_initialiser, pp_ajouter_joueur, pp_action, pp_expirer, pp_armer,
+    pp_etat_public, pp_prochaine_echeance,
+)
 
 # =============================================================
 # CREATION DE L APPLICATION FASTAPI
@@ -324,6 +332,14 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
                 etat_courant["dernier_reel"].append(0)
                 etat_courant["message"] = nom_joueur + " rejoint la partie."
 
+        # Picolopoly : une partie dure une heure, on fait une place a
+        # l arrivant (argent de depart, case Depart) tant qu on reste a 6.
+        elif etat_courant is not None and salon.get("jeu") == "picolopoly":
+            presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+            if (presents <= PP_JOUEURS_MAX and etat_courant["phase"] != "fin"
+                    and joueur["index"] == etat_courant["nb_joueurs"]):
+                pp_ajouter_joueur(etat_courant, nom_joueur)
+
     # On informe tout le monde qu un joueur a rejoint (ou est revenu)
     await diffuser(code_salon, {
         "type": "joueur_rejoint",
@@ -400,6 +416,21 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
         # A tout le monde : un arrivant agrandit la table pour les autres aussi.
         await diffuser(code_salon, bt_etat_public(salon))
 
+    elif salon.get("etat") is not None and salon.get("jeu") == "picolopoly":
+        # Retour ou arrivee : le plateau a lui seul, l etat a tous (la table a
+        # pu s agrandir). Le revenant n est plus absent : on lui rend un
+        # delai normal au lieu de celui, tres court, qui joue a sa place.
+        try:
+            await ws.send_text(json.dumps({
+                "type": "pp_demarree",
+                "joueurs": [j["nom"] for j in salon["joueurs"]],
+                "plateau": PP_CASES,
+            }))
+        except Exception:
+            pass
+        pp_armer(salon["etat"])
+        await pp_publier(code_salon, [])
+
     try:
         # Boucle principale : on ecoute les messages de ce joueur
         async for message_brut in ws.iter_text():
@@ -449,6 +480,8 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
                     await kinito_joueur_parti(code_salon, index_parti)
                 elif salon.get("jeu") == "buckshot":
                     await bt_joueur_parti(code_salon, index_parti)
+                elif salon.get("jeu") == "picolopoly":
+                    await pp_joueur_parti(code_salon, index_parti)
 
                 # Plus personne de connecte : on libere le salon.
                 if all(j.get("parti") for j in salon["joueurs"]):
@@ -513,6 +546,12 @@ async def traiter_message(code_salon, joueur, message):
         await bt_jouer_objet(code_salon, salons, diffuser, joueur, message.get("cible"))
     elif type_msg == "bt_tirer":
         await bt_tirer(code_salon, salons, diffuser, joueur, message.get("cible"))
+
+    # --- Actions de Picolopoly (le moteur valide tout) ---
+    elif type_msg == "pp_demarrer":
+        await pp_demarrer(code_salon)
+    elif isinstance(type_msg, str) and type_msg.startswith("pp_"):
+        await pp_traiter(code_salon, joueur, message)
 
 # =============================================================
 # ACTIONS DU KINITO
@@ -1683,6 +1722,119 @@ async def bt_joueur_parti(code_salon, index):
     else:
         return
     await diffuser(code_salon, bt_etat_public(salon))
+
+
+# =============================================================
+# PICOLOPOLY (Monopoly a boire)
+# Les regles sont dans picolopoly.py. Ici : le reseau, et le minuteur qui
+# joue le choix par defaut d un joueur qui ne repond pas (absent, ou parti)
+# et arrete la partie au bout de l heure. Sans lui, un seul joueur qui
+# s absente figerait toute la table.
+# =============================================================
+
+async def pp_demarrer(code_salon):
+    salon = salons[code_salon]
+    if salon.get("jeu") == "picolopoly" and salon.get("etat") and salon["etat"]["phase"] != "fin":
+        return      # deja en cours : un double clic ne relance pas tout
+    # Comme bb_demarrer : on repart des seuls presents, renumerotes. Sur la
+    # relance d une partie finie, une place vide recevrait des tours.
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < PP_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur", "message": "Picolopoly demande au moins 2 joueurs."})
+        return
+    if nb > PP_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur", "message": "Picolopoly se joue a 6 joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    salon["etat"] = pp_initialiser([j["nom"] for j in salon["joueurs"]], time.time())
+    salon["jeu"] = "picolopoly"
+    await diffuser(code_salon, {
+        "type": "pp_demarree",
+        "joueurs": [j["nom"] for j in salon["joueurs"]],
+        "plateau": PP_CASES,
+    })
+    await envoyer_indices(code_salon)
+    await pp_publier(code_salon, [])
+
+
+async def pp_publier(code_salon, evenements):
+    """Envoie les evenements du moteur, puis l etat, puis rearme le minuteur."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "picolopoly" or not salon.get("etat"):
+        return
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, pp_etat_public(salon["etat"], time.time()))
+    pp_programmer(code_salon)
+
+
+def pp_programmer(code_salon):
+    """Un seul minuteur par salon, cale sur la prochaine echeance."""
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("pp_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    echeance = pp_prochaine_echeance(salon["etat"])
+    salon["pp_minuteur"] = None if echeance is None else asyncio.create_task(
+        pp_minuteur(code_salon, salon, echeance))
+
+
+async def pp_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    # Le salon a pu etre libere, ou recree sous le meme code.
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "picolopoly":
+        return
+    # On se retire AVANT d envoyer quoi que ce soit : une action qui arrive
+    # pendant la diffusion rearme le minuteur, et ne doit pas nous annuler
+    # au milieu d un envoi.
+    salon["pp_minuteur"] = None
+    etat = salon["etat"]
+    version = etat["version"]
+    evenements = pp_expirer(etat, time.time())
+    if etat["version"] != version:
+        await pp_publier(code_salon, evenements)
+    else:
+        pp_programmer(code_salon)
+
+
+async def pp_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "picolopoly" or etat is None:
+        return
+    version = etat["version"]
+    evenements = pp_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await pp_publier(code_salon, evenements)
+    else:
+        # Refus : seule l erreur privee part, l etat n a pas bouge.
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+async def pp_joueur_parti(code_salon, index):
+    """
+    La place reste (il la reprend avec son jeton) ; ses tours sont sautes, et
+    si la table l attendait, son choix par defaut part apres quelques
+    secondes au lieu du delai normal.
+    """
+    salon = salons.get(code_salon)
+    if not salon or not salon.get("etat") or salon.get("jeu") != "picolopoly":
+        return
+    etat = salon["etat"]
+    if index >= etat["nb_joueurs"]:
+        return      # un spectateur ne tenait aucune place
+    etat["partis"][index] = True
+    etat["version"] += 1
+    pp_armer(etat)
+    await pp_publier(code_salon, [])
 
 
 # =============================================================
