@@ -310,6 +310,20 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
             etat_courant["message"] = nom_joueur + " rejoint la partie."
             kinito_reprendre(etat_courant)
 
+        # Buckshot n a pas de fin de partie : un arrivant laisse spectateur
+        # le resterait pour toujours. On lui fait donc une place, verre vide
+        # (il sera le chargeur de la prochaine manche) et sans objet jusqu a
+        # la prochaine distribution. Au-dela de 6 presents, il regarde.
+        elif etat_courant is not None and salon.get("jeu") == "buckshot":
+            presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+            if presents <= 6 and joueur["index"] == etat_courant["nb_joueurs"]:
+                etat_courant["nb_joueurs"] += 1
+                etat_courant["gorgees"].append(0)
+                etat_courant["objets"].append(None)
+                etat_courant["menottes"].append(False)
+                etat_courant["dernier_reel"].append(0)
+                etat_courant["message"] = nom_joueur + " rejoint la partie."
+
     # On informe tout le monde qu un joueur a rejoint (ou est revenu)
     await diffuser(code_salon, {
         "type": "joueur_rejoint",
@@ -371,6 +385,21 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
         except Exception:
             pass
 
+    elif salon.get("etat") is not None and salon.get("jeu") == "buckshot":
+        # Meme trou que BeerBattle avant correction : sans instantane, le
+        # revenant restait sur l etat d avant sa coupure, et s il devait
+        # tirer ou charger, la table l attendait sans qu il le sache.
+        try:
+            await ws.send_text(json.dumps({
+                "type": "bt_demarree",
+                "joueurs": [j["nom"] for j in salon["joueurs"]],
+            }))
+            await ws.send_text(json.dumps({"type": "bt_mon_index", "index": joueur["index"]}))
+        except Exception:
+            pass
+        # A tout le monde : un arrivant agrandit la table pour les autres aussi.
+        await diffuser(code_salon, bt_etat_public(salon))
+
     try:
         # Boucle principale : on ecoute les messages de ce joueur
         async for message_brut in ws.iter_text():
@@ -418,6 +447,8 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
                 })
                 if salon.get("jeu") == "kinito":
                     await kinito_joueur_parti(code_salon, index_parti)
+                elif salon.get("jeu") == "buckshot":
+                    await bt_joueur_parti(code_salon, index_parti)
 
                 # Plus personne de connecte : on libere le salon.
                 if all(j.get("parti") for j in salon["joueurs"]):
@@ -1336,14 +1367,28 @@ def bt_initialiser(nb_joueurs):
         "scie_active": False,
         "compteur_reel": 0,         # pour departager les egalites de verre vide
         "dernier_reel": [0] * nb_joueurs,
+        # Composition annoncee a voix haute par le chargeur : publique. Seul
+        # l ORDRE de la pile est secret.
+        "annonce_reel": 0,
+        "annonce_total": 0,
         "message": "",
     }
 
 
-def bt_le_plus_vide(etat):
-    """Index du joueur au verre le plus vide (egalite : dernier a avoir bu du reel)."""
+def bt_absents(salon):
+    """Index des places laissees vides en cours de partie (joueur parti)."""
+    return {j["index"] for j in salon["joueurs"] if j.get("parti")}
+
+
+def bt_le_plus_vide(etat, absents=()):
+    """
+    Index du joueur au verre le plus vide (egalite : dernier a avoir bu du reel).
+    Un absent ne peut pas charger : la manche l attendrait pour toujours.
+    """
     idx, mini, dernier = 0, None, -1
     for i in range(etat["nb_joueurs"]):
+        if i in absents:
+            continue
         g = etat["gorgees"][i]
         if mini is None or g < mini or (g == mini and etat["dernier_reel"][i] > dernier):
             mini, idx, dernier = g, i, etat["dernier_reel"][i]
@@ -1353,6 +1398,7 @@ def bt_le_plus_vide(etat):
 def bt_etat_public(salon):
     """Etat visible par tous. Ne contient JAMAIS le contenu de la pile."""
     etat = salon["etat"]
+    absents = bt_absents(salon)
     return {
         "type": "bt_etat",
         "joueurs": [j["nom"] for j in salon["joueurs"]],
@@ -1364,6 +1410,9 @@ def bt_etat_public(salon):
         "chargeur": etat["chargeur"],
         "pile_reste": len(etat["pile"]),
         "scie_active": etat["scie_active"],
+        "annonce_reel": etat.get("annonce_reel", 0),
+        "annonce_total": etat.get("annonce_total", 0),
+        "partis": [i in absents for i in range(etat["nb_joueurs"])],
         "message": etat.get("message", ""),
     }
 
@@ -1440,17 +1489,24 @@ async def bt_composer(code_salon, salons, diffuser, joueur, total, reel):
 
     etat["menottes"] = [False] * etat["nb_joueurs"]
     etat["scie_active"] = False
+    etat["annonce_reel"] = reel
+    etat["annonce_total"] = total
     etat["courant"] = etat["chargeur"]     # le chargeur ouvre la manche
     etat["phase"] = "objets"
     etat["message"] = "Nouvelle manche : " + str(reel) + " reelle(s) sur " + str(total) + "."
     await diffuser(code_salon, bt_etat_public(salon))
 
 
-def bt_prochain(etat):
-    """Fait passer la main au joueur suivant (en sautant les menottes)."""
+def bt_prochain(etat, absents=()):
+    """
+    Fait passer la main au joueur suivant, en sautant les menottes et les
+    places vides : donner la main a un absent figerait la table.
+    """
     n = etat["nb_joueurs"]
     for _ in range(n + 1):
         etat["courant"] = (etat["courant"] + 1) % n
+        if etat["courant"] in absents:
+            continue
         if etat["menottes"][etat["courant"]]:
             etat["menottes"][etat["courant"]] = False
             etat["message"] = "Menotte : le joueur saute son tour."
@@ -1465,6 +1521,11 @@ async def bt_jouer_objet(code_salon, salons, diffuser, joueur, cible):
     if etat["phase"] != "objets":
         return
     idx = joueur["index"]
+    # Un spectateur (arrive a table pleine) n a pas de place dans l etat :
+    # sans ce garde-fou, objets[idx] levait une IndexError dans la boucle de
+    # la WebSocket, et coupait sa connexion.
+    if idx >= etat["nb_joueurs"]:
+        return
     o = etat["objets"][idx]
     if not o or o["utilise"]:
         return
@@ -1575,7 +1636,7 @@ async def bt_tirer(code_salon, salons, diffuser, joueur, cible):
         await bt_manche_fin(code_salon, salons, diffuser)
         return
     if not rejoue:
-        bt_prochain(etat)
+        bt_prochain(etat, bt_absents(salon))
     await diffuser(code_salon, bt_etat_public(salon))
 
 
@@ -1583,7 +1644,7 @@ async def bt_manche_fin(code_salon, salons, diffuser):
     """Fin de manche : bilan des gorgees, le plus vide rechargera."""
     salon = salons[code_salon]
     etat = salon["etat"]
-    etat["chargeur"] = bt_le_plus_vide(etat)
+    etat["chargeur"] = bt_le_plus_vide(etat, bt_absents(salon))
     etat["phase"] = "composition"
     etat["message"] = "Manche terminee."
     await diffuser(code_salon, {
@@ -1592,6 +1653,35 @@ async def bt_manche_fin(code_salon, salons, diffuser):
         "gorgees": etat["gorgees"],
         "chargeur": etat["chargeur"],
     })
+    await diffuser(code_salon, bt_etat_public(salon))
+
+
+async def bt_joueur_parti(code_salon, index):
+    """
+    Un joueur quitte en pleine partie. Si la table l attendait -- pour tirer,
+    ou pour charger le paquet -- la main passe au present suivant. Sans ca
+    la partie restait figee jusqu a son retour, et pour toujours s il ne
+    revenait pas. Sa place reste dans l etat : il la reprend avec son jeton.
+    """
+    salon = salons.get(code_salon)
+    if not salon or not salon.get("etat") or salon.get("jeu") != "buckshot":
+        return
+    etat = salon["etat"]
+    if index >= etat["nb_joueurs"]:
+        return      # un spectateur ne tenait aucune place
+    absents = bt_absents(salon)
+    if len(absents) >= etat["nb_joueurs"]:
+        return      # plus personne : le salon va etre libere
+
+    nom = salon["joueurs"][index]["nom"]
+    if etat["phase"] == "composition" and etat["chargeur"] == index:
+        etat["chargeur"] = bt_le_plus_vide(etat, absents)
+        etat["message"] = nom + " est parti : " + salon["joueurs"][etat["chargeur"]]["nom"] + " charge a sa place."
+    elif etat["phase"] == "objets" and etat["courant"] == index:
+        bt_prochain(etat, absents)
+        etat["message"] = nom + " est parti : la main passe."
+    else:
+        return
     await diffuser(code_salon, bt_etat_public(salon))
 
 
