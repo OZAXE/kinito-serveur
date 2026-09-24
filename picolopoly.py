@@ -53,11 +53,17 @@ PP_GORGEES_DUEL = 3
 PP_GORGEES_CADEAU = 3
 PP_GORGEES_SOMMELIER = 6
 PP_RETOUR_DEFAUT = 2          # "Retour de baton" sans penalite precedente
-# Cagnotte du Parc gratuit : taxes, amendes des cartes et sorties de prison
+# Cagnotte du Parc Blossac : taxes, amendes des cartes et sorties de prison
 # payees s y accumulent ; s arreter au Parc permet de la rafler contre
 # 1 gorgee par tranche de 50 EUR.
 PP_CAGNOTTE_PAR_GORGEE = 50
 PP_MOTIFS_CAGNOTTE = ["taxe", "carte", "prison"]
+# Roulette : une mise par tour, par tranches de 50 EUR, 1 gorgee par tranche
+# misee (bue quoi qu il sorte). Une mise perdue part dans la cagnotte.
+# Gains : la mise est rendue multipliee par PP_ROULETTE_GAINS[pari].
+PP_ROULETTE_MISE = 50
+PP_ROULETTE_GAINS = {"rouge": 2, "noir": 2, "pair": 2, "impair": 2, "douzaine": 3, "plein": 36}
+PP_ROULETTE_ROUGES = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
 
 # Rythme
 PP_DUREE_PARTIE = 3600        # chrono dur, en secondes
@@ -119,7 +125,7 @@ PP_CASES = [
     _case("caisse", "Caisse de communauté"),
     _prop("Rémi's Pub", "orange", 180, [14, 70, 200, 550, 750, 950], 100),
     _prop("La Mie Câline", "orange", 200, [16, 80, 220, 600, 800, 1000], 100),
-    _case("parc", "Parc gratuit"),
+    _case("parc", "Parc Blossac"),
     _prop("L'Istanbul", "rouge", 220, [18, 90, 250, 700, 875, 1050], 150),
     _case("chance", "Chance"),
     _prop("Le CAP Ristobar", "rouge", 220, [18, 90, 250, 700, 875, 1050], 150),
@@ -364,6 +370,7 @@ def pp_initialiser(noms, maintenant=None):
         "rejouer": False,
         "doubles": 0,
         "echanges_tour": 0,
+        "roulette_jouee": False,
         "des": None,
         "attente": None,
         "dette": None,
@@ -422,6 +429,7 @@ def pp_etat_public(etat, maintenant=None):
         "courant": etat["courant"],
         "phase": etat["phase"],
         "a_lance": etat["a_lance"],
+        "roulette_jouee": etat["roulette_jouee"],
         "doubles": etat["doubles"],
         "des": etat["des"],
         "attente": etat["attente"],
@@ -818,6 +826,7 @@ def _tour_suivant(etat, ev):
     etat["rejouer"] = False
     etat["doubles"] = 0
     etat["echanges_tour"] = 0
+    etat["roulette_jouee"] = False
     etat["suite"] = []
     etat["message"] = "À " + _nom(etat, suivant) + " de jouer."
     ev.append(_tous({"type": "pp_tour", "joueur": suivant}))
@@ -955,6 +964,75 @@ def _lever(etat, ev, i, message):
     p["hypotheque"] = False
     ev.append(_tous({"type": "pp_hypotheque", "joueur": i, "case": c, "hypotheque": False}))
     etat["message"] = _nom(etat, i) + " lève l'hypothèque de " + PP_CASES[c]["nom"] + "."
+    return None
+
+
+# --- Roulette ------------------------------------------------
+
+def _libelle_pari(pari, numero):
+    if pari == "douzaine":
+        return "la " + ("1re" if numero == 1 else str(numero) + "e") + " douzaine"
+    if pari == "plein":
+        return "le " + str(numero)
+    return pari
+
+
+def _pari_gagne(pari, numero, tirage):
+    if pari == "plein":
+        return tirage == numero
+    if tirage == 0:
+        return False      # le zero fait perdre tous les paris simples
+    if pari == "rouge":
+        return tirage in PP_ROULETTE_ROUGES
+    if pari == "noir":
+        return tirage not in PP_ROULETTE_ROUGES
+    if pari == "pair":
+        return tirage % 2 == 0
+    if pari == "impair":
+        return tirage % 2 == 1
+    return (tirage - 1) // 12 + 1 == numero
+
+
+def _roulette(etat, ev, i, message):
+    """
+    Une mise par tour, avant ou apres le lancer. Les gorgees sont le prix
+    d entree, choisi : volontaires, comme celles de la cagnotte.
+    """
+    if not _peut_gerer(etat, i, False):
+        return "La roulette ne tourne que pendant votre tour."
+    if etat["roulette_jouee"]:
+        return "Une seule mise par tour."
+    pari = message.get("pari")
+    if not isinstance(pari, str) or pari not in PP_ROULETTE_GAINS:
+        return "Pari invalide."
+    numero = None
+    if pari in ("douzaine", "plein"):
+        numero = _entier(message.get("numero"))
+        haut = 3 if pari == "douzaine" else 36
+        bas = 1 if pari == "douzaine" else 0
+        if numero is None or not bas <= numero <= haut:
+            return "Numéro invalide."
+    mise = _entier(message.get("mise"))
+    if mise is None or mise < PP_ROULETTE_MISE or mise % PP_ROULETTE_MISE != 0:
+        return "Misez par tranches de " + str(PP_ROULETTE_MISE) + " €."
+    if mise > etat["argent"][i]:
+        return "Pas assez d'argent pour cette mise."
+
+    etat["roulette_jouee"] = True
+    etat["argent"][i] -= mise
+    _boire(etat, ev, [(i, mise // PP_ROULETTE_MISE)], "roulette", volontaire=True)
+    tirage = random.randint(0, 36)
+    gagne = _pari_gagne(pari, numero, tirage)
+    gain = mise * PP_ROULETTE_GAINS[pari] if gagne else 0
+    if gagne:
+        etat["argent"][i] += gain
+    else:
+        etat["cagnotte"] += mise
+    ev.append(_tous({"type": "pp_roulette", "joueur": i, "mise": mise, "pari": pari,
+                     "numero": numero, "tirage": tirage, "gagne": gagne, "gain": gain}))
+    etat["message"] = (_nom(etat, i) + " mise " + str(mise) + " € sur " + _libelle_pari(pari, numero)
+                       + " : le " + str(tirage) + " sort. "
+                       + ("Gagné, " + str(gain) + " € !" if gagne else "Perdu, la mise file dans la cagnotte."))
     return None
 
 
@@ -1260,6 +1338,7 @@ PP_ACTIONS = {
     "pp_prison_carte": _prison_carte,
     "pp_proposer_echange": _proposer_echange,
     "pp_faillite": _declarer_faillite,
+    "pp_roulette": _roulette,
 }
 
 
