@@ -53,6 +53,11 @@ PP_GORGEES_DUEL = 3
 PP_GORGEES_CADEAU = 3
 PP_GORGEES_SOMMELIER = 6
 PP_RETOUR_DEFAUT = 2          # "Retour de baton" sans penalite precedente
+# Cagnotte du Parc gratuit : taxes, amendes des cartes et sorties de prison
+# payees s y accumulent ; s arreter au Parc permet de la rafler contre
+# 1 gorgee par tranche de 50 EUR.
+PP_CAGNOTTE_PAR_GORGEE = 50
+PP_MOTIFS_CAGNOTTE = ["taxe", "carte", "prison"]
 
 # Rythme
 PP_DUREE_PARTIE = 3600        # chrono dur, en secondes
@@ -370,6 +375,7 @@ def pp_initialiser(noms, maintenant=None):
         "version": 0,
         "message": "La partie commence : à " + noms[0] + " de lancer les dés.",
         "classement": None,
+        "cagnotte": 0,
     }
     pp_armer(etat, maintenant)
     return etat
@@ -425,6 +431,7 @@ def pp_etat_public(etat, maintenant=None):
         "temps_restant": max(0, int(etat["fin_prevue"] - maintenant)),
         "delai_restant": None if echeance is None else max(0, int(echeance - maintenant)),
         "classement": etat["classement"],
+        "cagnotte": etat["cagnotte"],
     }
 
 
@@ -432,24 +439,29 @@ def pp_etat_public(etat, maintenant=None):
 # BOIRE, PAYER, SE DEPLACER
 # =============================================================
 
-def _boire(etat, ev, liste, raison, cul_sec=False):
+def _boire(etat, ev, liste, raison, cul_sec=False, volontaire=False):
     """
     liste : [(joueur, gorgees)]. L immunite annule la prochaine penalite,
     quelle qu en soit l origine -- cul sec de faillite compris (spec).
     Un seul message pour tout le groupe : un toast est UN evenement.
+    volontaire : des gorgees qu on a choisi de boire (le prix de la
+    cagnotte). Ce n est pas une penalite : l immunite ne s en mele pas --
+    sinon elle rendrait la cagnotte gratuite -- et le "Retour de baton"
+    ne les compte pas.
     """
     boivent = []
     for i, n in liste:
         if etat["faillite"][i] or (n <= 0 and not cul_sec):
             continue
-        if etat["immunites"][i] > 0:
+        if etat["immunites"][i] > 0 and not volontaire:
             etat["immunites"][i] -= 1
             boivent.append({"joueur": i, "nombre": 0, "immunise": True, "cul_sec": False})
             continue
         boivent.append({"joueur": i, "nombre": n, "immunise": False, "cul_sec": cul_sec})
         if not cul_sec:
             etat["gorgees"][i] += n
-            etat["derniere_penalite"][i] = n
+            if not volontaire:
+                etat["derniere_penalite"][i] = n
     if boivent:
         ev.append(_tous({"type": "pp_gorgees", "raison": raison, "boivent": boivent}))
 
@@ -462,6 +474,8 @@ def _payer(etat, ev, i, montant, creancier, motif):
         etat["argent"][i] -= montant
         if creancier is not None:
             etat["argent"][creancier] += montant
+        elif motif in PP_MOTIFS_CAGNOTTE:
+            etat["cagnotte"] += montant
         ev.append(_tous({"type": "pp_paiement", "de": i, "vers": creancier,
                          "montant": montant, "motif": motif}))
     else:
@@ -590,6 +604,17 @@ def _arrivee(etat, ev):
         _piocher(etat, ev, i, t)
     elif t == "allez_prison":
         _envoyer_prison(etat, ev, i)
+    elif t == "parc" and etat["cagnotte"] > 0:
+        montant = etat["cagnotte"]
+        etat["attente"] = {"type": "parc", "joueur": i, "montant": montant,
+                           "gorgees": _gorgees_cagnotte(montant)}
+        etat["message"] = (_nom(etat, i) + " peut rafler la cagnotte : " + str(montant)
+                           + " € contre " + str(_gorgees_cagnotte(montant)) + " gorgée(s).")
+
+
+def _gorgees_cagnotte(montant):
+    """1 gorgee par tranche de 50 EUR, sans plafond (au moins 1)."""
+    return max(1, montant // PP_CAGNOTTE_PAR_GORGEE)
 
 
 def _monsieur_monopoly(etat, ev, i):
@@ -1108,7 +1133,7 @@ def _choix(etat, ev, i, message):
     t = a["type"]
 
     # Validation d abord, pour ne rien consommer sur une reponse invalide.
-    if t in ("achat", "prison_carte", "echange"):
+    if t in ("achat", "prison_carte", "echange", "parc"):
         if not isinstance(v, bool):
             return "Réponse attendue : oui ou non."
     elif t == "cible":
@@ -1170,6 +1195,17 @@ def _choix(etat, ev, i, message):
         else:
             ev.append(_tous({"type": "pp_echange", "accepte": False, "proposition": a["proposition"]}))
             etat["message"] = _nom(etat, i) + " refuse l'échange."
+    elif t == "parc":
+        if v:
+            montant = etat["cagnotte"]
+            gorgees = _gorgees_cagnotte(montant)
+            etat["argent"][i] += montant
+            etat["cagnotte"] = 0
+            ev.append(_tous({"type": "pp_cagnotte", "joueur": i, "montant": montant, "gorgees": gorgees}))
+            etat["message"] = _nom(etat, i) + " rafle la cagnotte : " + str(montant) + " €."
+            _boire(etat, ev, [(i, gorgees)], "cagnotte", volontaire=True)
+        else:
+            etat["message"] = _nom(etat, i) + " laisse la cagnotte."
 
     _derouler(etat, ev)
     return None
@@ -1191,7 +1227,7 @@ def _duel(etat, ev, i, cible, nombre):
 
 def _valeur_defaut(etat, a):
     t = a["type"]
-    if t in ("achat", "echange"):
+    if t in ("achat", "echange", "parc"):
         return False
     if t == "prison_carte":
         return True
