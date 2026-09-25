@@ -1,5 +1,5 @@
 """
-Serveur multijoueur pour le Kinito, BeerBattle, Buckshot et Picolopoly.
+Serveur multijoueur pour le Kinito, BeerBattle, Buckshot et Picopoly.
 Technologie : FastAPI + WebSockets pour la communication temps reel.
 
 Architecture :
@@ -549,7 +549,7 @@ async def traiter_message(code_salon, joueur, message):
 
     # --- Actions de Picolopoly (le moteur valide tout) ---
     elif type_msg == "pp_demarrer":
-        await pp_demarrer(code_salon)
+        await pp_demarrer(code_salon, message.get("difficulte"))
     elif isinstance(type_msg, str) and type_msg.startswith("pp_"):
         await pp_traiter(code_salon, joueur, message)
 
@@ -1725,14 +1725,14 @@ async def bt_joueur_parti(code_salon, index):
 
 
 # =============================================================
-# PICOLOPOLY (Monopoly a boire)
+# PICOPOLY (Monopoly a boire)
 # Les regles sont dans picolopoly.py. Ici : le reseau, et le minuteur qui
 # joue le choix par defaut d un joueur qui ne repond pas (absent, ou parti)
 # et arrete la partie au bout de l heure. Sans lui, un seul joueur qui
 # s absente figerait toute la table.
 # =============================================================
 
-async def pp_demarrer(code_salon):
+async def pp_demarrer(code_salon, difficulte=None):
     salon = salons[code_salon]
     if salon.get("jeu") == "picolopoly" and salon.get("etat") and salon["etat"]["phase"] != "fin":
         return      # deja en cours : un double clic ne relance pas tout
@@ -1741,14 +1741,14 @@ async def pp_demarrer(code_salon):
     salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
     nb = len(salon["joueurs"])
     if nb < PP_JOUEURS_MIN:
-        await diffuser(code_salon, {"type": "erreur", "message": "Picolopoly demande au moins 2 joueurs."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Picopoly demande au moins 2 joueurs."})
         return
     if nb > PP_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Picolopoly se joue a 6 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Picopoly se joue a 6 joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
-    salon["etat"] = pp_initialiser([j["nom"] for j in salon["joueurs"]], time.time())
+    salon["etat"] = pp_initialiser([j["nom"] for j in salon["joueurs"]], time.time(), difficulte)
     salon["jeu"] = "picolopoly"
     await diffuser(code_salon, {
         "type": "pp_demarree",

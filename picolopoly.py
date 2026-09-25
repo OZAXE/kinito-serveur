@@ -1,5 +1,5 @@
 """
-Moteur de regles de Picolopoly (Monopoly a boire).
+Moteur de regles de Picopoly (Monopoly a boire).
 
 Moteur PUR : pas de WebSocket, pas d asyncio, pas d horloge implicite (le
 temps est toujours passe en parametre). Chaque action prend l etat -- un
@@ -9,7 +9,7 @@ serveur.py s occupe du reseau, des minuteurs, et diffuse pp_etat apres
 chaque action acceptee.
 
 Un message a envoyer est {"a": index du destinataire ou None pour tous,
-"msg": {...}}. Picolopoly n a presque aucun secret : seul l ordre des
+"msg": {...}}. Picopoly n a presque aucun secret : seul l ordre des
 paquets Chance / Caisse de communaute n est jamais diffuse.
 
 Deroulement d un tour :
@@ -42,17 +42,30 @@ PP_MULT_COMPAGNIE = (4, 10)   # x des : une compagnie / les deux
 PP_INTERET_LEVEE = 10         # % ajoutes pour lever une hypotheque
 
 # Gorgees
-PP_GORGEE_PAR_TRANCHE = 50    # 1 gorgee par tranche de 50 EUR...
-PP_GORGEES_MAX = 5            # ...plafonnee
-PP_GORGEES_MIROIR = 1         # le proprietaire qui encaisse distribue
-PP_GORGEES_DEPART = 1         # toast collectif
-PP_GORGEES_PRISON = 1
-PP_GORGEES_ECHANGE = 1        # toast collectif
 PP_GORGEES_DISTRIBUTION = 1   # carte "Distribution generale", par adversaire
-PP_GORGEES_DUEL = 3
-PP_GORGEES_CADEAU = 3
-PP_GORGEES_SOMMELIER = 6
 PP_RETOUR_DEFAUT = 2          # "Retour de baton" sans penalite precedente
+# Difficulte, choisie par le createur du salon. Elle ne fait pas que
+# multiplier : elle decide aussi QUAND on boit.
+#   tranche / plafond  loyers, taxes, cartes : 1 gorgee par tranche de
+#                      "tranche" EUR, au moins 1, au plus "plafond"
+#   depart             passage au Depart : toute la table trinque ("tous"),
+#                      celui qui passe seulement ("joueur"), ou personne
+#   miroir             le proprietaire qui encaisse un loyer fait boire N
+#                      gorgees a qui il veut (0 = il ne distribue rien)
+#   prison / echange   entree en prison ; toast collectif d un echange conclu
+#   duel / cadeau / sommelier   les cartes speciales ({n} dans leur texte)
+# La cagnotte et la roulette ne bougent pas : ce sont des choix, pas des
+# penalites. "difficile" est la partie d origine, et le defaut quand un
+# client n envoie rien.
+PP_DIFFICULTES = {
+    "facile": {"tranche": 100, "plafond": 3, "depart": "personne", "miroir": 0,
+               "prison": 1, "echange": 0, "duel": 2, "cadeau": 2, "sommelier": 4},
+    "normal": {"tranche": 50, "plafond": 4, "depart": "joueur", "miroir": 0,
+               "prison": 1, "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 5},
+    "difficile": {"tranche": 50, "plafond": 5, "depart": "tous", "miroir": 1,
+                  "prison": 1, "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 6},
+}
+PP_DIFFICULTE_DEFAUT = "difficile"
 # Cagnotte du Parc Blossac : taxes, amendes des cartes et sorties de prison
 # payees s y accumulent ; s arreter au Parc permet de la rafler contre
 # 1 gorgee par tranche de 50 EUR.
@@ -161,7 +174,8 @@ for _i, _c in enumerate(PP_CASES):
 # Gains : surtout "distribuer", un "boire" contre-intuitif.
 # Pertes : surtout "boire", un "distribuer" malgre la perte.
 # Les gorgees d un gain / d une perte suivent la meme echelle que les
-# loyers (pp_gorgees_pour).
+# loyers (pp_gorgees_pour). {n} dans un texte : le nombre de gorgees de
+# la difficulte en cours (_texte_carte).
 # =============================================================
 
 PP_CHANCE = [
@@ -196,8 +210,7 @@ PP_CHANCE = [
     {"id": "ch_retour", "effet": "retour_baton",
      "texte": "Retour de bâton : un adversaire boit le double de votre dernière pénalité."},
     {"id": "ch_duel", "effet": "duel",
-     "texte": "Duel : défiez un adversaire au dé. Le plus petit score boit "
-              + str(PP_GORGEES_DUEL) + " gorgées."},
+     "texte": "Duel : défiez un adversaire au dé. Le plus petit score boit {n} gorgées."},
     {"id": "ch_immunite", "effet": "immunite",
      "texte": "Immunité : vous ne boirez pas votre prochaine pénalité, quelle qu'elle soit."},
 ]
@@ -230,11 +243,9 @@ PP_CAISSE = [
     {"id": "ca_distribution", "effet": "distribution_generale",
      "texte": "Distribution générale : tous vos adversaires boivent une gorgée."},
     {"id": "ca_cadeau", "effet": "cadeau", "montant": 100,
-     "texte": "Cadeau empoisonné : la banque vous offre 100 €, mais vous buvez "
-              + str(PP_GORGEES_CADEAU) + " gorgées."},
+     "texte": "Cadeau empoisonné : la banque vous offre 100 €, mais vous buvez {n} gorgées."},
     {"id": "ca_sommelier", "effet": "sommelier",
-     "texte": "Sommelier : répartissez " + str(PP_GORGEES_SOMMELIER)
-              + " gorgées entre vos adversaires comme il vous plaît."},
+     "texte": "Sommelier : répartissez {n} gorgées entre vos adversaires comme il vous plaît."},
 ]
 
 PP_CARTES = {c["id"]: c for c in PP_CHANCE + PP_CAISSE}
@@ -244,11 +255,24 @@ PP_CARTES = {c["id"]: c for c in PP_CHANCE + PP_CAISSE}
 # OUTILS
 # =============================================================
 
-def pp_gorgees_pour(montant):
-    """Gorgees pour un montant : 1 par tranche complete de 50, au moins 1, au plus 5."""
+def pp_regle(etat):
+    """Les reglages de gorgees de la difficulte de la partie."""
+    return PP_DIFFICULTES[etat["difficulte"]]
+
+
+def pp_gorgees_pour(etat, montant):
+    """Gorgees pour un montant : 1 par tranche complete, au moins 1, plafonnees."""
     if montant <= 0:
         return 0
-    return min(PP_GORGEES_MAX, max(1, montant // PP_GORGEE_PAR_TRANCHE))
+    r = pp_regle(etat)
+    return min(r["plafond"], max(1, montant // r["tranche"]))
+
+
+def _texte_carte(etat, carte):
+    """{n} : les gorgees de la carte (duel, cadeau, sommelier) a cette difficulte."""
+    if "{n}" not in carte["texte"]:
+        return carte["texte"]
+    return carte["texte"].replace("{n}", str(pp_regle(etat)[carte["effet"]]))
 
 
 def _tous(msg):
@@ -336,10 +360,16 @@ def pp_patrimoine(etat, i):
 # INITIALISATION
 # =============================================================
 
-def pp_initialiser(noms, maintenant=None):
-    """Etat d une nouvelle partie. noms : prenoms dans l ordre des places."""
+def pp_initialiser(noms, maintenant=None, difficulte=None):
+    """
+    Etat d une nouvelle partie. noms : prenoms dans l ordre des places.
+    difficulte : cle de PP_DIFFICULTES ; toute autre valeur (absente, ou
+    envoyee de travers par un client) donne la difficulte par defaut.
+    """
     if maintenant is None:
         maintenant = time.time()
+    if not isinstance(difficulte, str) or difficulte not in PP_DIFFICULTES:
+        difficulte = PP_DIFFICULTE_DEFAUT
     nb = len(noms)
     chance = [c["id"] for c in PP_CHANCE]
     caisse = [c["id"] for c in PP_CAISSE]
@@ -383,6 +413,7 @@ def pp_initialiser(noms, maintenant=None):
         "message": "La partie commence : à " + noms[0] + " de lancer les dés.",
         "classement": None,
         "cagnotte": 0,
+        "difficulte": difficulte,
     }
     pp_armer(etat, maintenant)
     return etat
@@ -440,6 +471,7 @@ def pp_etat_public(etat, maintenant=None):
         "delai_restant": None if echeance is None else max(0, int(echeance - maintenant)),
         "classement": etat["classement"],
         "cagnotte": etat["cagnotte"],
+        "difficulte": etat["difficulte"],
     }
 
 
@@ -509,7 +541,9 @@ def _passer_depart(etat, ev, i):
     if not etat["de_rapide"][i]:
         etat["de_rapide"][i] = True
         ev.append(_tous({"type": "pp_de_rapide", "joueur": i}))
-    _boire(etat, ev, [(j, PP_GORGEES_DEPART) for j in _vivants(etat)], "toast_depart")
+    qui = pp_regle(etat)["depart"]
+    trinquent = _vivants(etat) if qui == "tous" else [i] if qui == "joueur" else []
+    _boire(etat, ev, [(j, 1) for j in trinquent], "toast_depart")
 
 
 def _envoyer_prison(etat, ev, i):
@@ -532,7 +566,7 @@ def _emprisonner(etat, ev, i):
     ev.append(_tous({"type": "pp_deplacement", "joueur": i, "de": pos,
                      "vers": PP_CASE_PRISON, "sens": 0, "motif": "prison"}))
     etat["message"] = _nom(etat, i) + " va en prison."
-    _boire(etat, ev, [(i, PP_GORGEES_PRISON)], "prison")
+    _boire(etat, ev, [(i, pp_regle(etat)["prison"])], "prison")
 
 
 def _rendre_carte_sortie(etat, i):
@@ -576,7 +610,7 @@ def _executer(etat, ev, etape):
     elif t == "miroir":
         o = etape["proprio"]
         if not etat["faillite"][o]:
-            _demander_cible(etat, o, "miroir", PP_GORGEES_MIROIR, par_carte=False)
+            _demander_cible(etat, o, "miroir", pp_regle(etat)["miroir"], par_carte=False)
     elif t == "monopoly":
         _monsieur_monopoly(etat, ev, i)
 
@@ -598,14 +632,14 @@ def _arrivee(etat, ev):
         elif o != i and not p["hypotheque"]:
             loyer = pp_loyer(etat, c)
             etat["message"] = _nom(etat, i) + " paie " + str(loyer) + " € de loyer à " + _nom(etat, o) + "."
-            _boire(etat, ev, [(i, pp_gorgees_pour(loyer))], "loyer")
-            etat["suite"][0:0] = [
-                {"t": "payer", "montant": loyer, "creancier": o, "motif": "loyer"},
-                {"t": "miroir", "proprio": o},
-            ]
+            _boire(etat, ev, [(i, pp_gorgees_pour(etat, loyer))], "loyer")
+            etapes = [{"t": "payer", "montant": loyer, "creancier": o, "motif": "loyer"}]
+            if pp_regle(etat)["miroir"] > 0:
+                etapes.append({"t": "miroir", "proprio": o})
+            etat["suite"][0:0] = etapes
     elif t == "taxe":
         etat["message"] = _nom(etat, i) + " paie " + case["nom"] + " : " + str(case["montant"]) + " €."
-        _boire(etat, ev, [(i, pp_gorgees_pour(case["montant"]))], "taxe")
+        _boire(etat, ev, [(i, pp_gorgees_pour(etat, case["montant"]))], "taxe")
         etat["suite"].insert(0, {"t": "payer", "montant": case["montant"],
                                  "creancier": None, "motif": "taxe"})
     elif t in ("chance", "caisse"):
@@ -661,9 +695,10 @@ def _piocher(etat, ev, i, paquet):
     effet = carte["effet"]
     if effet != "sortie_prison":
         ids.append(cid)     # remise sous le paquet
+    texte = _texte_carte(etat, carte)
     ev.append(_tous({"type": "pp_carte", "joueur": i, "paquet": paquet,
-                     "carte": {"id": cid, "effet": effet, "texte": carte["texte"]}}))
-    etat["message"] = _nom(etat, i) + " : " + carte["texte"]
+                     "carte": {"id": cid, "effet": effet, "texte": texte}}))
+    etat["message"] = _nom(etat, i) + " : " + texte
 
     if effet == "aller":
         _avancer_vers(etat, ev, i, carte["case"], "carte")
@@ -681,7 +716,7 @@ def _piocher(etat, ev, i, paquet):
         etat["cartes_sortie"][i].append(paquet)
     elif effet == "gain":
         etat["argent"][i] += carte["montant"]
-        g = pp_gorgees_pour(carte["montant"])
+        g = pp_gorgees_pour(etat, carte["montant"])
         if carte["mode"] == "boire":
             _boire(etat, ev, [(i, g)], "carte")
         else:
@@ -694,7 +729,7 @@ def _piocher(etat, ev, i, paquet):
             for p in etat["proprietes"]:
                 if p is not None and p["proprietaire"] == i:
                     montant += carte["hotel"] if p["maisons"] == 5 else p["maisons"] * carte["maison"]
-        g = pp_gorgees_pour(montant)
+        g = pp_gorgees_pour(etat, montant)
         etat["suite"].insert(0, {"t": "payer", "montant": montant,
                                  "creancier": None, "motif": "carte"})
         if carte["mode"] == "boire":
@@ -708,17 +743,17 @@ def _piocher(etat, ev, i, paquet):
         dernier = etat["derniere_penalite"][i]
         _demander_cible(etat, i, "retour", 2 * dernier if dernier > 0 else PP_RETOUR_DEFAUT)
     elif effet == "duel":
-        _demander_cible(etat, i, "duel", PP_GORGEES_DUEL)
+        _demander_cible(etat, i, "duel", pp_regle(etat)["duel"])
     elif effet == "cadeau":
         etat["argent"][i] += carte["montant"]
-        _boire(etat, ev, [(i, PP_GORGEES_CADEAU)], "cadeau")
+        _boire(etat, ev, [(i, pp_regle(etat)["cadeau"])], "cadeau")
     elif effet == "immunite":
         etat["immunites"][i] += 1
     elif effet == "sommelier":
         cibles = _adversaires(etat, i, par_carte=True)
         if cibles:
             etat["attente"] = {"type": "sommelier", "joueur": i,
-                               "total": PP_GORGEES_SOMMELIER, "cibles": cibles}
+                               "total": pp_regle(etat)["sommelier"], "cibles": cibles}
         else:
             etat["message"] = "Personne à servir : tout le monde est à l'abri."
 
@@ -1198,7 +1233,7 @@ def _conclure_echange(etat, ev, prop):
     etat["argent"][cible] += prop["argent_donne"] - prop["argent_recu"]
     ev.append(_tous({"type": "pp_echange", "accepte": True, "proposition": prop}))
     etat["message"] = "Marché conclu entre " + _nom(etat, i) + " et " + _nom(etat, cible) + " : tournée générale !"
-    _boire(etat, ev, [(j, PP_GORGEES_ECHANGE) for j in _vivants(etat)], "toast_echange")
+    _boire(etat, ev, [(j, pp_regle(etat)["echange"]) for j in _vivants(etat)], "toast_echange")
 
 
 # --- Reponse a un choix ---------------------------------------
