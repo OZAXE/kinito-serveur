@@ -30,7 +30,7 @@ import time
 # CONSTANTES DE REGLES -- tout le calibrage se regle ici
 # =============================================================
 PP_JOUEURS_MIN = 2
-PP_JOUEURS_MAX = 6
+PP_JOUEURS_MAX = 8
 
 # Monopoly classique francais
 PP_ARGENT_DEPART = 1500
