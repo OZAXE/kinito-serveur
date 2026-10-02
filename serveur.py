@@ -333,7 +333,7 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
                 etat_courant["message"] = nom_joueur + " rejoint la partie."
 
         # Picolopoly : une partie dure une heure, on fait une place a
-        # l arrivant (argent de depart, case Depart) tant qu on reste a 6.
+        # l arrivant (argent de depart, case Depart) tant qu on reste a 8.
         elif etat_courant is not None and salon.get("jeu") == "picolopoly":
             presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
             if (presents <= PP_JOUEURS_MAX and etat_courant["phase"] != "fin"
@@ -1744,7 +1744,7 @@ async def pp_demarrer(code_salon, difficulte=None):
         await diffuser(code_salon, {"type": "erreur", "message": "Picopoly demande au moins 2 joueurs."})
         return
     if nb > PP_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Picopoly se joue a 6 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Picopoly se joue a 8 joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
