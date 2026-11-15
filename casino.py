@@ -989,7 +989,7 @@ def _pk_suivre(etat, ev, i, message, maintenant):
     t = etat["t"]
     du = t["mise_max"] - t["mise_tour"][i]
     if du <= 0:
-        _pk_apres_action(etat, ev, i, "parle", maintenant)
+        _pk_apres_action(etat, ev, i, "check", maintenant)
         return ev
     paye = _pk_payer(etat, i, du)
     texte = "suit (" + str(paye) + ")" if not t["tapis"][i] else "fait tapis (" + str(paye) + ")"
