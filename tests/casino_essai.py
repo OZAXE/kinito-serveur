@@ -52,7 +52,34 @@ def essais_mains():
     assert C.cs_pari_valide("n36") and not C.cs_pari_valide("n37")
     assert not C.cs_pari_valide("n017") and not C.cs_pari_valide("bleu")
     assert sorted(C.CS_ORDRE_ROUE) == list(range(37))
+    essai_split()
     print("regles : ok")
+
+
+def essai_split():
+    """Une paire de 8 separee : deux mains, deux mises, jouees l une apres l autre."""
+    etat = C.cs_initialiser(["A"], 0)
+    C.cs_action(etat, 0, {"type": "cs_choisir", "jeu": "blackjack"}, 0)
+    C.cs_action(etat, 0, {"type": "cs_bj_miser", "montant": 100}, 0)
+    C.cs_action(etat, 0, {"type": "cs_pret"}, 0)
+    t = etat["t"]
+    # On truque la donne : 8-8 pour le joueur, 10-7 pour le croupier.
+    t["mains"][0] = [C._bj_main(["8S", "8H"], 100)]
+    t["croupier"] = ["TS", "7D"]
+    t["paquet"] = ["2C", "5C", "3D", "TC"]   # tirees par la fin : TC, 3D, 5C, 2C
+    t["courant"], t["main_courante"] = 0, 0
+    etat["phase"] = "jeu"
+    C.cs_action(etat, 0, {"type": "cs_bj_splitter"}, 0)
+    assert [m["cartes"] for m in t["mains"][0]] == [["8S", "TC"], ["8H", "3D"]], t["mains"][0]
+    assert etat["jetons"][0] == 800
+    C.cs_action(etat, 0, {"type": "cs_bj_rester"}, 0)          # 18 sur la main 1
+    assert t["main_courante"] == 1
+    C.cs_action(etat, 0, {"type": "cs_bj_doubler"}, 0)         # 11 + 5 = 16, double
+    assert etat["phase"] == "resultat"
+    # Croupier 17 : main 1 (18) gagne 200, main 2 (16, doublee a 200) perd.
+    assert [m["resultat"] for m in t["mains"][0]] == ["gagné", "perdu"]
+    assert etat["jetons"][0] == 1000 - 100 + 0, etat["jetons"]
+    assert etat["bilan"]["lignes"][0]["delta"] == -100
 
 
 # -------------------------------------------------------------
@@ -68,7 +95,11 @@ def jetons_en_jeu(etat):
             return 0
         return sum(m["montant"] for ms in t["mises"] for m in ms)
     if etat["jeu"] == "blackjack":
-        return 0 if etat["phase"] == "resultat" else sum(t["mises"])
+        if etat["phase"] == "resultat":
+            return 0
+        if etat["phase"] == "mises":
+            return sum(t["mises"])
+        return sum(m["mise"] for mains in t["mains"] for m in mains)
     if etat["jeu"] == "poker":
         return 0 if etat["phase"] == "resultat" else sum(t["engage"])
     return 0
@@ -91,8 +122,13 @@ def verifier(etat, banque):
         for j in range(n):
             assert len(t[ "cartes"][j]) == (2 if t["dans_coup"][j] else 0)
     if etat["jeu"] == "blackjack" and etat["phase"] == "jeu":
-        c = t["courant"]
-        assert t["statuts"][c] == "joue" and C.cs_valeur_bj(t["mains"][c])[0] < 21
+        c, h = t["courant"], t["main_courante"]
+        m = t["mains"][c][h]
+        assert m["statut"] == "joue" and C.cs_valeur_bj(m["cartes"])[0] < 21 and not m["double"]
+        assert len(t["mains"][c]) <= C.CS_BJ_MAINS_MAX
+        for mains in t["mains"]:
+            for mm in mains:
+                assert len(mm["cartes"]) >= 2
     pub = C.cs_etat_public(etat, 0)
     texte = repr(pub)
     assert "paquet" not in texte
@@ -143,12 +179,16 @@ def action_au_hasard(etat, i):
             m = random.choice([10, 20, 50, 100, 500, 5, etat["jetons"][i]])
             if jeu == "roulette":
                 return {"type": "cs_rl_miser", "pari": random.choice(PARIS), "montant": m}
+            if r < 0.07:
+                return {"type": "cs_bj_miser" if jeu == "blackjack" else "cs_rl_miser",
+                        "pari": random.choice(PARIS), "tapis": True}
             return {"type": "cs_bj_miser", "montant": m}
         if r < 0.5:
             return {"type": "cs_rl_annuler" if jeu == "roulette" else "cs_bj_annuler"}
         return {"type": "cs_pret"}
     if phase == "jeu" and jeu == "blackjack":
-        return {"type": random.choice(["cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler"])}
+        return {"type": random.choice(["cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler",
+                                       "cs_bj_splitter", "cs_bj_splitter"])}
     if phase == "jeu" and jeu == "poker":
         k = random.random()
         if k < 0.15:

@@ -165,8 +165,8 @@ def cs_ajouter_joueur(etat, nom):
             t["mises"].append([])
             t["prets"].append(False)
         elif etat["jeu"] == "blackjack":
-            for cle, vide in (("mises", 0), ("prets", False), ("statuts", None), ("doubles", False)):
-                t[cle].append(vide)
+            t["mises"].append(0)
+            t["prets"].append(False)
             t["mains"].append([])
         elif etat["jeu"] == "poker":
             # Il regarde ce coup-ci : hors du coup, considere comme couche.
@@ -317,7 +317,7 @@ def _rl_miser(etat, ev, i, message, maintenant):
     if etat["jeu"] != "roulette" or etat["phase"] != "mises":
         return _erreur(i, "Les jeux sont faits.")
     pari = message.get("pari")
-    montant = _entier(message.get("montant"))
+    montant = etat["jetons"][i] if message.get("tapis") else _entier(message.get("montant"))
     if not cs_pari_valide(pari):
         return _erreur(i, "Pari inconnu.")
     if montant is None or montant < CS_MISE_MIN:
@@ -440,17 +440,26 @@ def _bj_naturel(cartes):
     return len(cartes) == 2 and cs_valeur_bj(cartes)[0] == 21
 
 
+CS_BJ_MAINS_MAX = 4          # split : 4 mains au plus par joueur
+
+
+def _bj_valeur_carte(c):
+    return 10 if c[0] in "TJQK" else (11 if c[0] == "A" else int(c[0]))
+
+
 def _bj_nouveau(etat, maintenant):
     n = etat["nb_joueurs"]
     etat["t"] = {
-        "mises": [0] * n,
+        "mises": [0] * n,          # mise posee pendant la phase des mises
         "prets": [False] * n,
+        # Pendant le coup, chaque joueur a une ou plusieurs mains (split) :
+        # {"cartes", "mise", "statut", "double", "split", "resultat"}
+        # statut : "joue", "reste", "saute", "blackjack".
         "mains": [[] for _ in range(n)],
-        "statuts": [None] * n,     # None, "joue", "reste", "saute", "blackjack", "double"
-        "doubles": [False] * n,
         "croupier": [],
         "cache": True,             # la 2e carte du croupier est cachee
-        "courant": None,
+        "courant": None,           # joueur qui joue...
+        "main_courante": None,     # ... et laquelle de ses mains
         "paquet": [],
         "tires_croupier": 0,
     }
@@ -463,7 +472,10 @@ def _bj_miser(etat, ev, i, message, maintenant):
     t = etat["t"]
     if etat["jeu"] != "blackjack" or etat["phase"] != "mises":
         return _erreur(i, "Les mises sont closes.")
-    montant = _entier(message.get("montant"))
+    if message.get("tapis"):
+        montant = etat["jetons"][i]
+    else:
+        montant = _entier(message.get("montant"))
     if montant is None or montant < CS_MISE_MIN:
         return _erreur(i, "Mise minimum : " + str(CS_MISE_MIN) + " jetons.")
     if montant > etat["jetons"][i]:
@@ -486,73 +498,86 @@ def _bj_annuler(etat, ev, i, message, maintenant):
     return ev
 
 
+def _bj_main(cartes, mise, split=False):
+    return {"cartes": cartes, "mise": mise, "statut": "joue", "double": False,
+            "split": split, "resultat": None}
+
+
 def _bj_distribuer(etat, ev, maintenant):
     t = etat["t"]
     t["paquet"] = _paquet() + _paquet()
     joueurs = [j for j in range(etat["nb_joueurs"]) if t["mises"][j] > 0]
+    for j in joueurs:
+        t["mains"][j] = [_bj_main([], t["mises"][j])]
     for _ in range(2):
         for j in joueurs:
-            t["mains"][j].append(t["paquet"].pop())
+            t["mains"][j][0]["cartes"].append(t["paquet"].pop())
         t["croupier"].append(t["paquet"].pop())
     for j in joueurs:
-        t["statuts"][j] = "blackjack" if _bj_naturel(t["mains"][j]) else "joue"
+        if _bj_naturel(t["mains"][j][0]["cartes"]):
+            t["mains"][j][0]["statut"] = "blackjack"
     etat["phase"] = "jeu"
     etat["message"] = "Cartes distribuées."
     ev.append(_tous({"type": "cs_bj_donne", "manche": etat["manche"]}))
-    _bj_suivant(etat, ev, maintenant, depuis=-1)
+    _bj_suivant(etat, ev, maintenant, -1, -1)
 
 
-def _bj_suivant(etat, ev, maintenant, depuis):
+def _bj_suivant(etat, ev, maintenant, j0, h0):
+    """La prochaine main a jouer apres (j0, h0), dans l ordre des sieges."""
     t = etat["t"]
-    for j in range(depuis + 1, etat["nb_joueurs"]):
-        if t["statuts"][j] == "joue":
-            t["courant"] = j
-            _armer(etat, maintenant)
-            etat["message"] = "Au tour de " + etat["noms"][j] + "."
-            return
-    t["courant"] = None
+    for j in range(max(0, j0), etat["nb_joueurs"]):
+        depart = h0 + 1 if j == j0 else 0
+        for h in range(depart, len(t["mains"][j])):
+            if t["mains"][j][h]["statut"] == "joue":
+                t["courant"], t["main_courante"] = j, h
+                _armer(etat, maintenant)
+                nb = len(t["mains"][j])
+                etat["message"] = "Au tour de " + etat["noms"][j] + \
+                    (" (main " + str(h + 1) + "/" + str(nb) + ")" if nb > 1 else "") + "."
+                return
+    t["courant"] = t["main_courante"] = None
     _bj_croupier(etat, ev, maintenant)
 
 
 def _bj_croupier(etat, ev, maintenant):
     t = etat["t"]
     t["cache"] = False
-    joueurs = [j for j in range(etat["nb_joueurs"]) if t["mises"][j] > 0]
-    encore = [j for j in joueurs if t["statuts"][j] not in ("saute",)
-              and not (t["statuts"][j] == "blackjack")]
-    tirees = 0
-    if encore:
+    mains = [m for j in range(etat["nb_joueurs"]) for m in t["mains"][j]]
+    # Le croupier ne tire que s il reste une main a battre.
+    if any(m["statut"] == "reste" for m in mains):
         while cs_valeur_bj(t["croupier"])[0] < 17:
             t["croupier"].append(t["paquet"].pop())
-            tirees += 1
+    tirees = len(t["croupier"]) - 2
     t["tires_croupier"] = tirees
     total_c = cs_valeur_bj(t["croupier"])[0]
     bj_c = _bj_naturel(t["croupier"])
-    deltas, details, resultats = {}, {}, {}
-    for j in joueurs:
-        mise = t["mises"][j]
-        main = t["mains"][j]
-        total = cs_valeur_bj(main)[0]
-        if t["statuts"][j] == "saute":
-            retour, res = 0, "sauté"
-        elif t["statuts"][j] == "blackjack":
-            if bj_c:
+    deltas, details = {}, {}
+    for j in range(etat["nb_joueurs"]):
+        if not t["mains"][j]:
+            continue
+        retour_total, mise_totale, textes = 0, 0, []
+        for m in t["mains"][j]:
+            mise = m["mise"]
+            total = cs_valeur_bj(m["cartes"])[0]
+            if m["statut"] == "saute":
+                retour, res = 0, "sauté"
+            elif m["statut"] == "blackjack":
+                retour, res = (mise, "égalité") if bj_c else (mise + (mise * 3) // 2, "blackjack")
+            elif bj_c:
+                retour, res = 0, "perdu"
+            elif total_c > 21 or total > total_c:
+                retour, res = 2 * mise, "gagné"
+            elif total == total_c:
                 retour, res = mise, "égalité"
             else:
-                retour, res = mise + (mise * 3) // 2, "blackjack"
-        elif bj_c:
-            retour, res = 0, "perdu"
-        elif total_c > 21 or total > total_c:
-            retour, res = 2 * mise, "gagné"
-        elif total == total_c:
-            retour, res = mise, "égalité"
-        else:
-            retour, res = 0, "perdu"
-        etat["jetons"][j] += retour
-        deltas[j] = retour - mise
-        resultats[j] = res
-        details[j] = res + " (" + str(total) + " contre " + str(total_c) + ")"
-    t["resultats"] = {str(j): r for j, r in resultats.items()}
+                retour, res = 0, "perdu"
+            m["resultat"] = res
+            retour_total += retour
+            mise_totale += mise
+            textes.append(res + " (" + str(total) + ")")
+        etat["jetons"][j] += retour_total
+        deltas[j] = retour_total - mise_totale
+        details[j] = ", ".join(textes) + " contre " + str(total_c)
     if bj_c:
         etat["message"] = "Blackjack du croupier !"
     elif total_c > 21:
@@ -565,57 +590,101 @@ def _bj_croupier(etat, ev, maintenant):
     ev.append(_tous({"type": "cs_bj_croupier", "manche": etat["manche"], "tirees": tirees}))
 
 
-def _bj_verifier_tour(etat, i):
+def _bj_main_courante(etat, i):
+    """La main que i doit jouer, ou un texte d erreur."""
     t = etat["t"]
     if etat["jeu"] != "blackjack" or etat["phase"] != "jeu" or t["courant"] != i:
-        return "Ce n'est pas à toi de jouer."
-    return None
+        return None, "Ce n'est pas à toi de jouer."
+    return t["mains"][i][t["main_courante"]], None
+
+
+def _bj_fin_main(etat, ev, i, maintenant):
+    """La main courante est finie (ou continue) selon son total."""
+    t = etat["t"]
+    m = t["mains"][i][t["main_courante"]]
+    total = cs_valeur_bj(m["cartes"])[0]
+    if total > 21:
+        m["statut"] = "saute"
+    elif total == 21 or m["double"]:
+        m["statut"] = "reste"
+    if m["statut"] == "joue":
+        _armer(etat, maintenant)
+    else:
+        _bj_suivant(etat, ev, maintenant, i, t["main_courante"])
 
 
 def _bj_tirer(etat, ev, i, message, maintenant):
-    err = _bj_verifier_tour(etat, i)
+    m, err = _bj_main_courante(etat, i)
     if err:
         return _erreur(i, err)
-    t = etat["t"]
-    t["mains"][i].append(t["paquet"].pop())
-    total = cs_valeur_bj(t["mains"][i])[0]
+    m["cartes"].append(etat["t"]["paquet"].pop())
     ev.append(_tous({"type": "cs_bj_carte", "joueur": i}))
-    if total > 21:
-        t["statuts"][i] = "saute"
-        _bj_suivant(etat, ev, maintenant, i)
-    elif total == 21:
-        t["statuts"][i] = "reste"
-        _bj_suivant(etat, ev, maintenant, i)
-    else:
-        _armer(etat, maintenant)
+    _bj_fin_main(etat, ev, i, maintenant)
     return ev
 
 
 def _bj_rester(etat, ev, i, message, maintenant):
-    err = _bj_verifier_tour(etat, i)
+    m, err = _bj_main_courante(etat, i)
     if err:
         return _erreur(i, err)
-    etat["t"]["statuts"][i] = "reste"
-    _bj_suivant(etat, ev, maintenant, i)
+    m["statut"] = "reste"
+    _bj_suivant(etat, ev, maintenant, i, etat["t"]["main_courante"])
     return ev
 
 
 def _bj_doubler(etat, ev, i, message, maintenant):
-    err = _bj_verifier_tour(etat, i)
+    m, err = _bj_main_courante(etat, i)
+    if err:
+        return _erreur(i, err)
+    if len(m["cartes"]) != 2:
+        return _erreur(i, "On ne double que sur deux cartes.")
+    if etat["jetons"][i] < m["mise"]:
+        return _erreur(i, "Pas assez de jetons pour doubler.")
+    etat["jetons"][i] -= m["mise"]
+    m["mise"] *= 2
+    m["double"] = True
+    m["cartes"].append(etat["t"]["paquet"].pop())
+    ev.append(_tous({"type": "cs_bj_carte", "joueur": i}))
+    _bj_fin_main(etat, ev, i, maintenant)
+    return ev
+
+
+def cs_peut_splitter(main, jetons, nb_mains):
+    c = main["cartes"]
+    return (len(c) == 2 and _bj_valeur_carte(c[0]) == _bj_valeur_carte(c[1])
+            and jetons >= main["mise"] and nb_mains < CS_BJ_MAINS_MAX)
+
+
+def _bj_splitter(etat, ev, i, message, maintenant):
+    """Deux cartes de meme valeur : deux mains, une mise de plus."""
+    m, err = _bj_main_courante(etat, i)
     if err:
         return _erreur(i, err)
     t = etat["t"]
-    if len(t["mains"][i]) != 2:
-        return _erreur(i, "On ne double que sur les deux premières cartes.")
-    if etat["jetons"][i] < t["mises"][i]:
-        return _erreur(i, "Pas assez de jetons pour doubler.")
-    etat["jetons"][i] -= t["mises"][i]
-    t["mises"][i] *= 2
-    t["doubles"][i] = True
-    t["mains"][i].append(t["paquet"].pop())
-    ev.append(_tous({"type": "cs_bj_carte", "joueur": i}))
-    t["statuts"][i] = "saute" if cs_valeur_bj(t["mains"][i])[0] > 21 else "reste"
-    _bj_suivant(etat, ev, maintenant, i)
+    if not cs_peut_splitter(m, etat["jetons"][i], len(t["mains"][i])):
+        if len(m["cartes"]) != 2 or _bj_valeur_carte(m["cartes"][0]) != _bj_valeur_carte(m["cartes"][1]):
+            return _erreur(i, "On ne sépare que deux cartes de même valeur.")
+        if etat["jetons"][i] < m["mise"]:
+            return _erreur(i, "Pas assez de jetons pour séparer.")
+        return _erreur(i, "Quatre mains au plus.")
+    etat["jetons"][i] -= m["mise"]
+    h = t["main_courante"]
+    as_ = m["cartes"][0][0] == "A"
+    seconde = _bj_main([m["cartes"].pop()], m["mise"], split=True)
+    m["split"] = True
+    m["cartes"].append(t["paquet"].pop())
+    seconde["cartes"].append(t["paquet"].pop())
+    t["mains"][i].insert(h + 1, seconde)
+    ev.append(_tous({"type": "cs_bj_split", "joueur": i}))
+    if as_:
+        # Des As separes : une seule carte chacun, on reste.
+        m["statut"] = seconde["statut"] = "reste"
+        _bj_suivant(etat, ev, maintenant, i, h + 1)
+    else:
+        if cs_valeur_bj(seconde["cartes"])[0] == 21:
+            seconde["statut"] = "reste"
+        _bj_fin_main(etat, ev, i, maintenant)
+    etat["message"] = etat["noms"][i] + " sépare sa main."
     return ev
 
 
@@ -920,7 +989,7 @@ def _pk_suivre(etat, ev, i, message, maintenant):
     t = etat["t"]
     du = t["mise_max"] - t["mise_tour"][i]
     if du <= 0:
-        _pk_apres_action(etat, ev, i, "parle", maintenant)
+        _pk_apres_action(etat, ev, i, "check", maintenant)
         return ev
     paye = _pk_payer(etat, i, du)
     texte = "suit (" + str(paye) + ")" if not t["tapis"][i] else "fait tapis (" + str(paye) + ")"
@@ -1019,11 +1088,12 @@ def cs_etat_public(etat, maintenant):
         croupier = list(t["croupier"])
         if t["cache"] and len(croupier) >= 2:
             croupier[1] = "??"
+        mains = [[dict(m, valeur=cs_valeur_bj(m["cartes"])[0],
+                       peut_splitter=cs_peut_splitter(m, etat["jetons"][j], len(t["mains"][j])))
+                  for m in t["mains"][j]] for j in range(etat["nb_joueurs"])]
         pub["table"] = {
-            "mises": t["mises"], "prets": t["prets"], "mains": t["mains"],
-            "statuts": t["statuts"], "doubles": t["doubles"], "croupier": croupier,
-            "courant": t["courant"], "resultats": t.get("resultats"),
-            "valeurs": [cs_valeur_bj(m)[0] if m else 0 for m in t["mains"]],
+            "mises": t["mises"], "prets": t["prets"], "mains": mains, "croupier": croupier,
+            "courant": t["courant"], "main_courante": t["main_courante"],
             "valeur_croupier": cs_valeur_bj([c for c in croupier if c != "??"])[0] if croupier else 0,
             "tires_croupier": t["tires_croupier"],
         }
@@ -1054,6 +1124,7 @@ CS_ACTIONS = {
     "cs_bj_tirer": _bj_tirer,
     "cs_bj_rester": _bj_rester,
     "cs_bj_doubler": _bj_doubler,
+    "cs_bj_splitter": _bj_splitter,
     "cs_pk_coucher": _pk_coucher,
     "cs_pk_suivre": _pk_suivre,
     "cs_pk_relancer": _pk_relancer,
