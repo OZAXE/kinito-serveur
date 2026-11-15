@@ -470,7 +470,8 @@ async def scenario(jeu, duree, graine, battement, sortes):
     banc.code = serveur.generer_code()
     serveur.salons[banc.code] = {"joueurs": [], "etat": None, "jeu": None}
 
-    noms = ["Alice", "Bruno", "Chloe", "Dylan", "Emma", "Farid"][:NB_JOUEURS[jeu]]
+    nb = int(os.environ.get("BANC_NB", NB_JOUEURS[jeu]))
+    noms = ["Alice", "Bruno", "Chloe", "Dylan", "Emma", "Farid", "Gaelle", "Hugo"][:nb]
     for n in noms:
         r = Robot(banc, n)
         banc.robots.append(r)
