@@ -1,5 +1,5 @@
 """
-Serveur multijoueur pour le Kinito, BeerBattle, Buckshot et Picopoly.
+Serveur multijoueur pour le Kinito, BeerBattle, Buckshot, Picopoly et Menteur.
 Technologie : FastAPI + WebSockets pour la communication temps reel.
 
 Architecture :
@@ -24,6 +24,12 @@ from picolopoly import (
     PP_CASES, PP_JOUEURS_MIN, PP_JOUEURS_MAX,
     pp_initialiser, pp_ajouter_joueur, pp_action, pp_expirer, pp_armer,
     pp_etat_public, pp_prochaine_echeance, pp_attendu,
+)
+# Menteur (bluff aux cartes + roulette) : meme principe, moteur pur a part.
+from menteur import (
+    MT_JOUEURS_MIN, MT_JOUEURS_MAX,
+    mt_initialiser, mt_action, mt_expirer, mt_etat_public, mt_main,
+    mt_prochaine_echeance, mt_joueur_parti, mt_joueur_revenu,
 )
 
 # =============================================================
@@ -70,7 +76,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-15 reconnexions"
+VERSION = "2026-11-15 menteur"
 
 
 # =============================================================
@@ -527,6 +533,9 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
         else:
             etat["version"] += 1
             pp_rearmer_si_attendu(etat, idx)
+    elif jeu == "menteur" and idx < etat["nb_joueurs"]:
+        mt_joueur_revenu(etat, idx, time.time())
+        mt_programmer(code_salon)
     if annoncer:
         await diffuser(code_salon, {
             "type": "joueur_rejoint",
@@ -638,6 +647,16 @@ async def envoyer_instantane(code_salon, joueur, complet=True, nouveau=False):
         else:
             await envoyer(joueur, pp_etat_public(etat, time.time()))
 
+    elif jeu == "menteur":
+        # Sa main est secrete : elle ne part que vers lui. Un arrivant en
+        # pleine partie regarde (pas de main) jusqu a la partie suivante.
+        if complet:
+            await envoyer(joueur, {"type": "mt_demarree", "joueurs": noms})
+        await envoyer(joueur, mt_etat_public(etat, time.time()))
+        main = mt_main(etat, idx)
+        if main is not None:
+            await envoyer(joueur, main)
+
 
 async def depart(code_salon, joueur, ws):
     """
@@ -683,6 +702,11 @@ async def depart(code_salon, joueur, ws):
             await bt_joueur_parti(code_salon, index_parti)
         elif jeu == "picolopoly":
             await pp_joueur_parti(code_salon, index_parti)
+        elif jeu == "menteur":
+            etat = salon["etat"]
+            if index_parti < etat["nb_joueurs"]:
+                mt_joueur_parti(etat, index_parti, time.time())
+                await mt_publier(code_salon, [])
 
     # Plus personne de connecte : le salon sera libere s il le reste.
     if all(j.get("parti") for j in salon["joueurs"]):
@@ -710,9 +734,10 @@ def programmer_liberation(code_salon):
     async def liberer():
         await asyncio.sleep(DELAI_SALON_VIDE)
         if salons.get(code_salon) is salon and all(j.get("parti") for j in salon["joueurs"]):
-            m = salon.get("pp_minuteur")
-            if m is not None and not m.done():
-                m.cancel()
+            for cle in ("pp_minuteur", "mt_minuteur"):
+                m = salon.get(cle)
+                if m is not None and not m.done():
+                    m.cancel()
             salons.pop(code_salon, None)
 
     salon["liberation"] = asyncio.ensure_future(liberer())
@@ -767,6 +792,8 @@ async def traiter_message(code_salon, joueur, message):
     if type_msg.startswith("bb_") and type_msg != "bb_demarrer" and not (en_cours and jeu == "beerbattle"):
         return
     if type_msg.startswith("bt_") and type_msg != "bt_demarrer" and not (en_cours and jeu == "buckshot"):
+        return
+    if type_msg.startswith("mt_") and type_msg != "mt_demarrer" and not (en_cours and jeu == "menteur"):
         return
 
     # --- Demarrer une partie ---
@@ -829,6 +856,12 @@ async def traiter_message(code_salon, joueur, message):
         await pp_demarrer(code_salon, message.get("difficulte"))
     elif isinstance(type_msg, str) and type_msg.startswith("pp_"):
         await pp_traiter(code_salon, joueur, message)
+
+    # --- Actions de Menteur (le moteur valide tout) ---
+    elif type_msg == "mt_demarrer":
+        await mt_demarrer(code_salon, message.get("mode"))
+    elif type_msg.startswith("mt_"):
+        await mt_traiter(code_salon, joueur, message)
 
 # =============================================================
 # ACTIONS DU KINITO
@@ -2235,6 +2268,105 @@ def pp_rearmer_si_attendu(etat, index):
     att = pp_attendu(etat)
     if att is not None and att[0] == index:
         pp_armer(etat)
+
+
+# =============================================================
+# MENTEUR (bluff aux cartes + roulette des shots)
+# Les regles sont dans menteur.py. Ici : le reseau, les mains privees, et le
+# minuteur qui joue a la place d un joueur absent ou trop lent, et enchaine
+# les manches apres chaque retournement.
+# =============================================================
+
+async def mt_demarrer(code_salon, mode=None):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    # Lancement depuis la salle d attente, ou relance d une partie finie
+    # (meme depuis un autre jeu du salon fini) : un double clic ne relance pas.
+    if etat is not None and not (salon.get("jeu") == "menteur" and etat.get("phase") == "fin"):
+        return
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < MT_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur", "message": "Menteur demande au moins 2 joueurs."})
+        return
+    if nb > MT_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur", "message": "Menteur se joue a 8 joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    salon["etat"] = mt_initialiser([j["nom"] for j in salon["joueurs"]], time.time(), mode)
+    salon["jeu"] = "menteur"
+    await diffuser(code_salon, {"type": "mt_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer_indices(code_salon)
+    await mt_publier(code_salon, [])
+
+
+async def mt_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous et sa main a chacun."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "menteur" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, mt_etat_public(etat, time.time()))
+    for joueur in salon["joueurs"]:
+        if not joueur.get("parti"):
+            main = mt_main(etat, joueur["index"])
+            if main is not None:
+                await envoyer(joueur, main)
+    mt_programmer(code_salon)
+
+
+def mt_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("mt_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = mt_prochaine_echeance(etat) if etat and salon.get("jeu") == "menteur" else None
+    salon["mt_minuteur"] = None if echeance is None else asyncio.create_task(
+        mt_minuteur(code_salon, salon, echeance))
+
+
+async def mt_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "menteur":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("mt_minuteur") is not moi:
+            return
+        salon["mt_minuteur"] = None
+        etat = salon["etat"]
+        # Plus personne a table : on ne joue pas toute la partie a leur place.
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = mt_expirer(etat, time.time())
+        if etat["version"] != version:
+            await mt_publier(code_salon, evenements)
+        else:
+            mt_programmer(code_salon)
+
+
+async def mt_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "menteur" or etat is None:
+        return
+    version = etat["version"]
+    evenements = mt_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await mt_publier(code_salon, evenements)
+    else:
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
 
 
 # =============================================================
