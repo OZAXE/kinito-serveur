@@ -489,10 +489,10 @@ def arrivee_en_partie(salon, joueur):
     # Buckshot n a pas de fin de partie : un arrivant laisse spectateur
     # le resterait pour toujours. On lui fait donc une place, verre vide
     # (il sera le chargeur de la prochaine manche) et sans objet jusqu a
-    # la prochaine distribution. Au-dela de 6 presents, il regarde.
+    # la prochaine distribution. Au-dela de 8 presents, il regarde.
     elif etat_courant is not None and salon.get("jeu") == "buckshot":
         presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
-        if presents <= 6 and joueur["index"] == etat_courant["nb_joueurs"]:
+        if presents <= BT_JOUEURS_MAX and joueur["index"] == etat_courant["nb_joueurs"]:
             etat_courant["nb_joueurs"] += 1
             etat_courant["gorgees"].append(0)
             etat_courant["objets"].append(None)
@@ -1761,6 +1761,9 @@ BT_OBJETS = [
 ]
 
 
+BT_JOUEURS_MAX = 8
+
+
 def bt_initialiser(nb_joueurs):
     """Initialise l etat d une partie de Buckshot."""
     return {
@@ -1847,8 +1850,8 @@ async def bt_demarrer(code_salon, salons, diffuser):
     if nb < 2:
         await diffuser(code_salon, {"type": "erreur", "message": "Buckshot demande au moins 2 joueurs."})
         return
-    if nb > 6:
-        await diffuser(code_salon, {"type": "erreur", "message": "Buckshot se joue a 6 joueurs maximum."})
+    if nb > BT_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur", "message": "Buckshot se joue a 8 joueurs maximum."})
         return
     salon["etat"] = bt_initialiser(nb)
     salon["jeu"] = "buckshot"
