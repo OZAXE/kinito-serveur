@@ -49,6 +49,9 @@ async function tester(navigateur, jeu) {
     const ctx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
     await ctx.addInitScript(SCRIPT_MUET);
     const p = await ctx.newPage();
+    // Sans carte graphique, chaque scène 3D ouverte ralentit les suivantes.
+    p.setDefaultNavigationTimeout(120000);
+    p.setDefaultTimeout(60000);
     p.on('pageerror', e => erreurs.push(e.message));
     return p;
   };

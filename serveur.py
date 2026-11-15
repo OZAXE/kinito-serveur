@@ -1764,6 +1764,16 @@ BT_OBJETS = [
 BT_JOUEURS_MAX = 8
 
 
+def bt_bornes_cartouches(etat):
+    """
+    Nombre de cartouches que le chargeur peut mettre : au moins une par
+    joueur, au plus deux. Jusqu a 4 joueurs on garde 4 a 8 ; a 8 joueurs,
+    8 a 16, pour que tout le monde tire au moins une fois par manche.
+    """
+    n = etat["nb_joueurs"]
+    return max(4, n), max(8, 2 * n)
+
+
 def bt_initialiser(nb_joueurs):
     """Initialise l etat d une partie de Buckshot."""
     return {
@@ -1823,6 +1833,8 @@ def bt_etat_public(salon):
         "scie_active": etat["scie_active"],
         "annonce_reel": etat.get("annonce_reel", 0),
         "annonce_total": etat.get("annonce_total", 0),
+        "cartouches_min": bt_bornes_cartouches(etat)[0],
+        "cartouches_max": bt_bornes_cartouches(etat)[1],
         "partis": [i in absents for i in range(etat["nb_joueurs"])],
         "message": etat.get("message", ""),
     }
@@ -1875,7 +1887,8 @@ async def bt_composer(code_salon, salons, diffuser, joueur, total, reel):
         reel = int(reel)
     except (TypeError, ValueError):
         return
-    total = max(4, min(8, total))
+    mini, maxi = bt_bornes_cartouches(etat)
+    total = max(mini, min(maxi, total))
     reel = max(0, min(total, reel))
 
     # Construction et melange de la pile
