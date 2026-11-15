@@ -1,5 +1,5 @@
 """
-Serveur multijoueur pour le Kinito, BeerBattle, Buckshot, Picopoly et Menteur.
+Serveur multijoueur pour le Kinito, BeerBattle, Buckshot, Picopoly, Menteur et le Casino.
 Technologie : FastAPI + WebSockets pour la communication temps reel.
 
 Architecture :
@@ -30,6 +30,12 @@ from menteur import (
     MT_JOUEURS_MIN, MT_JOUEURS_MAX,
     mt_initialiser, mt_action, mt_expirer, mt_etat_public, mt_main,
     mt_prochaine_echeance, mt_joueur_parti, mt_joueur_revenu,
+)
+# Casino (roulette, blackjack, poker) : meme principe, moteur pur a part.
+from casino import (
+    CS_JOUEURS_MIN, CS_JOUEURS_MAX,
+    cs_initialiser, cs_ajouter_joueur, cs_action, cs_expirer, cs_etat_public,
+    cs_main_poker, cs_prochaine_echeance, cs_joueur_parti, cs_joueur_revenu,
 )
 
 # =============================================================
@@ -76,7 +82,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-15 menteur"
+VERSION = "2026-11-15 casino"
 
 
 # =============================================================
@@ -514,6 +520,13 @@ def arrivee_en_partie(salon, joueur):
                 and joueur["index"] == etat_courant["nb_joueurs"]):
             pp_ajouter_joueur(etat_courant, nom_joueur)
 
+    # Casino : on s assoit a tout moment avec ses jetons de depart, et on
+    # joue des le coup suivant.
+    elif etat_courant is not None and salon.get("jeu") == "casino":
+        presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+        if presents <= CS_JOUEURS_MAX and joueur["index"] == etat_courant["nb_joueurs"]:
+            cs_ajouter_joueur(etat_courant, nom_joueur)
+
 
 async def revenir(code_salon, salon, joueur, annoncer=True):
     """Le joueur reprend sa place (apres une coupure ou un silence)."""
@@ -536,6 +549,9 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
     elif jeu == "menteur" and idx < etat["nb_joueurs"]:
         mt_joueur_revenu(etat, idx, time.time())
         mt_programmer(code_salon)
+    elif jeu == "casino" and idx < etat["nb_joueurs"]:
+        cs_joueur_revenu(etat, idx, time.time())
+        cs_programmer(code_salon)
     if annoncer:
         await diffuser(code_salon, {
             "type": "joueur_rejoint",
@@ -657,6 +673,18 @@ async def envoyer_instantane(code_salon, joueur, complet=True, nouveau=False):
         if main is not None:
             await envoyer(joueur, main)
 
+    elif jeu == "casino":
+        # Un arrivant agrandit la table : tout le monde doit le voir.
+        if complet:
+            await envoyer(joueur, {"type": "cs_demarree", "joueurs": noms})
+        if nouveau:
+            await cs_publier(code_salon, [])
+        else:
+            await envoyer(joueur, cs_etat_public(etat, time.time()))
+            main = cs_main_poker(etat, idx)
+            if main is not None:
+                await envoyer(joueur, main)
+
 
 async def depart(code_salon, joueur, ws):
     """
@@ -707,6 +735,11 @@ async def depart(code_salon, joueur, ws):
             if index_parti < etat["nb_joueurs"]:
                 mt_joueur_parti(etat, index_parti, time.time())
                 await mt_publier(code_salon, [])
+        elif jeu == "casino":
+            etat = salon["etat"]
+            if index_parti < etat["nb_joueurs"]:
+                evenements = cs_joueur_parti(etat, index_parti, time.time())
+                await cs_publier(code_salon, evenements)
 
     # Plus personne de connecte : le salon sera libere s il le reste.
     if all(j.get("parti") for j in salon["joueurs"]):
@@ -734,7 +767,7 @@ def programmer_liberation(code_salon):
     async def liberer():
         await asyncio.sleep(DELAI_SALON_VIDE)
         if salons.get(code_salon) is salon and all(j.get("parti") for j in salon["joueurs"]):
-            for cle in ("pp_minuteur", "mt_minuteur"):
+            for cle in ("pp_minuteur", "mt_minuteur", "cs_minuteur"):
                 m = salon.get(cle)
                 if m is not None and not m.done():
                     m.cancel()
@@ -794,6 +827,8 @@ async def traiter_message(code_salon, joueur, message):
     if type_msg.startswith("bt_") and type_msg != "bt_demarrer" and not (en_cours and jeu == "buckshot"):
         return
     if type_msg.startswith("mt_") and type_msg != "mt_demarrer" and not (en_cours and jeu == "menteur"):
+        return
+    if type_msg.startswith("cs_") and type_msg != "cs_demarrer" and not (en_cours and jeu == "casino"):
         return
 
     # --- Demarrer une partie ---
@@ -862,6 +897,12 @@ async def traiter_message(code_salon, joueur, message):
         await mt_demarrer(code_salon, message.get("mode"))
     elif type_msg.startswith("mt_"):
         await mt_traiter(code_salon, joueur, message)
+
+    # --- Casino (le moteur valide tout) ---
+    elif type_msg == "cs_demarrer":
+        await cs_demarrer(code_salon)
+    elif type_msg.startswith("cs_"):
+        await cs_traiter(code_salon, joueur, message)
 
 # =============================================================
 # ACTIONS DU KINITO
@@ -2364,6 +2405,108 @@ async def mt_traiter(code_salon, joueur, message):
     evenements = mt_action(etat, joueur["index"], message, time.time())
     if etat["version"] != version:
         await mt_publier(code_salon, evenements)
+    else:
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+# =============================================================
+# CASINO (roulette, blackjack, poker)
+# Les regles sont dans casino.py. Ici : le reseau, les cartes privees du
+# poker, et le minuteur qui lance la roue, joue a la place d un joueur absent
+# ou trop lent, et enchaine les coups.
+# =============================================================
+
+async def cs_demarrer(code_salon):
+    salon = salons[code_salon]
+    # Le casino n a pas de fin : on l ouvre depuis la salle d attente, ou a
+    # la place d un autre jeu fini du salon. Un double clic ne rouvre rien.
+    etat = salon.get("etat")
+    if etat is not None:
+        jeu = salon.get("jeu")
+        fini = (jeu == "menteur" and etat.get("phase") == "fin") or \
+               (jeu == "beerbattle" and etat.get("phase") == "fini")
+        if not fini:
+            return
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < CS_JOUEURS_MIN:
+        return
+    if nb > CS_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur", "message": "Le casino accueille 8 joueurs au plus."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    salon["etat"] = cs_initialiser([j["nom"] for j in salon["joueurs"]], time.time())
+    salon["jeu"] = "casino"
+    await diffuser(code_salon, {"type": "cs_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer_indices(code_salon)
+    await cs_publier(code_salon, [])
+
+
+async def cs_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous et ses cartes a chacun."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "casino" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, cs_etat_public(etat, time.time()))
+    for joueur in salon["joueurs"]:
+        if not joueur.get("parti"):
+            main = cs_main_poker(etat, joueur["index"])
+            if main is not None:
+                await envoyer(joueur, main)
+    cs_programmer(code_salon)
+
+
+def cs_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("cs_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = cs_prochaine_echeance(etat) if etat and salon.get("jeu") == "casino" else None
+    salon["cs_minuteur"] = None if echeance is None else asyncio.create_task(
+        cs_minuteur(code_salon, salon, echeance))
+
+
+async def cs_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "casino":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("cs_minuteur") is not moi:
+            return
+        salon["cs_minuteur"] = None
+        etat = salon["etat"]
+        # Plus personne a table : la roue ne tourne pas dans le vide.
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = cs_expirer(etat, time.time())
+        if etat["version"] != version:
+            await cs_publier(code_salon, evenements)
+        else:
+            cs_programmer(code_salon)
+
+
+async def cs_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "casino" or etat is None:
+        return
+    version = etat["version"]
+    evenements = cs_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await cs_publier(code_salon, evenements)
     else:
         for e in evenements:
             await bt_envoyer_prive(salon, e["a"], e["msg"])
