@@ -75,107 +75,127 @@
     }
   ],
   "plan": {
-    "vue": "0 0 320 440",
+    "vue": "0 0 380 420",
     "zones": {
+      "cuisine": [
+        120,
+        30,
+        130,
+        100
+      ],
       "serre": [
-        0,
-        0,
-        150,
-        120
+        10,
+        40,
+        110,
+        90
       ],
       "bibliotheque": [
-        150,
         0,
-        170,
-        120
+        130,
+        120,
+        100
       ],
       "bureau": [
         0,
-        120,
-        110,
-        110
-      ],
-      "fumoir": [
-        0,
         230,
-        110,
-        110
+        120,
+        90
       ],
       "salle_de_bal": [
-        150,
-        120,
-        170,
+        250,
+        110,
+        130,
         150
       ],
+      "fumoir": [
+        250,
+        260,
+        110,
+        100
+      ],
       "veranda": [
-        150,
-        270,
-        170,
+        120,
+        320,
+        130,
         70
       ],
-      "cuisine": [
-        0,
-        340,
-        150,
-        100
-      ],
       "cave": [
-        150,
-        340,
-        170,
-        100
+        0,
+        320,
+        120,
+        90
       ]
     },
     "couloirs": {
-      "couloir": [
-        110,
+      "hall": [
         120,
-        40,
-        220
+        130,
+        130,
+        190
       ]
     },
     "portes": [
+      [
+        "hall",
+        "cuisine"
+      ],
+      [
+        "cuisine",
+        "serre"
+      ],
       [
         "serre",
         "bibliotheque"
       ],
       [
-        "serre",
+        "hall",
+        "bibliotheque"
+      ],
+      [
+        "hall",
         "bureau"
       ],
       [
-        "bibliotheque",
-        "salle_de_bal"
-      ],
-      [
         "bureau",
-        "couloir"
+        "cave"
       ],
       [
-        "fumoir",
-        "couloir"
-      ],
-      [
-        "couloir",
+        "hall",
         "salle_de_bal"
       ],
       [
         "salle_de_bal",
+        "fumoir"
+      ],
+      [
+        "hall",
+        "fumoir"
+      ],
+      [
+        "hall",
         "veranda"
       ],
       [
-        "couloir",
-        "cuisine"
-      ],
-      [
-        "cuisine",
+        "veranda",
         "cave"
-      ],
-      [
-        "fumoir",
-        "cuisine"
       ]
-    ]
+    ],
+    "entree": "veranda",
+    "vitrees": [
+      "serre",
+      "veranda"
+    ],
+    "murs": {
+      "bibliotheque": "#2c4436",
+      "bureau": "#25324a",
+      "salle_de_bal": "#e6d6ab",
+      "fumoir": "#5a1f26",
+      "cuisine": "#d8d0bd",
+      "cave": "#4a4038",
+      "hall": "#6b4a2e",
+      "serre": "#e9efe6",
+      "veranda": "#efe9dc"
+    }
   },
   "armes": [
     {
