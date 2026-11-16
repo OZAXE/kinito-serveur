@@ -109,6 +109,22 @@ async def temoin(code: str):
     return {"nom": ev[0]["a"] if ev else None}
 
 
+@serveur.app.get("/test/evenement/{code}/{type_}")
+async def evenement(code: str, type_: str):
+    """Reserve aux tests : demarre tout de suite un evenement d ambiance."""
+    soiree = serveur.soiree_de(code)
+    couche = serveur.couches.get(soiree, {}).get("enq")
+    if couche is None:
+        return {"ok": False}
+    async with serveur.verrou_soiree(soiree):
+        import time as _t
+        couche.etat["evenement"] = None
+        ev = enquete.demarrer_evenement(couche.etat, type_, _t.time())
+        await couche._publier(serveur._contexte(soiree, couche), ev)
+    serveur._apres_couche(soiree, couche)
+    return {"ok": True, "evenement": couche.etat["evenement"]}
+
+
 @serveur.app.get("/test/solution/{code}")
 async def solution(code: str):
     """Reserve aux tests : la solution secrete de l enquete."""

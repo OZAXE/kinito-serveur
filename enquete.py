@@ -29,6 +29,14 @@ baisse avec le temps ; l annonce « interference » arrive avec un retard
 aleatoire. De vraies rumeurs ambiantes noient la fausse dans le bruit.
 Aucune penalite visible n est liee au role : tout passe par les charges,
 les delais et la detection.
+Tranche 6 : evenements d ambiance, programmes en secret au lancement, a des
+moments aleatoires, jamais deux a la fois ni deux fois de suite le meme :
+coupure (archive verrouillee, plis illisibles, detection divisee par 2),
+decouverte (un indice vrai publie a tous), alerte (delai d accusation
+divise par 2, gorgees d accusation ratee doublees), brouhaha (rumeurs deux
+fois plus frequentes, une fausse rumeur gratuite pour le tueur),
+interrogatoire (2 joueurs designes ; refuser coute des gorgees), maree
+(PE doubles).
 
 SECURITE : le tueur ne doit jamais etre deductible techniquement.
 - vue_publique ne contient JAMAIS la solution ni le tueur avant la fin ;
@@ -119,6 +127,7 @@ def pack_public(pack):
         "lieux": pack["lieux"], "armes": pack["armes"], "portraits": pack["portraits"],
         "plan": pack["plan"],
         "ouverture": pack["textes"]["ouverture"],
+        "evenements": {k: {"nom": v["nom"], "debut": v["debut"]} for k, v in pack["textes"].get("evenements", {}).items()},
     }
 
 
@@ -178,6 +187,12 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "prochaine_rumeur_a": None, # SECRET
         "detournement": None,       # SECRET : {cible, categorie, element}
         "faux_emis": [],            # SECRET : [[categorie, element]] (deux faux identiques interdits)
+        # --- tranche 6 ---
+        "programme": [],            # SECRET : [{t, type}] evenements a venir
+        "evenement": None,          # public : {type, debut, fin, interroges}
+        "coupure_jusqua": None,
+        "decouvertes": [],          # public : [{t, texte, categorie, element}]
+        "evenements_passes": [],    # [{type, debut}]
     }
 
 
@@ -210,6 +225,7 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_expertise": _expertiser,
         "enq_charge": _acheter_charge,
         "enq_sabotage": _saboter,
+        "enq_refuser": _refuser_interrogatoire,
     }.get(t)
     if f is None:
         return []
@@ -314,6 +330,7 @@ def _lancer(etat, nom, message, maintenant, rng, config):
     etat["fin_a"] = maintenant + config["duree_ouverture"] + etat["duree"]
     etat["prochain_bonus_a"] = etat["ouverture_fin_a"] + _intervalle_bonus(etat, config, rng)
     etat["prochaine_rumeur_a"] = etat["ouverture_fin_a"] + _intervalle(etat, config, rng, "rumeurs_toutes")
+    etat["programme"] = programmer_evenements(etat, config, rng)
     etat["version"] += 1
     return []
 
@@ -338,6 +355,9 @@ def prochaine_echeance(etat):
         tic = (etat["dernier_tic"] or etat["ouverture_fin_a"]) + TIC_PALIERS
         candidats = [etat["fin_a"], tic, etat.get("prochain_bonus_a"), etat.get("prochaine_rumeur_a")]
         candidats += [d["t"] for d in etat.get("differes", [])]
+        candidats += [x["t"] for x in etat.get("programme", [])[:1]]
+        if etat.get("evenement"):
+            candidats.append(etat["evenement"]["fin"])
         candidats += [e["visible_a"] for p in etat["perso"].values() for e in p["archive"] if e.get("retenu")]
         return min(x for x in candidats if x is not None)
     return None
@@ -354,6 +374,7 @@ def expirer(etat, maintenant, config=None, rng=random):
     if etat["phase"] == "enquete" and etat.get("prochain_bonus_a") is not None and maintenant >= etat["prochain_bonus_a"]:
         ev += temoin_anonyme(etat, maintenant, rng, config)
     if etat["phase"] == "enquete":
+        ev += _evenements(etat, maintenant, rng, config)
         ev += _liberer_retenus(etat, maintenant)
         ev += _publier_differes(etat, maintenant)
         if etat.get("prochaine_rumeur_a") is not None and maintenant >= etat["prochaine_rumeur_a"]:
@@ -409,6 +430,10 @@ def vue_publique(etat, maintenant):
         "bonus_toutes": CONFIG["vitesses"][etat["vitesse"]]["bonus_toutes"],
         "echecs": etat.get("echecs", 0),
         "rumeurs": etat.get("rumeurs", [])[-20:],
+        "evenement": _evenement_public(etat),
+        "gorgees_refus": max(1, int(CONFIG["gorgees"]["refus_interrogatoire"]
+                                    * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
+        "decouvertes": etat.get("decouvertes", []),
         "seuil_patience": seuil_patience(etat) if lancee else None,
         "delai_accusation": CONFIG["vitesses"][etat["vitesse"]]["delai_accusation"],
         "fin": None,
@@ -683,6 +708,8 @@ def _lire(etat, nom, message, maintenant, rng, config):
         return []
     if e["lu"]:
         return _erreur(nom, "Déjà lu : il est rangé dans ton archive.")
+    if _actif(etat, "coupure", maintenant):
+        return _erreur(nom, "Le courant est coupé : impossible de lire ce pli pour l'instant.")
     e["lu"] = True
     etat["version"] += 1
     return [_a(nom, _texte(e, True))]
@@ -695,6 +722,8 @@ def _consulter(etat, nom, message, maintenant, rng, config):
         return []
     if etat["phase"] != "enquete":
         return _erreur(nom, "L'archive est close.")
+    if _actif(etat, "coupure", maintenant):
+        return _erreur(nom, "Le courant est coupé : l'archive est verrouillée.")
     p = _perso(etat, nom)
     timer = _vitesse(etat, config)["timer_consultation"]
     if p["derniere_consultation"] is not None and maintenant < p["derniere_consultation"] + timer:
@@ -713,6 +742,8 @@ def crediter_pe(etat, nom, n, jeu, raison, config=None):
     p = _perso(etat, nom)
     if p is None or n <= 0:
         return []
+    if (etat.get("evenement") or {}).get("type") == "maree":
+        n *= 2                       # les victoires rapportent le double
     p["pe"] += n
     titre = {"kinito": "Kinito", "buckshot": "Buckshot", "menteur": "Menteur", "beerbattle": "BeerBattle",
              "picolopoly": "Picopoly", "casino": "Casino"}.get(jeu, jeu)
@@ -810,7 +841,7 @@ def vue_privee_t2(etat, nom, maintenant, config=None):
                      "tampon": e["tampon"]} for e in p["archive"] if not e.get("retenu")],
         "consultation_possible_a": (p["derniere_consultation"] + timer) if p["derniere_consultation"] else None,
         "accusations": p.get("accusations", []),
-        "prochaine_accusation_a": p.get("prochaine_accusation_a"),
+        "prochaine_accusation_a": prochaine_accusation(etat, p, maintenant),
     }
 
 
@@ -840,8 +871,9 @@ def _accuser(etat, nom, message, maintenant, rng, config):
     suspect, arme, lieu = message.get("suspect"), message.get("arme"), message.get("lieu")
     if _joueur(etat, suspect or "") is None or arme not in etat["armes"] or lieu not in etat["lieux"]:
         return _erreur(nom, "Accusation incomplète : un personnage, une arme et un lieu.")
-    if p["prochaine_accusation_a"] is not None and maintenant < p["prochaine_accusation_a"]:
-        reste = int(p["prochaine_accusation_a"] - maintenant + 0.999)
+    prochaine = prochaine_accusation(etat, p, maintenant)
+    if prochaine is not None and maintenant < prochaine:
+        reste = int(prochaine - maintenant + 0.999)
         return _erreur(nom, f"Prochaine accusation possible dans {reste // 60} min {reste % 60:02d} s.")
     sol = etat["solution"]
     suspect = _joueur(etat, suspect)["nom"]
@@ -861,6 +893,8 @@ def _accuser(etat, nom, message, maintenant, rng, config):
     p["accusations"].append({"t": maintenant, "suspect": suspect, "arme": arme, "lieu": lieu, "justes": vue_justes})
     gorgees_echecs = config["gorgees"]["accusation_ratee"]
     base = gorgees_echecs[min(p["echecs"], len(gorgees_echecs) - 1)]
+    if _actif(etat, "alerte", maintenant):
+        base *= 2                    # l inspecteur presse : les erreurs coutent double
     p["echecs"] += 1
     etat["echecs"] += 1
     delai = _vitesse(etat, config)["delai_accusation"] * (2 ** p["echecs"])
@@ -947,6 +981,8 @@ def _expertiser(etat, nom, message, maintenant, rng, config):
         return _erreur(nom, "Cet indice n'est pas dans ton archive.")
     if e["tampon"]:
         return _erreur(nom, "Cet indice porte déjà un tampon d'expertise.")
+    if _actif(etat, "coupure", maintenant):
+        return _erreur(nom, "Le courant est coupé : l'archive est verrouillée.")
     p = _perso(etat, nom)
     timer = _vitesse(etat, config)["timer_consultation"]
     if p["derniere_consultation"] is not None and maintenant < p["derniere_consultation"] + timer:
@@ -1055,6 +1091,8 @@ def console(etat, nom, maintenant, config=None):
         "cout_charge": _vitesse(etat, config)["pe_par_indice"],
         "prochain_sabotage_a": p["prochain_sabotage_a"],
         "detection": round(detection_actuelle(etat, maintenant, config), 3),
+        "detection_fin": _vitesse(etat, config)["detection"][1],
+        "rumeur_gratuite": _rumeur_gratuite(etat, maintenant),
         "rumeur_utilisee": p["rumeur_utilisee"],
         "detournement_possible": etat.get("detournement") is None and etat.get("prochain_bonus_a") is not None,
         "interception_minutes": round(config["sabotage"]["interception"] / 60),
@@ -1097,22 +1135,26 @@ def _saboter(etat, nom, message, maintenant, rng, config):
     genre = message.get("sabotage")
     if genre not in SABOTAGES:
         return _erreur(nom, "Sabotage inconnu.")
-    if p["charges"] < 1:
+    gratuite = genre == "rumeur" and _rumeur_gratuite(etat, maintenant)
+    if p["charges"] < 1 and not gratuite:
         return _erreur(nom, "Plus de charge : achète-en une avec tes PE.")
-    if p["prochain_sabotage_a"] is not None and maintenant < p["prochain_sabotage_a"]:
+    if not gratuite and p["prochain_sabotage_a"] is not None and maintenant < p["prochain_sabotage_a"]:
         reste = int(p["prochain_sabotage_a"] - maintenant + 0.999)
         return _erreur(nom, f"Prochain sabotage possible dans {reste} s.")
     pack = PACKS[etat["univers"]]
     trace = {"t": maintenant, "type": genre, "cible": None, "categorie": None, "element": None, "mode": None}
     ev = []
     if genre == "rumeur":
-        if p["rumeur_utilisee"]:
+        if p["rumeur_utilisee"] and not gratuite:
             return _erreur(nom, "Une seule fausse rumeur par partie.")
         cat, elem = message.get("categorie"), message.get("element")
         if cat not in ("suspect", "lieu", "arme") or elem not in _candidats(etat, cat) or elem == _element_solution(etat, cat) \
                 or (cat == "suspect" and cle_nom(elem) == cle_nom(nom)):
             return _erreur(nom, "La rumeur doit viser un innocent.")
-        p["rumeur_utilisee"] = True
+        if gratuite:
+            etat["evenement"]["rumeur_gratuite_utilisee"] = True
+        else:
+            p["rumeur_utilisee"] = True
         trace.update(categorie=cat, element=elem)
         # Publiee apres un petit delai aleatoire, comme une rumeur ambiante.
         a, b = config["sabotage"]["delai_publication"]
@@ -1160,8 +1202,10 @@ def _saboter(etat, nom, message, maintenant, rng, config):
         a, b = config["sabotage"]["delai_annonce"]
         etat["differes"].append({"t": maintenant + rng.uniform(a, b), "genre": "annonce",
                                  "texte": pack["textes"]["annonces"]["interference"]})
-    p["charges"] -= 1
-    p["prochain_sabotage_a"] = maintenant + _vitesse(etat, config)["delai_sabotage"]
+    if not gratuite:
+        p["charges"] -= 1
+        p["prochain_sabotage_a"] = maintenant + _vitesse(etat, config)["delai_sabotage"]
+    trace["gratuite"] = gratuite
     etat["sabotages"].append(trace)
     etat["version"] += 1
     return ev
@@ -1192,7 +1236,7 @@ def rumeur_ambiante(etat, maintenant, rng=random, config=None):
     config = config or CONFIG
     cat = rng.choice(("suspect", "lieu", "arme"))
     elem = rng.choice(_candidats(etat, cat))
-    etat["prochaine_rumeur_a"] = maintenant + _intervalle(etat, config, rng, "rumeurs_toutes")
+    etat["prochaine_rumeur_a"] = maintenant + _intervalle(etat, config, rng, "rumeurs_toutes") / (2 if _actif(etat, "brouhaha", maintenant) else 1)
     etat["version"] += 1
     return _ajouter_rumeur(etat, maintenant, _texte_rumeur(etat, cat, elem, rng), elem if cat == "lieu" else None)
 
@@ -1225,6 +1269,133 @@ def _liberer_retenus(etat, maintenant):
                 ev.append(_a(nom, {"type": "enq_nouvel_indice", "id": e["id"], "source": e["source"]}))
                 etat["version"] += 1
     return ev
+
+
+# =============================================================
+# TRANCHE 6 : EVENEMENTS D AMBIANCE
+# =============================================================
+
+EVENEMENTS = ("coupure", "decouverte", "alerte", "brouhaha", "interrogatoire", "maree")
+
+
+def programmer_evenements(etat, config, rng):
+    """
+    N evenements (selon la vitesse) de duree D, places au hasard dans
+    l enquete : un depart au plus tot apres 10 % du temps, jamais deux a la
+    fois, au moins 2 D entre la fin de l un et le debut du suivant, jamais
+    deux fois de suite le meme type. SECRET (personne ne sait quand).
+    """
+    v = _vitesse(etat, config)
+    n, d = v["evenements"], v["duree_evenement"]
+    debut, fin = etat["ouverture_fin_a"] + 0.1 * etat["duree"], etat["fin_a"] - d - 0.05 * etat["duree"]
+    pas = 3 * d                       # D d evenement + 2 D d espacement
+    while n > 0 and (fin - debut) < (n - 1) * pas:
+        n -= 1                        # partie trop courte : moins d evenements
+    if n <= 0:
+        return []
+    # Positions : on tire n points dans l espace libre, puis on ajoute l espacement.
+    libre = (fin - debut) - (n - 1) * pas
+    points = sorted(rng.uniform(0, libre) for _ in range(n))
+    types, dernier = [], None
+    for _ in range(n):
+        choix = [t for t in EVENEMENTS if t != dernier]
+        dernier = rng.choice(choix)
+        types.append(dernier)
+    return [{"t": debut + x + i * pas, "type": types[i]} for i, x in enumerate(points)]
+
+
+def _actif(etat, type_, maintenant):
+    e = etat.get("evenement")
+    return bool(e and e["type"] == type_ and e["debut"] <= maintenant < e["fin"])
+
+
+def _rumeur_gratuite(etat, maintenant):
+    e = etat.get("evenement")
+    return _actif(etat, "brouhaha", maintenant) and not e.get("rumeur_gratuite_utilisee")
+
+
+def prochaine_accusation(etat, p, maintenant):
+    """Heure de la prochaine accusation ; pendant une alerte, l attente restante est divisee par 2."""
+    prochaine = p.get("prochaine_accusation_a")
+    if prochaine is None or not _actif(etat, "alerte", maintenant):
+        return prochaine
+    derniere = p["accusations"][-1]["t"] if p.get("accusations") else maintenant
+    return derniere + (prochaine - derniere) / 2
+
+
+def _evenement_public(etat):
+    e = etat.get("evenement")
+    if not e:
+        return None
+    return {"type": e["type"], "debut": e["debut"], "fin": e["fin"], "interroges": e.get("interroges", []),
+            "refus": e.get("refus", [])}
+
+
+def _textes_evenement(etat, type_):
+    return PACKS[etat["univers"]]["textes"]["evenements"][type_]
+
+
+def _evenements(etat, maintenant, rng, config):
+    ev = []
+    e = etat.get("evenement")
+    if e and maintenant >= e["fin"]:
+        textes = _textes_evenement(etat, e["type"])
+        if textes.get("fin"):
+            _annoncer(etat, maintenant, textes["fin"])
+        etat["evenement"] = None
+        etat["coupure_jusqua"] = None
+        etat["version"] += 1
+        ev.append(_tous({"type": "enq_evenement_fin", "evenement": e["type"]}))
+    if etat.get("evenement") is None and etat.get("programme") and maintenant >= etat["programme"][0]["t"]:
+        prevu = etat["programme"].pop(0)
+        ev += demarrer_evenement(etat, prevu["type"], maintenant, rng, config)
+    return ev
+
+
+def demarrer_evenement(etat, type_, maintenant, rng=random, config=None):
+    config = config or CONFIG
+    d = _vitesse(etat, config)["duree_evenement"]
+    textes = _textes_evenement(etat, type_)
+    e = {"type": type_, "debut": maintenant, "fin": maintenant + d}
+    etat["evenement"] = e
+    etat.setdefault("evenements_passes", []).append({"type": type_, "debut": maintenant})
+    _annoncer(etat, maintenant, textes["nom"] + " : " + textes["debut"])
+    ev = []
+    if type_ == "coupure":
+        etat["coupure_jusqua"] = e["fin"]
+    elif type_ == "decouverte":
+        if etat["pool"]:
+            indice = etat["pool"].pop(rng.randrange(len(etat["pool"])))
+            texte = texte_indice(etat, indice, rng)
+            etat["decouvertes"].append({"t": maintenant, "texte": texte, "categorie": indice["categorie"], "element": indice["element"]})
+            _annoncer(etat, maintenant, texte)
+            ev.append(_tous({"type": "enq_decouverte", "texte": texte, "categorie": indice["categorie"],
+                             "element": indice["element"], "source": textes["nom"], "recu_a": maintenant}))
+            if not etat["pool"] and not etat["dossier_epuise"]:
+                etat["dossier_epuise"] = True
+                _annoncer(etat, maintenant, PACKS[etat["univers"]]["textes"]["annonces"]["dossier_epuise"])
+    elif type_ == "brouhaha":
+        etat["prochaine_rumeur_a"] = min(etat.get("prochaine_rumeur_a") or e["fin"],
+                                         maintenant + _intervalle(etat, config, rng, "rumeurs_toutes") / 4)
+    elif type_ == "interrogatoire":
+        e["interroges"] = rng.sample([j["nom"] for j in etat["joueurs"]], min(2, len(etat["joueurs"])))
+        e["refus"] = []
+    etat["version"] += 1
+    ev.insert(0, _tous({"type": "enq_evenement", "evenement": type_, "nom": textes["nom"], "texte": textes["debut"],
+                        "fin": e["fin"], "interroges": e.get("interroges", [])}))
+    return ev
+
+
+def _refuser_interrogatoire(etat, nom, message, maintenant, rng, config):
+    """Un joueur designe refuse de livrer un indice a voix haute : il boit."""
+    e = etat.get("evenement")
+    if not _actif(etat, "interrogatoire", maintenant) or not any(cle_nom(x) == cle_nom(nom) for x in e["interroges"]):
+        return _erreur(nom, "Personne ne t'interroge en ce moment.")
+    if any(cle_nom(x) == cle_nom(nom) for x in e["refus"]):
+        return _erreur(nom, "Tu as déjà refusé.")
+    e["refus"].append(nom)
+    etat["version"] += 1
+    return [_imposer(etat, nom, _gorgees(etat, config, config["gorgees"]["refus_interrogatoire"]), "Refus de répondre", maintenant)]
 
 
 def recapitulatif(etat):

@@ -24,6 +24,8 @@ async function attendreQue(test, delai) {
 // Texte VISIBLE de la page (textContent inclut aussi le code des <script>).
 async function visible(page) { return page.evaluate(() => document.body.innerText); }
 // Les confirmations sont des fenêtres dans la page (role=dialog) : on clique le bouton nommé.
+const document_body_coupure = (c) => /evt-coupure/.test(c);
+
 async function confirmerDansPage(page, libelle) {
   return attendreQue(() => page.evaluate((l) => {
     const b = [...document.querySelectorAll('[role=dialog] button')].find(x => x.textContent === l);
@@ -250,6 +252,30 @@ async function sansDefilement(page) {
   verifier(!!await attendreQue(() => pt.evaluate(() => /Tes sabotages/.test(document.getElementById('dossier').innerText) && document.querySelectorAll('#dossier section:last-child p').length === 3), 8000),
     '  la console garde l\'historique de ses 3 sabotages');
   await pt.evaluate(() => [...document.querySelectorAll('#dossier header button')][0].click());
+
+  // Événements d'ambiance
+  const pe0 = pages[enqs[0]];
+  await fetch(API + '/test/evenement/' + code + '/coupure');
+  const bande = await attendreQue(() => pe0.evaluate(() => { const b = document.querySelector('.evenement-bande'); return b && document.body.classList.contains('evt-coupure') && b.innerText; }), 10000);
+  verifier(!!bande && /courant/i.test(bande), 'coupure : bandeau avec sa règle et son compte à rebours chez tout le monde');
+  await onglet(pe0, 'indices');
+  const coupe = await attendreQue(() => pe0.evaluate(() => { const b = document.querySelector('[data-relire]'); return b && b.disabled && /Courant coupé/.test(b.textContent); }), 8000);
+  verifier(!!coupe, '  l\'archive est verrouillée (« Courant coupé »)');
+  await onglet(pe0, 'plan');
+  if (CAPTURES) { await attendre(800); await pe0.screenshot({ path: CAPTURES + '/enquete-coupure.png' }); }
+  await fetch(API + '/test/evenement/' + code + '/decouverte');
+  const lettresD = await Promise.all(noms.map(n => attendreQue(() => pages[n].evaluate(() => { const a = [...document.querySelectorAll('.lettre .avis')].find(x => /Indice public/.test(x.textContent)); return a && document.querySelector('.lettre .corps').textContent; }), 10000)));
+  verifier(lettresD.every(x => x && x === lettresD[0]) && !document_body_coupure(await pe0.evaluate(() => document.body.className)),
+    'découverte : tous reçoivent le même indice public, illustré (« ' + (lettresD[0] || '').slice(0, 45) + '… »), et le courant est revenu');
+  if (CAPTURES) await pe0.screenshot({ path: CAPTURES + '/enquete-decouverte.png' });
+  for (const n of noms) await pages[n].evaluate(() => document.querySelectorAll('.voile').forEach(v => v.remove()));
+  const inter = (await (await fetch(API + '/test/evenement/' + code + '/interrogatoire')).json()).evenement.interroges;
+  const pi = pages[inter[0]];
+  verifier(!!await clic(pi, '.evenement-bande button'), 'interrogatoire : ' + inter.join(' et ') + ' sont désignés, bouton « Je refuse »');
+  await confirmerDansPage(pi, 'Je refuse');
+  const refus = await attendreQue(() => pi.evaluate(() => { const t = document.getElementById('toast'); return t && /Bois/.test(t.textContent) && t.textContent; }), 8000);
+  verifier(!!refus, '  refuser coûte des gorgées : « ' + (refus || '') + ' »');
+  await fetch(API + '/test/evenement/' + code + '/maree');
 
   // Carnet sur le plan
   await onglet(max, 'plan');
