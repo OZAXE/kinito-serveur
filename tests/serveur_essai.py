@@ -92,5 +92,12 @@ async def crediter(code: str, nom: str, n: int):
     return {"ok": True}
 
 
+@serveur.app.get("/test/solution/{code}")
+async def solution(code: str):
+    """Reserve aux tests : la solution secrete de l enquete."""
+    couche = serveur.couches.get(serveur.soiree_de(code), {}).get("enq")
+    return couche.etat["solution"] if couche else {}
+
+
 if __name__ == "__main__":
     uvicorn.run(serveur.app, host="127.0.0.1", port=8000, log_level="warning")
