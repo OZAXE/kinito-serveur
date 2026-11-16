@@ -271,6 +271,17 @@ async def essai_tables():
     verifier(info["tables"][0]["joueurs"] == ["Lea"] and sorted(info["tables"][1]["joueurs"]) == ["Max", "Zoe"],
              "  la soiree le voit a la table 2")
 
+    # Annonce des defaites a la table (animation sur les telephones)
+    wz.recus.clear(); wl.recus.clear()
+    await serveur.signaler(t2, "beerbattle", "victoire", gagnants=["Zoe"])
+    r = [m for m in wz.recus if m.get("type") == "table_resultat"]
+    verifier(r and r[-1]["perdants"] == ["Max"] and r[-1]["gagnants"] == ["Zoe"],
+             "fin de partie : la table apprend que Max a perdu (Zoe gagne)")
+    verifier(not any(m.get("type") == "table_resultat" for m in wl.recus), "  l autre table n en sait rien")
+    await serveur.signaler(code, "kinito", "manche", perdants=["Lea"], details={"gorgees": 3})
+    r = [m for m in wl.recus if m.get("type") == "table_resultat"]
+    verifier(r and r[-1]["perdants"] == ["Lea"] and r[-1]["gorgees"] == {"Lea": 3}, "manche de Kinito perdue : Lea, 3 gorgees")
+
     # Les couches couvrent toute la soiree.
     await envoyer(t2, zoe, {"type": "tst_lancer"})
     couche = serveur.couches.get(code, {}).get("tst")

@@ -61,8 +61,9 @@ async function tester(navigateur, jeu) {
   await A.goto(SITE + page);
   await A.fill('#pseudo', 'Alice');
   await A.locator('button', { hasText: /Cr.er un salon/ }).first().click();
-  await A.waitForFunction(() => /^[A-Z]{4}$/.test((document.querySelector('.code-salon') || {}).textContent || ''));
-  const code = (await A.textContent('.code-salon')).trim();
+  // Le code n'est plus affiché dans le jeu (il est sur l'accueil de la soirée) : on le lit dans la page.
+  await A.waitForFunction(() => { try { return /^[A-Z]{4}$/.test(JSON.parse(localStorage.getItem('shield.soiree')).table); } catch (e) { return false; } });
+  const code = await A.evaluate(() => JSON.parse(localStorage.getItem('shield.soiree')).table);
 
   for (const [p, nom] of [[B, 'Bruno'], [C, 'Chloe']]) {
     await p.goto(SITE + page + '?salon=' + code);

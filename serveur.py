@@ -3002,11 +3002,44 @@ async def signaler(code_salon, jeu, type_evt, gagnants=(), perdants=(), details=
     """
     table = code_salon
     code_salon = soiree_de(code_salon)
+    salon = salons.get(table)
+    if salon is not None:
+        await annoncer_resultat(table, salon, jeu, type_evt, gagnants, perdants, details or {})
     if not couches.get(code_salon):
         return
-    salon = salons.get(table)
     async with verrou_soiree(code_salon):
         await _signaler(code_salon, salon, table, jeu, type_evt, gagnants, perdants, details)
+
+
+async def annoncer_resultat(table, salon, jeu, type_evt, gagnants, perdants, details):
+    """
+    Annonce a la table qui a perdu (et gagne), pour l animation de defaite
+    sur les telephones (commun/soiree.js). Un seul message pour tous les jeux :
+    - perdants donnes par le jeu (Kinito : le perdant de la manche) ;
+    - fin de partie (victoire) : tous ceux qui ne gagnent pas ;
+    - Buckshot : ceux qui boivent le plus sur la manche.
+    """
+    presents = [j["nom"] for j in salon["joueurs"] if not j.get("parti")]
+    gorgees = {}
+    perdus = list(perdants)
+    if not perdus and type_evt == "victoire" and gagnants:
+        g = {cle_prenom(n) for n in gagnants}
+        perdus = [n for n in presents if cle_prenom(n) not in g]
+    if not perdus and jeu == "buckshot" and type_evt == "manche":
+        par = {n: v for n, v in (details.get("gorgees") or {}).items() if v}
+        if par:
+            pire = max(par.values())
+            perdus = [n for n, v in par.items() if v == pire]
+            gorgees = par
+    if jeu == "kinito" and perdus:
+        gorgees = {perdus[0]: details.get("gorgees")}      # None : cul sec
+    if not perdus:
+        return
+    try:
+        await diffuser(table, {"type": "table_resultat", "jeu": jeu, "evt": type_evt, "gagnants": list(gagnants),
+                               "perdants": perdus, "gorgees": gorgees})
+    except Exception:
+        journal.exception("Annonce du resultat a la table %s", table)
 
 
 async def _signaler(code_salon, salon, table, jeu, type_evt, gagnants, perdants, details):

@@ -55,6 +55,19 @@ async function attendreQue(test, delai) {
   await attendreQue(() => lea.evaluate(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(x => x.textContent === 'Rejoindre'); if (b) { b.click(); return true; } return false; }), 5000);
   verifier(!!await attendreQue(() => lea.evaluate((c) => JSON.parse(localStorage.getItem('shield.soiree')).table === c, code), 10000),
     'toucher la ligne d’une table (et confirmer) y fait asseoir aussi');
+  // Animation de défaite (commune à tous les jeux, dans commun/soiree.js)
+  const resultat = { type: 'table_resultat', jeu: 'kinito', evt: 'manche', gagnants: [], perdants: ['Lea'], gorgees: { Lea: 3 } };
+  await lea.evaluate((m) => Soiree.traiterMessage(m, 'kinito'), resultat);
+  await max.evaluate((m) => Soiree.traiterMessage(m, 'kinito'), resultat);
+  const anim = await attendreQue(() => lea.evaluate(() => { const v = document.querySelector('.res-voile.perdu'); return v && v.innerText; }), 5000);
+  verifier(!!anim && /Bois 3 gorgées/.test(anim), 'Léa perd la manche : animation de défaite (« ' + (anim || '').replace(/\n/g, ' ').slice(0, 60) + ' »)');
+  if (CAPTURES) { await attendre(900); await lea.screenshot({ path: CAPTURES + '/defaite.png' }); }
+  const bandeau = await attendreQue(() => max.evaluate(() => { const b = document.querySelector('.res-bandeau'); return b && b.textContent; }), 5000);
+  verifier(!!bandeau && /Lea a perdu la manche/.test(bandeau), '  Max voit le bandeau : « ' + (bandeau || '') + ' »');
+  verifier(!!await attendreQue(() => lea.evaluate(() => !document.querySelector('.res-voile')), 6000), '  l’animation disparaît seule, sans bloquer le jeu');
+  await max.evaluate(() => Soiree.traiterMessage({ type: 'table_resultat', jeu: 'menteur', evt: 'victoire', gagnants: ['Max'], perdants: ['Lea'], gorgees: {} }, 'menteur'));
+  verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('.res-voile.gagne')), 5000), 'fin de partie : le gagnant a droit à « Bien joué ! »');
+  if (CAPTURES) { await attendre(900); await max.screenshot({ path: CAPTURES + '/victoire.png' }); }
   await nav.close();
   console.log(echecs ? echecs + ' ECHEC(S)' : 'OK');
   process.exit(echecs ? 1 : 0);
