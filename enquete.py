@@ -160,6 +160,8 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "unite": config["gorgees"]["unite_defaut"],
         "dosage": "normal",         # doux | normal | corse (multiplie les gorgees)
         "plafond": config["gorgees"]["plafond_par_heure"],   # gorgees max par heure et par joueur (0 : sans)
+        "gorgees_publiques": True,  # chaque penalite s affiche chez tout le monde (anti-triche)
+        "penalites": [],            # public si gorgees_publiques : [{id, t, nom, nombre, raison, bu}]
         "joueurs": [],              # [{"nom", "portrait"}], ordre d arrivee
         # --- secret jusqu a la fin ---
         "tueur": None,
@@ -232,6 +234,7 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_charge": _acheter_charge,
         "enq_sabotage": _saboter,
         "enq_refuser": _refuser_interrogatoire,
+        "enq_bu": _c_est_bu,
     }.get(t)
     if f is None:
         return []
@@ -301,6 +304,8 @@ def _configurer(etat, nom, message, maintenant, rng, config):
         if not isinstance(d, (int, float)) or not 600 <= d <= 8 * 3600:
             return _erreur(nom, "Durée entre 10 minutes et 8 heures.")
         etat["duree"] = int(d)
+    if "gorgees_publiques" in message:
+        etat["gorgees_publiques"] = bool(message["gorgees_publiques"])
     if "dosage" in message:
         if message["dosage"] not in config["gorgees"]["dosages"]:
             return _erreur(nom, "Dosage inconnu.")
@@ -429,6 +434,8 @@ def vue_publique(etat, maintenant):
         "dosage": etat.get("dosage", "normal"),
         "dosages": CONFIG["gorgees"]["dosages"],
         "plafond": etat.get("plafond"),
+        "gorgees_publiques": etat.get("gorgees_publiques", True),
+        "penalites": etat.get("penalites", []) if etat.get("gorgees_publiques", True) else [],
         "plafonds": CONFIG["gorgees"]["plafonds"],
         "jeux": etat["jeux"],
         "duree": etat["duree"],
@@ -680,6 +687,12 @@ def _imposer(etat, nom, nombre, raison, maintenant, config=None):
         exces = nombre - bu
     if bu:
         p["gorgees"].append([maintenant, bu, raison])
+        if etat.get("gorgees_publiques", True):
+            # Affiche a tous jusqu a ce que le joueur confirme : pas de gorgee oubliee.
+            etat.setdefault("penalites", []).append({"id": etat["prochain_id"], "t": maintenant, "nom": nom,
+                                                     "nombre": bu, "raison": raison, "bu": False})
+            etat["prochain_id"] += 1
+            del etat["penalites"][:-PENALITES_MAX]
     secondes = 0
     if exces:
         secondes = exces * config["gorgees"]["handicap_par_gorgee"]
@@ -687,6 +700,22 @@ def _imposer(etat, nom, nombre, raison, maintenant, config=None):
         p.setdefault("handicaps", []).append([maintenant, exces, raison])
     return _a(nom, {"type": "enq_gorgee", "nombre": bu, "unite": etat["unite"], "raison": raison,
                     "handicap": secondes})
+
+
+PENALITES_MAX = 40
+
+
+def _c_est_bu(etat, nom, message, maintenant, rng, config):
+    """Le joueur confirme devant tous qu il a bu sa penalite."""
+    for x in etat.get("penalites", []):
+        if x["id"] == message.get("id"):
+            if cle_nom(x["nom"]) != cle_nom(nom):
+                return _erreur(nom, "Ce n'est pas ta pénalité.")
+            if not x["bu"]:
+                x["bu"] = True
+                etat["version"] += 1
+            return []
+    return _erreur(nom, "Pénalité introuvable.")
 
 
 def _handicap(etat, nom, maintenant):

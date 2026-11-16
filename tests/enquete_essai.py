@@ -761,6 +761,36 @@ def essai_gorgees_et_plafonds():
     verifier(m._imposer(e2, "Max", 50, "Essai", 2000.0)["msg"]["nombre"] == 50, "plafond désactivé : aucune limite")
 
 
+def essai_penalites_publiques():
+    print("Pénalités visibles par tous")
+    e, t = en_cours(5, 21)
+    e["programme"] = []
+    a = e["joueurs"][1]["nom"]
+    sol = e["solution"]
+    mauvais = next(x for x in e["lieux"] if x != sol["lieu"])
+    m.action(e, a, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": mauvais}, t)
+    pen = m.vue_publique(e, t)["penalites"]
+    verifier(len(pen) == 1 and pen[0]["nom"] == a and pen[0]["nombre"] >= 1 and not pen[0]["bu"],
+             "accusation ratée : tout le monde voit qui doit boire, et combien")
+    verifier(set(pen[0].keys()) == {"id", "t", "nom", "nombre", "raison", "bu"}, "  sans le contenu de l'accusation (ni lieu, ni arme, ni suspect)")
+    autre = e["joueurs"][2]["nom"]
+    verifier(m.action(e, autre, {"type": "enq_bu", "id": pen[0]["id"]}, t)[0]["msg"]["type"] == "enq_erreur", "  personne d'autre ne peut cocher à sa place")
+    m.action(e, a, {"type": "enq_bu", "id": pen[0]["id"]}, t + 5)
+    verifier(m.vue_publique(e, t + 5)["penalites"][0]["bu"], "  le joueur confirme « C'est bu » devant tous")
+    k = e["tueur"]
+    pk = m._perso(e, k)
+    pk["charges"] = 1
+    n = len(e["penalites"])
+    autre = next(j["nom"] for j in e["joueurs"] if j["nom"] != k)
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "interception", "cible": autre}, t + 6)
+    verifier(len(e["penalites"]) == n, "un sabotage ne fait jamais boire le tueur (rien ne le trahit)")
+    e2 = partie(4)
+    m.action(e2, "Lea", {"type": "enq_config", "gorgees_publiques": False}, 1000.0)
+    m.action(e2, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(2))
+    m._imposer(e2, "Max", 2, "Essai", 2000.0)
+    verifier(m.vue_publique(e2, 2000.0)["penalites"] == [], "l'hôte peut garder les pénalités privées")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -774,6 +804,7 @@ essai_sabotages()
 essai_detection_et_rumeurs()
 essai_evenements()
 essai_gorgees_et_plafonds()
+essai_penalites_publiques()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)

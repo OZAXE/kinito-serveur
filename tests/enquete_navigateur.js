@@ -167,6 +167,12 @@ async function sansDefilement(page) {
   await max.evaluate(() => document.querySelector('.voile button').click());
   verifier(!!await attendreQue(() => max.evaluate(() => { const b = document.querySelector('[data-relire]'); return b && b.disabled && /Relire dans/.test(b.textContent); }), 5000),
     '  puis chrono avant la prochaine relecture');
+  const chezZoe = await attendreQue(() => pages.Zoe.evaluate(() => { const v = [...document.querySelectorAll('.a-boire .verre')].find(x => /Max/.test(x.textContent)); return v && v.textContent; }), 10000);
+  verifier(!!chezZoe, '  pénalité visible par tous : Zoé voit « ' + (chezZoe || '') + ' »');
+  if (CAPTURES) await pages.Zoe.screenshot({ path: CAPTURES + '/enquete-a-boire.png' });
+  await clicSel(max, '[data-bu]');
+  verifier(!!await attendreQue(() => pages.Zoe.evaluate(() => ![...document.querySelectorAll('.a-boire .verre')].some(x => /Max/.test(x.textContent))), 10000),
+    '  Max tape « C’est bu ✓ » : la pénalité disparaît chez tout le monde');
 
   // Témoin anonyme et contre-expertise
   const servi = (await (await fetch(API + '/test/temoin/' + code)).json()).nom;
