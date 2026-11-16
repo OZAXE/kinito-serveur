@@ -3145,19 +3145,51 @@ async def info_salon(code: str):
     }
 
 
+# --- Qui est dans la soiree ---
+# L accueil n a pas de connexion permanente : il relit l etat de la soiree
+# toutes les quelques secondes en donnant son prenom (?nom=), ce qui le
+# compte present. S y ajoutent les joueurs assis aux tables et ceux qui ont
+# l Enquete ouverte (connexion soiree).
+presences_accueil = {}    # soiree -> {cle du prenom: {"nom", "vu", "arrive"}}
+PRESENCE_ACCUEIL = 30     # secondes sans nouvelles avant de ne plus compter
+
+
+def presents_soiree(soiree, tables):
+    maintenant = time.time()
+    vus = presences_accueil.get(soiree, {})
+    for k in [k for k, v in vus.items() if maintenant - v["vu"] > 4 * PRESENCE_ACCUEIL]:
+        del vus[k]
+    out = {}
+    for t in tables:
+        for nom in t["joueurs"]:
+            out.setdefault(cle_prenom(nom), {"nom": nom, "ou": "Table " + str(t["numero"]) + (" · " + t["titre"] if t.get("titre") else "")})
+    for a in abonnes_soirees.get(soiree, {}).values():
+        out.setdefault(cle_prenom(a["nom"]), {"nom": a["nom"], "ou": "Enquête"})
+    for k, v in vus.items():
+        if maintenant - v["vu"] <= PRESENCE_ACCUEIL:
+            out.setdefault(k, {"nom": v["nom"], "ou": "Accueil"})
+    return sorted(out.values(), key=lambda x: x["nom"].casefold())
+
+
 @app.get("/soiree/{code}")
-async def info_soiree(code: str):
-    """La soiree : ses tables (jeu, joueurs presents) et ses couches."""
+async def info_soiree(code: str, nom: str = ""):
+    """La soiree : ses tables (jeu, joueurs presents), ses couches et qui est la."""
     code = soiree_de(code)
     if not soiree_existe(code):
         return {"existe": False}
+    nom = " ".join(nom.split())[:24]
+    if nom:
+        vus = presences_accueil.setdefault(code, {})
+        k = cle_prenom(nom)
+        vus[k] = {"nom": nom, "vu": time.time(), "arrive": vus.get(k, {}).get("arrive", time.time())}
     tables = []
     for t in _tables(code):
         jeu = JEUX.get(t["jeu"])
         t["titre"] = jeu.titre if jeu else None
         t["page"] = jeu.page if jeu else None
         tables.append(t)
-    return {"existe": True, "code": code, "tables": tables, "couches": sorted(couches.get(code, {}))}
+    return {"existe": True, "code": code, "tables": tables, "couches": sorted(couches.get(code, {})),
+            "presents": presents_soiree(code, tables)}
 
 
 @app.get("/soiree/{code}/rouvrir")
