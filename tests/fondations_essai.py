@@ -286,6 +286,20 @@ async def essai_tables():
     await ctx.envoyer_nom("Zoe", {"type": "tst_prive"})
     verifier({"type": "tst_prive"} in sz.recus, "  et joint un joueur par sa connexion soiree")
 
+    # Qui est dans la soiree : tables, Enquete (connexion soiree) et accueil
+    info = await serveur.info_soiree(code, nom="Ana")
+    p = {x["nom"]: x["ou"] for x in info["presents"]}
+    verifier(p.get("Ana") == "Accueil" and p.get("Lea", "").startswith("Table 1") and p.get("Zoe", "").startswith("Table 2"),
+             "presents : Ana sur l accueil, Lea a la table 1, Zoe a la table 2 (" + str(p) + ")")
+    verifier("Kinito" in p.get("Lea", ""), "  avec le jeu de la table")
+    noe = FauxWS()
+    await serveur.abonner(code, "Noe", noe)
+    verifier({x["nom"]: x["ou"] for x in (await serveur.info_soiree(code))["presents"]}.get("Noe") == "Enquête",
+             "  Noe, qui n a que l Enquete ouverte, compte aussi")
+    serveur.presences_accueil[code]["ana"]["vu"] -= serveur.PRESENCE_ACCUEIL + 1
+    verifier("Ana" not in [x["nom"] for x in (await serveur.info_soiree(code))["presents"]],
+             "  Ana, sans nouvelles depuis 30 s, n est plus comptee")
+
     # La table 1 liberee, le code reste pris tant que la table 2 vit.
     del serveur.salons[code]
     verifier(serveur.soiree_existe(code) and (await serveur.info_salon(code))["existe"],

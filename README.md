@@ -20,6 +20,9 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
 - Les couches (l'Enquête) appartiennent à la soirée : elles voient les joueurs et les victoires
   de toutes les tables.
 
+- Qui est là : `/soiree/{code}?nom=Lea` compte Léa présente sur l'accueil (30 s sans nouvelles : plus
+  comptée) ; `presents` réunit les joueurs des tables (avec le jeu), ceux qui ont l'Enquête ouverte et l'accueil.
+
 ## Une table = un salon
 
 - Le même code sert toute la soirée. **Règle unique de lancement** : en salle d'attente le jeu démarre ;
@@ -97,6 +100,7 @@ python tests/non_fuite_essai.py 300         # parties au hasard : rien ne trahit
 python tests/simulation.py --partage 0.5    # équilibre : victoires du tueur, accusations, gorgées/h
 node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
 node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
+node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 python tests/banc_reconnexions.py --jeu tous --duree 20
 node tests/navigateur.js                    # serveur_essai.py + site sur localhost:8765
 # Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :
