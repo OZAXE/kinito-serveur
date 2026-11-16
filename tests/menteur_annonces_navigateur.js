@@ -38,6 +38,13 @@ async function attendreQue(test, delai) {
     });
     ws.onMessage((m) => serveur.send(m));
   });
+  // Chaque grande annonce est notée dès qu'elle apparaît (elles se suivent vite)
+  await ctx.addInitScript(() => {
+    window.__annonces = [];
+    new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+      if (n.classList && n.classList.contains('annonce-mt')) window.__annonces.push(n.innerText.replace(/\n/g, ' · '));
+    }))).observe(document, { childList: true, subtree: true });
+  });
   console.log('== menteur : annonces');
   await p.goto(SITE + 'menteur-3d-jeu.html', { timeout: 120000 });
   await p.fill('#pseudo', 'Enzo');
@@ -59,13 +66,14 @@ async function attendreQue(test, delai) {
   await attendreQue(() => enzo.etat.pose && enzo.etat.courant === autre, 10000);
   await attendre(1500);
   joueur(autre)({ type: 'mt_menteur' });
-  const cri = await attendreQue(() => p.evaluate(() => { const a = document.querySelector('.annonce-mt'); return a && /MENTEUR/.test(a.innerText) && a.innerText; }), 15000);
-  verifier(!!cri, 'tout le monde voit en grand : « ' + (cri || '').replace(/\n/g, ' · ') + ' »');
-  if (CAPTURES) { await attendre(500); await p.screenshot({ path: CAPTURES + '/menteur-cri.png' }); }
-  const verdict = await attendreQue(() => p.evaluate(() => { const a = document.querySelector('.annonce-mt'); return a && /VRAI|MENSONGE|DIABLE|CHAOS|MAÎTRE/.test(a.innerText) && a.innerText; }), 15000);
-  verifier(!!verdict, '  puis le verdict, en grand, avec les cartes posées : « ' + (verdict || '').replace(/\n/g, ' · ') + ' »');
-  verifier(await p.evaluate(() => !!document.querySelector('.annonce-mt .carte-mt') || /DIABLE|CHAOS|MAÎTRE/.test(document.querySelector('.annonce-mt').innerText)), '  les cartes réellement posées sont montrées à tous');
-  if (CAPTURES) { await attendre(500); await p.screenshot({ path: CAPTURES + '/menteur-verdict.png' }); }
+  const cri = await attendreQue(() => p.evaluate(() => window.__annonces.find((t) => /MENTEUR/.test(t))), 15000);
+  verifier(!!cri, 'tout le monde voit en grand : « ' + (cri || '') + ' »');
+  const verdict = await attendreQue(() => p.evaluate(() => window.__annonces.find((t) => /VRAI|MENSONGE|DIABLE|CHAOS|MAÎTRE/.test(t))), 15000);
+  verifier(!!verdict, '  puis le verdict, en grand : « ' + (verdict || '') + ' »');
+  verifier(!!verdict && (/[♔♕AJ★]/.test(verdict) || /DIABLE|CHAOS|MAÎTRE/.test(verdict)), '  avec les cartes réellement posées, montrées à tous');
+  const suite = await attendreQue(() => p.evaluate(() => window.__annonces.find((t) => /BANG|clic/.test(t))), 15000);
+  verifier(!!suite, '  puis le tir : « ' + (suite || '') + ' »');
+  if (CAPTURES) await p.screenshot({ path: CAPTURES + '/menteur-tir.png' });
   verifier(erreurs.length === 0, 'aucune erreur JavaScript' + (erreurs.length ? ' : ' + erreurs.join(' | ') : ''));
   clearInterval(pingMax);
   max.ws.close();
