@@ -302,10 +302,15 @@ async function sansDefilement(page) {
   for (const n of noms) await pages[n].evaluate(() => document.querySelectorAll('.voile').forEach(v => v.remove()));
   const inter = (await (await fetch(API + '/test/evenement/' + code + '/interrogatoire')).json()).evenement.interroges;
   const pi = pages[inter[0]];
-  verifier(!!await clic(pi, '.evenement-bande button'), 'interrogatoire : ' + inter.join(' et ') + ' sont désignés, bouton « Je refuse »');
+  verifier(!!await attendreQue(() => pi.evaluate(() => { const b = [...document.querySelectorAll('.evenement-bande button')].find(x => /Je refuse/.test(x.textContent)); if (b) { b.click(); return true; } return false; }), 8000), 'interrogatoire : ' + inter.join(' et ') + ' sont désignés, bouton « Je refuse »');
   await confirmerDansPage(pi, 'Je refuse');
   const refus = await attendreQue(() => pi.evaluate(() => { const t = document.getElementById('toast'); return t && /Bois/.test(t.textContent) && t.textContent; }), 8000);
   verifier(!!refus, '  refuser coûte des gorgées : « ' + (refus || '') + ' »');
+  const pi2 = pages[inter[1]];
+  verifier(!!await clicSel(pi2, '[data-repondu]'), '  ' + inter[1] + ' livre son indice à voix haute et tape « J’ai répondu ✓ »');
+  const statut = await attendreQue(() => pages[noms.find(n => !inter.includes(n))].evaluate(() => { const s = document.querySelector('.evenement-bande .interroges'); return s && /a répondu/.test(s.innerText) && /a refusé/.test(s.innerText) && s.innerText; }), 10000);
+  verifier(!!statut, '  tout le monde voit qui a répondu et qui a refusé : « ' + (statut || '').replace(/\n/g, ' ') + ' »');
+  if (CAPTURES) await pi2.screenshot({ path: CAPTURES + '/enquete-interrogatoire.png' });
   await fetch(API + '/test/evenement/' + code + '/maree');
 
   // Carnet sur le plan

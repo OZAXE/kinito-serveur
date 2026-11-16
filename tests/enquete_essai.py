@@ -703,6 +703,20 @@ def essai_evenements():
     verifier(ev and ev[0]["msg"]["type"] == "enq_gorgee" and ev[0]["msg"]["raison"] == "Refus de répondre", "  refuser coûte des gorgées")
     hors = next(j["nom"] for j in e["joueurs"] if j["nom"] not in inter)
     verifier(m.action(e, hors, {"type": "enq_refuser"}, t + 1)[0]["msg"]["type"] == "enq_erreur", "  seuls les désignés sont concernés")
+    verifier(m.action(e, inter[0], {"type": "enq_repondu"}, t + 2)[0]["msg"]["type"] == "enq_erreur", "  on ne peut pas refuser puis dire « j'ai répondu »")
+    ev = m.action(e, inter[1], {"type": "enq_repondu"}, t + 2)
+    verifier(ev == [] and m.vue_publique(e, t + 2)["evenement"]["repondu"] == [inter[1]], "« J'ai répondu » : visible par tous, sans gorgée")
+    verifier(m.action(e, inter[1], {"type": "enq_refuser"}, t + 3)[0]["msg"]["type"] == "enq_erreur", "  et plus de refus possible ensuite")
+    # Silence jusqu'au bout : compte comme un refus
+    e, t, ev = partie_evt("interrogatoire", g=5)
+    inter = e["evenement"]["interroges"]
+    m.action(e, inter[0], {"type": "enq_repondu"}, t + 1)
+    ev = m.expirer(e, e["evenement"]["fin"])
+    g = [x for x in ev if x["msg"]["type"] == "enq_gorgee"]
+    verifier(len(g) == 1 and g[0]["a"] == inter[1] and g[0]["msg"]["raison"] == "Silence à l'interrogatoire",
+             "silence jusqu'à la fin de l'interrogatoire : compte comme un refus (gorgées)")
+    verifier(any(x["nom"] == inter[1] and x["raison"] == "Silence à l'interrogatoire" for x in m.vue_publique(e, t)["penalites"]),
+             "  et la pénalité s'affiche chez tout le monde")
 
     # Marée
     e, t, _ = partie_evt("maree")
