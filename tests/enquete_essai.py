@@ -119,8 +119,9 @@ def essai_non_fuite():
         verifier(e["solution"]["arme"] in pub["armes"], "  (les armes retenues, elles, sont publiques)")
     vues = [m.vue_privee(e, j["nom"]) for j in e["joueurs"]]
     verifier(len({tuple(sorted(v)) for v in vues}) == 1, "vue privée : mêmes clés pour les 8 joueurs")
-    verifier(sum(v["role"] == "tueur" for v in vues) == 1 and all(v["solution"] is None for v in vues if v["role"] != "tueur"),
-             "  un seul tueur, et lui seul connaît la solution")
+    verifier(sum(v["role"] == "tueur" for v in vues) == 1 and all(v["solution"] == {"tueur": None, "arme": None, "lieu": None}
+                                                                     for v in vues if v["role"] != "tueur"),
+             "  un seul tueur, et lui seul connaît la solution (les autres : même forme, vide)")
     spect = m.vue_privee(e, "Inconnu")
     verifier(sorted(spect) == sorted(vues[0]) and spect["role"] is None, "  même forme pour un spectateur")
 
@@ -250,11 +251,12 @@ def essai_accusations():
     ev = m.action(e, a, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": sol["lieu"]}, t + 60)
     verifier(ev[0]["msg"]["type"] == "enq_erreur", "délai avant la prochaine accusation")
     attente = p(a)["prochaine_accusation_a"] - t
-    verifier(attente == 600 * 2, "  doublé après un échec (20 min en Soirée)")
+    d0 = m.CONFIG["vitesses"]["soiree"]["delai_accusation"]
+    verifier(attente == d0 * 2, f"  doublé après un échec ({2 * d0 // 60} min en Soirée)")
     ev = m.action(e, a, {"type": "enq_accuser", "suspect": "Personne", "arme": sol["arme"], "lieu": sol["lieu"]}, t + 5000)
     verifier(ev[0]["msg"]["type"] == "enq_erreur" and e["echecs"] == 1, "accusation incomplète ou invalide : refusée, ne compte pas")
     m.action(e, a, {"type": "enq_accuser", "suspect": b, "arme": autre_arme, "lieu": autre_lieu}, t + 5000)
-    verifier(p(a)["prochaine_accusation_a"] - (t + 5000) == 600 * 4 and p(a)["gorgees"][-1][1] == 4,
+    verifier(p(a)["prochaine_accusation_a"] - (t + 5000) == d0 * 4 and p(a)["gorgees"][-1][1] == 4,
              "deuxième échec : délai x4, 4 gorgées")
     # Le tueur bluffe : même en accusant juste, c'est un échec pour tous.
     ev = m.action(e, sol["tueur"], {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": sol["lieu"]}, t)
@@ -461,7 +463,8 @@ def essai_sabotages():
     vue = m.vue_privee(e, k, t)["console"]
     verifier(vue and vue["charges"] == 3 and set(vue["cibles"]) == set(autres) and abs(vue["detection"] - 0.5) < 1e-6,
              "  sa console : charges, cibles, détection de départ (50 %)")
-    verifier(all(m.vue_privee(e, n, t)["console"] is None for n in autres), "  la console n'existe que pour lui (None pour les autres)")
+    verifier(all(m.vue_privee(e, n, t)["console"].keys() == vue.keys() and m.vue_privee(e, n, t)["console"]["cibles"] == [] for n in autres),
+             "  les autres reçoivent une console factice de même forme, vide")
     pub = json.dumps(m.vue_publique(e, t), ensure_ascii=False)
     verifier('"charges"' not in pub and "console" not in pub, "  rien dans l'état public")
 
@@ -858,6 +861,32 @@ def essai_univers():
         verifier(pub["plan"].get("decor", "manoir") in ("manoir", "station", "velvet") and len(pub["evenements"]) == 6, "  pack public : décor 3D et événements")
 
 
+def essai_joueurs_fictifs():
+    print("Joueurs fictifs")
+    e = m.nouvelle_partie("ABCD", "Lea", 1000.0)
+    m.action(e, "Lea", {"type": "enq_portrait", "portrait": "comtesse"}, 1000.0)
+    verifier(m.action(e, "Max", {"type": "enq_bot_ajouter"}, 1000.0)[0]["msg"]["type"] == "enq_erreur", "seul l'hôte ajoute des joueurs fictifs")
+    for _ in range(4):
+        m.action(e, "Lea", {"type": "enq_bot_ajouter"}, 1000.0, rng=random.Random(1))
+    bots = [j for j in e["joueurs"] if j.get("bot")]
+    verifier(len(bots) == 4 and len({j["portrait"] for j in e["joueurs"]}) == 5, "l'hôte en ajoute : chacun a un portrait libre")
+    verifier(all(j["bot"] for j in m.vue_publique(e, 1000.0)["joueurs"] if j["nom"] != "Lea"), "  ils sont marqués comme fictifs pour tous")
+    m.action(e, "Lea", {"type": "enq_bot_retirer", "nom": bots[0]["nom"]}, 1000.0)
+    verifier(len(e["joueurs"]) == 4, "  et peut en retirer")
+    m.action(e, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(2))
+    t = 1000.0 + m.CONFIG["duree_ouverture"]
+    m.expirer(e, t)
+    r = random.Random(3)
+    while e["phase"] == "enquete":
+        t += 60
+        m.expirer(e, t, rng=r)
+        m.tic_bots(e, t, r)
+    actifs = sum(len(m._perso(e, j["nom"])["archive"]) for j in e["joueurs"] if j.get("bot"))
+    verifier(e["phase"] == "fin" and actifs > 0, f"une partie seul contre 3 joueurs fictifs va jusqu'au bout ({e['raison_fin']}, {actifs} plis reçus par eux)")
+    verifier(all(x["bu"] for x in e.get("penalites", []) if any(j["nom"] == x["nom"] and j.get("bot") for j in e["joueurs"])),
+             "  les joueurs fictifs cochent leurs gorgées tout seuls")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -873,6 +902,7 @@ essai_evenements()
 essai_gorgees_et_plafonds()
 essai_penalites_publiques()
 essai_univers()
+essai_joueurs_fictifs()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)

@@ -68,8 +68,15 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
 - Trois univers (`enquetes/manoir.json`, `station.json`, `velvet.json`) : 8 lieux, 8 armes, 12 portraits,
   plan (avec `decor` pour le thème 3D du site), textes du narrateur. Validés au chargement (textes complets,
   modèles qui se remplissent) ; contractions « de le » -> « du » après insertion d'un nom.
+- Joueurs fictifs (`enq_bot_ajouter` / `enq_bot_retirer`, hôte, salle d'attente) : pour tester seul.
+  Ils gagnent `bot_pe_heure` PE par heure et jouent avec `jouer_bot`, qui ne voit que ce qu'un vrai joueur
+  verrait (ses plis, les découvertes, le retour de ses accusations, déduit façon Mastermind). Le même
+  moteur sert au simulateur `tests/simulation.py`.
+- Équilibre (simulation, 6 joueurs, 4 PE/h) : l'entraide pèse plus que tout. À 50 % d'entraide, le tueur
+  gagne environ 60 % en Flash, 35 % en Express, 50 % en Soirée, 35 % en Marathon ; à 25 %, 70 à 85 %.
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
-  mêmes clés pour tous (`tests/enquete_essai.py`).
+  mêmes clés pour tous ; solution et console factices, de même forme, pour les enquêteurs
+  (`tests/enquete_essai.py`, `tests/non_fuite_essai.py`).
 
 ## Base de données
 
@@ -84,7 +91,10 @@ python tests/menteur_essai.py
 python tests/casino_essai.py
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py
+python tests/non_fuite_essai.py 300         # parties au hasard : rien ne trahit le tueur, à chaque étape
+python tests/simulation.py --partage 0.5    # équilibre : victoires du tueur, accusations, gorgées/h
 node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
+node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
 python tests/banc_reconnexions.py --jeu tous --duree 20
 node tests/navigateur.js                    # serveur_essai.py + site sur localhost:8765
 # Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :
