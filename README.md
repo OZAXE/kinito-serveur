@@ -23,6 +23,11 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
 - Qui est là : `/soiree/{code}?nom=Lea` compte Léa présente sur l'accueil (30 s sans nouvelles : plus
   comptée ; `&table=` donne sa table) ; `presents` réunit les joueurs des tables (avec le jeu), ceux qui ont l'Enquête
   ouverte et l'accueil, avec la table de chacun pour la rejoindre d'un toucher.
+- Changer de jeu : une page de jeu se connecte avec `?page=<jeu>`. Si elle arrive à une table dont la partie
+  (d'un autre jeu) n'a plus aucun joueur actif, cette partie abandonnée est close : la table repasse en salle
+  d'attente du nouveau jeu (`attente` dans `/soiree`), au lieu de renvoyer le joueur dans l'ancien jeu.
+- Défaites : `signaler` annonce aussi à la table `table_resultat` (perdants, gagnants, gorgées) ; les pages
+  jouent l'animation (commun/soiree.js).
 
 ## Une table = un salon
 
@@ -102,6 +107,7 @@ python tests/simulation.py --partage 0.5    # équilibre : victoires du tueur, a
 node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
 node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
+node tests/menteur_annonces_navigateur.js   # Menteur : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
 python tests/banc_reconnexions.py --jeu tous --duree 20
 node tests/navigateur.js                    # serveur_essai.py + site sur localhost:8765
 # Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :
