@@ -260,6 +260,7 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_charge": _acheter_charge,
         "enq_sabotage": _saboter,
         "enq_refuser": _refuser_interrogatoire,
+        "enq_repondu": _repondu_interrogatoire,
         "enq_bu": _c_est_bu,
         "enq_bot_ajouter": _ajouter_bot,
         "enq_bot_retirer": _retirer_bot,
@@ -1482,7 +1483,7 @@ def _evenement_public(etat):
     if not e:
         return None
     return {"type": e["type"], "debut": e["debut"], "fin": e["fin"], "interroges": e.get("interroges", []),
-            "refus": e.get("refus", [])}
+            "refus": e.get("refus", []), "repondu": e.get("repondu", [])}
 
 
 def _textes_evenement(etat, type_):
@@ -1493,6 +1494,13 @@ def _evenements(etat, maintenant, rng, config):
     ev = []
     e = etat.get("evenement")
     if e and maintenant >= e["fin"]:
+        if e["type"] == "interrogatoire":
+            # Silence jusqu au bout : compte comme un refus (sinon il suffirait d ignorer).
+            for nom in e.get("interroges", []):
+                if not _a_traite(e, nom):
+                    e["refus"].append(nom)
+                    ev.append(_imposer(etat, nom, _gorgees(etat, config, config["gorgees"]["refus_interrogatoire"]),
+                                       "Silence à l'interrogatoire", maintenant))
         textes = _textes_evenement(etat, e["type"])
         if textes.get("fin"):
             _annoncer(etat, maintenant, textes["fin"])
@@ -1534,19 +1542,41 @@ def demarrer_evenement(etat, type_, maintenant, rng=random, config=None):
     elif type_ == "interrogatoire":
         e["interroges"] = rng.sample([j["nom"] for j in etat["joueurs"]], min(2, len(etat["joueurs"])))
         e["refus"] = []
+        e["repondu"] = []
     etat["version"] += 1
     ev.insert(0, _tous({"type": "enq_evenement", "evenement": type_, "nom": textes["nom"], "texte": textes["debut"],
                         "fin": e["fin"], "interroges": e.get("interroges", [])}))
     return ev
 
 
-def _refuser_interrogatoire(etat, nom, message, maintenant, rng, config):
-    """Un joueur designe refuse de livrer un indice a voix haute : il boit."""
+def _a_traite(e, nom):
+    return any(cle_nom(x) == cle_nom(nom) for x in e.get("refus", []) + e.get("repondu", []))
+
+
+def _verifier_interroge(etat, nom, maintenant):
     e = etat.get("evenement")
     if not _actif(etat, "interrogatoire", maintenant) or not any(cle_nom(x) == cle_nom(nom) for x in e["interroges"]):
-        return _erreur(nom, "Personne ne t'interroge en ce moment.")
-    if any(cle_nom(x) == cle_nom(nom) for x in e["refus"]):
-        return _erreur(nom, "Tu as déjà refusé.")
+        return None, "Personne ne t'interroge en ce moment."
+    if _a_traite(e, nom):
+        return None, "Tu as déjà répondu ou refusé."
+    return e, None
+
+
+def _repondu_interrogatoire(etat, nom, message, maintenant, rng, config):
+    """Un joueur designe signale devant tous qu il a livre son indice a voix haute."""
+    e, refus = _verifier_interroge(etat, nom, maintenant)
+    if refus:
+        return _erreur(nom, refus)
+    e["repondu"].append(nom)
+    etat["version"] += 1
+    return []
+
+
+def _refuser_interrogatoire(etat, nom, message, maintenant, rng, config):
+    """Un joueur designe refuse de livrer un indice a voix haute : il boit."""
+    e, refus = _verifier_interroge(etat, nom, maintenant)
+    if refus:
+        return _erreur(nom, refus)
     e["refus"].append(nom)
     etat["version"] += 1
     return [_imposer(etat, nom, _gorgees(etat, config, config["gorgees"]["refus_interrogatoire"]), "Refus de répondre", maintenant)]
@@ -1635,6 +1665,9 @@ def jouer_bot(etat, nom, maintenant, rng=random, config=None, partage=(), audace
         if cle_nom(x["nom"]) == cle_nom(nom) and not x["bu"]:
             x["bu"] = True
             etat["version"] += 1
+    evt = etat.get("evenement")
+    if _actif(etat, "interrogatoire", maintenant) and any(cle_nom(x) == cle_nom(nom) for x in evt["interroges"]) and not _a_traite(evt, nom):
+        agir({"type": "enq_repondu" if rng.random() < 0.8 else "enq_refuser"})
     for e in list(p["archive"]):
         if not e["lu"] and not e.get("retenu"):
             agir({"type": "enq_lire", "id": e["id"]})
