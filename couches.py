@@ -29,12 +29,15 @@ Evenement signale par un jeu (dict) :
 class Contexte:
     """Ce que le serveur met a disposition d une couche (reseau, horloge, sauvegarde)."""
 
-    def __init__(self, code, diffuser, envoyer_nom, noms_presents, tables,
+    def __init__(self, code, diffuser, envoyer_nom, noms_presents, abonnes, tables,
                  sauvegarder, maintenant):
         self.code = code                    # code de la SOIREE (toutes tables)
-        self.diffuser = diffuser            # async (message) -> a tous les connectes, toutes tables
-        self.envoyer_nom = envoyer_nom      # async (nom, message) -> a ce joueur, ou qu il soit
-        self.noms_presents = noms_presents  # () -> [noms connectes, toutes tables]
+        # Les couches parlent aux joueurs par leur connexion « soiree »
+        # (/ws-soiree), pas par leur place a une table.
+        self.diffuser = diffuser            # async (message) -> a toutes les connexions soiree
+        self.envoyer_nom = envoyer_nom      # async (nom, message) -> a la connexion soiree de ce joueur
+        self.abonnes = abonnes              # () -> [noms ayant une connexion soiree ouverte]
+        self.noms_presents = noms_presents  # () -> [noms assis a une table, toutes tables]
         self.tables = tables                # () -> [{"code", "numero", "jeu", "joueurs"}]
         self.sauvegarder = sauvegarder      # () -> marque la couche a sauvegarder
         self.maintenant = maintenant        # () -> horodatage (secondes)
