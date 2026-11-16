@@ -708,6 +708,59 @@ def essai_evenements():
     verifier(m._perso(e, a)["pe"] == 2, "marée : une victoire rapporte le double de PE")
 
 
+def essai_gorgees_et_plafonds():
+    print("Gorgées, dosage et plafond")
+    e = partie(5)
+    ev = m.action(e, "Lea", {"type": "enq_config", "dosage": "corse", "plafond": 6, "unite": "pompe"}, 1000.0)
+    pub = m.vue_publique(e, 1000.0)
+    verifier(pub["dosage"] == "corse" and pub["plafond"] == 6 and pub["unite"] == "pompe", "l'hôte règle dosage, plafond et unité (mode sans alcool)")
+    verifier(m.action(e, "Max", {"type": "enq_config", "dosage": "doux"}, 1000.0)[0]["msg"]["type"] == "enq_erreur", "  lui seul")
+    verifier(m.action(e, "Lea", {"type": "enq_config", "plafond": 7}, 1000.0)[0]["msg"]["type"] == "enq_erreur", "  plafond parmi les choix proposés")
+    v = pub["vitesses"]["soiree"]
+    verifier(all(x in v for x in ("pe_par_indice", "timer_consultation", "bonus_toutes", "delai_accusation", "evenements", "lieux_armes")),
+             "  chaque vitesse détaille ce qu'elle change")
+    verifier(pub["gorgees_consultation"] == 2 and pub["gorgees_achat"] == 3, "corsé : consultation 1 -> 2, achat 2 -> 3 (x1,5 arrondi)")
+    m.action(e, "Lea", {"type": "enq_config", "dosage": "doux"}, 1000.0)
+    verifier(m.vue_publique(e, 1000.0)["gorgees_achat"] == 1, "doux : achat 2 -> 1")
+    # Plafond
+    m.action(e, "Lea", {"type": "enq_config", "dosage": "normal", "plafond": 6}, 1000.0)
+    m.action(e, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(3))
+    t = 1000.0 + m.CONFIG["duree_ouverture"]
+    m.expirer(e, t)
+    e["programme"] = []
+    nom = "Zoe"
+    p = m._perso(e, nom)
+    ev = m._imposer(e, nom, 4, "Essai", t)
+    verifier(ev["msg"]["nombre"] == 4 and not ev["msg"]["handicap"], "sous le plafond : on boit normalement")
+    ev = m._imposer(e, nom, 4, "Accusation ratée", t + 10)
+    h = m.CONFIG["gorgees"]["handicap_par_gorgee"]
+    verifier(ev["msg"]["nombre"] == 2 and ev["msg"]["handicap"] == 2 * h, "plafond de 6 : on boit 2, les 2 autres deviennent " + str(2 * h // 60) + " min d'attente")
+    verifier(m.vue_privee(e, nom, t + 10)["gorgees_heure"] == 6, "  compteur de l'heure : 6/6")
+    p["archive"].append({"id": 99, "texte": "x", "categorie": "lieu", "element": e["lieux"][0], "vrai": True,
+                         "source": "Victoire", "recu_a": t, "lu": True, "tampon": None})
+    ev = m.action(e, nom, {"type": "enq_consulter", "id": 99}, t + 20)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and "pénalité de temps" in ev[0]["msg"]["message"], "  handicap : archive bloquée")
+    sol = e["solution"]
+    ev = m.action(e, nom, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": sol["lieu"]}, t + 20)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "  et accusations bloquées")
+    verifier(m.vue_privee(e, nom, t + 20)["consultation_possible_a"] == p["handicap_jusqua"], "  l'heure de fin du handicap est affichée")
+    ev = m._imposer(e, nom, 3, "Essai", t + 30)
+    verifier(ev["msg"]["nombre"] == 0 and ev["msg"]["handicap"] == 3 * h and p["handicap_jusqua"] == t + 10 + 5 * h,
+             "plafond atteint : tout devient attente, et les attentes s'additionnent")
+    ev = m.action(e, nom, {"type": "enq_consulter", "id": 99}, p["handicap_jusqua"] + 1)
+    verifier(ev[0]["msg"]["type"] == "enq_texte", "  le handicap purgé, l'archive se rouvre")
+    ev = m._imposer(e, nom, 2, "Essai", t + 3601)
+    verifier(ev["msg"]["nombre"] == 2, "une heure plus tard, le compteur repart")
+    m._terminer(e, "tueur", "heure", None)
+    b = {x["nom"]: x for x in m.recapitulatif(e)["bues"]}
+    verifier(b[nom]["total"] == 4 + 2 + 2 and b[nom]["handicap"] == 2 + 3 + 1, "récap : gorgées bues et non bues (converties) par joueur")
+    # Sans plafond
+    e2 = partie(4)
+    m.action(e2, "Lea", {"type": "enq_config", "plafond": 0}, 1000.0)
+    m.action(e2, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(4))
+    verifier(m._imposer(e2, "Max", 50, "Essai", 2000.0)["msg"]["nombre"] == 50, "plafond désactivé : aucune limite")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -720,6 +773,7 @@ essai_contre_expertise()
 essai_sabotages()
 essai_detection_et_rumeurs()
 essai_evenements()
+essai_gorgees_et_plafonds()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)

@@ -37,6 +37,10 @@ divise par 2, gorgees d accusation ratee doublees), brouhaha (rumeurs deux
 fois plus frequentes, une fausse rumeur gratuite pour le tueur),
 interrogatoire (2 joueurs designes ; refuser coute des gorgees), maree
 (PE doubles).
+Tranche 7 : vitesses detaillees pour l hote, dosage des gorgees (doux,
+normal, corse) et plafond de gorgees par heure et par joueur : au-dela, la
+penalite devient un handicap de temps (archive et accusations bloquees)
+au lieu de faire boire. Unite de penalite libre (mode sans alcool).
 
 SECURITE : le tueur ne doit jamais etre deductible techniquement.
 - vue_publique ne contient JAMAIS la solution ni le tueur avant la fin ;
@@ -154,6 +158,8 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "jeux": list(v["jeux"]),
         "duree": v["duree"],
         "unite": config["gorgees"]["unite_defaut"],
+        "dosage": "normal",         # doux | normal | corse (multiplie les gorgees)
+        "plafond": config["gorgees"]["plafond_par_heure"],   # gorgees max par heure et par joueur (0 : sans)
         "joueurs": [],              # [{"nom", "portrait"}], ordre d arrivee
         # --- secret jusqu a la fin ---
         "tueur": None,
@@ -295,6 +301,14 @@ def _configurer(etat, nom, message, maintenant, rng, config):
         if not isinstance(d, (int, float)) or not 600 <= d <= 8 * 3600:
             return _erreur(nom, "Durée entre 10 minutes et 8 heures.")
         etat["duree"] = int(d)
+    if "dosage" in message:
+        if message["dosage"] not in config["gorgees"]["dosages"]:
+            return _erreur(nom, "Dosage inconnu.")
+        etat["dosage"] = message["dosage"]
+    if "plafond" in message:
+        if message["plafond"] not in config["gorgees"]["plafonds"]:
+            return _erreur(nom, "Plafond inconnu.")
+        etat["plafond"] = message["plafond"]
     if "unite" in message:
         u = " ".join(str(message["unite"]).split())[:20]
         if not u:
@@ -405,8 +419,17 @@ def vue_publique(etat, maintenant):
         "univers": etat["univers"],
         "univers_disponibles": univers_disponibles(),
         "vitesse": etat["vitesse"],
-        "vitesses": {k: {"titre": x["titre"], "duree": x["duree"], "jeux": x["jeux"]}
+        "vitesses": {k: {"titre": x["titre"], "duree": x["duree"], "jeux": x["jeux"],
+                         "pe_par_indice": x["pe_par_indice"], "timer_consultation": x["timer_consultation"],
+                         "bonus_toutes": x["bonus_toutes"], "delai_accusation": x["delai_accusation"],
+                         "echecs_par_joueur": x["echecs_par_joueur"], "mult_gorgees": x["mult_gorgees"],
+                         "evenements": x["evenements"], "duree_evenement": x["duree_evenement"],
+                         "lieux_armes": x["lieux_armes"]}
                      for k, x in CONFIG["vitesses"].items()},
+        "dosage": etat.get("dosage", "normal"),
+        "dosages": CONFIG["gorgees"]["dosages"],
+        "plafond": etat.get("plafond"),
+        "plafonds": CONFIG["gorgees"]["plafonds"],
         "jeux": etat["jeux"],
         "duree": etat["duree"],
         "unite": etat["unite"],
@@ -421,18 +444,14 @@ def vue_publique(etat, maintenant):
         "journal": etat.get("journal", [])[-20:],
         "dossier_epuise": etat.get("dossier_epuise", False),
         "timer_consultation": CONFIG["vitesses"][etat["vitesse"]]["timer_consultation"],
-        "gorgees_consultation": max(1, int(CONFIG["gorgees"]["consultation"]
-                                           * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
-        "gorgees_achat": max(1, int(CONFIG["gorgees"]["indice_achete"]
-                                    * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
-        "gorgees_expertise": max(1, int(CONFIG["gorgees"]["contre_expertise_achetee"]
-                                        * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
+        "gorgees_consultation": _gorgees(etat, CONFIG, CONFIG["gorgees"]["consultation"]),
+        "gorgees_achat": _gorgees(etat, CONFIG, CONFIG["gorgees"]["indice_achete"]),
+        "gorgees_expertise": _gorgees(etat, CONFIG, CONFIG["gorgees"]["contre_expertise_achetee"]),
         "bonus_toutes": CONFIG["vitesses"][etat["vitesse"]]["bonus_toutes"],
         "echecs": etat.get("echecs", 0),
         "rumeurs": etat.get("rumeurs", [])[-20:],
         "evenement": _evenement_public(etat),
-        "gorgees_refus": max(1, int(CONFIG["gorgees"]["refus_interrogatoire"]
-                                    * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
+        "gorgees_refus": _gorgees(etat, CONFIG, CONFIG["gorgees"]["refus_interrogatoire"]),
         "decouvertes": etat.get("decouvertes", []),
         "seuil_patience": seuil_patience(etat) if lancee else None,
         "delai_accusation": CONFIG["vitesses"][etat["vitesse"]]["delai_accusation"],
@@ -636,14 +655,47 @@ def _indices_derniere_heure(p, maintenant):
 
 
 def _gorgees(etat, config, base):
-    """Nombre de gorgees selon la vitesse (multiplicateur), arrondi, au moins 1."""
-    return max(1, int(base * _vitesse(etat, config)["mult_gorgees"] + 0.5))
+    """Nombre de gorgees selon la vitesse et le dosage choisi par l hote, arrondi, au moins 1."""
+    dosage = config["gorgees"]["dosages"].get(etat.get("dosage", "normal"), 1)
+    return max(1, int(base * _vitesse(etat, config)["mult_gorgees"] * dosage + 0.5))
 
 
-def _imposer(etat, nom, nombre, raison, maintenant):
+def gorgees_heure(p, maintenant):
+    return sum(n for t, n, _ in p["gorgees"] if maintenant - t < 3600)
+
+
+def _imposer(etat, nom, nombre, raison, maintenant, config=None):
+    """
+    Fait boire un joueur, dans la limite du plafond horaire. Au-dela, le
+    reste devient un handicap de temps : archive et accusations bloquees
+    (handicap_par_gorgee secondes par gorgee non bue). Meme regle pour tous,
+    tueur compris : rien ne le distingue.
+    """
+    config = config or CONFIG
     p = _perso(etat, nom)
-    p["gorgees"].append([maintenant, nombre, raison])
-    return _a(nom, {"type": "enq_gorgee", "nombre": nombre, "unite": etat["unite"], "raison": raison})
+    plafond = etat.get("plafond") or 0
+    bu, exces = nombre, 0
+    if plafond:
+        bu = max(0, min(nombre, plafond - gorgees_heure(p, maintenant)))
+        exces = nombre - bu
+    if bu:
+        p["gorgees"].append([maintenant, bu, raison])
+    secondes = 0
+    if exces:
+        secondes = exces * config["gorgees"]["handicap_par_gorgee"]
+        p["handicap_jusqua"] = max(p.get("handicap_jusqua") or maintenant, maintenant) + secondes
+        p.setdefault("handicaps", []).append([maintenant, exces, raison])
+    return _a(nom, {"type": "enq_gorgee", "nombre": bu, "unite": etat["unite"], "raison": raison,
+                    "handicap": secondes})
+
+
+def _handicap(etat, nom, maintenant):
+    """Message d erreur si le joueur purge un handicap de temps, sinon None."""
+    h = (_perso(etat, nom) or {}).get("handicap_jusqua")
+    if h and maintenant < h:
+        reste = int(h - maintenant + 0.999)
+        return f"Plafond de {etat['unite']}s atteint : pénalité de temps, encore {reste // 60} min {reste % 60:02d} s."
+    return None
 
 
 def _verifier_demande(etat, nom, maintenant, config):
@@ -729,6 +781,9 @@ def _consulter(etat, nom, message, maintenant, rng, config):
     if p["derniere_consultation"] is not None and maintenant < p["derniere_consultation"] + timer:
         reste = int(p["derniere_consultation"] + timer - maintenant + 0.999)
         return _erreur(nom, f"Archive verrouillée encore {reste} s.")
+    refus = _handicap(etat, nom, maintenant)
+    if refus:
+        return _erreur(nom, refus)
     p["derniere_consultation"] = maintenant
     etat["version"] += 1
     return [_a(nom, _texte(e, False)),
@@ -820,6 +875,13 @@ def tic_paliers(etat, tables, maintenant, config=None):
     return out
 
 
+def _consultation_possible(p, timer):
+    """Fin du chrono de l archive, ou du handicap de temps s il dure plus longtemps."""
+    bornes = [x for x in ((p["derniere_consultation"] + timer) if p["derniere_consultation"] else None,
+                          p.get("handicap_jusqua")) if x]
+    return max(bornes) if bornes else None
+
+
 def vue_privee_t2(etat, nom, maintenant, config=None):
     """Champs prives de la tranche 2 : memes cles pour tout le monde."""
     config = config or CONFIG
@@ -829,7 +891,8 @@ def vue_privee_t2(etat, nom, maintenant, config=None):
     if p is None:
         return {"pe": 0, "cout_indice": v["pe_par_indice"], "indices_heure": 0,
                 "indices_heure_max": config["indices_par_heure_max"], "archive": [],
-                "consultation_possible_a": None, "accusations": [], "prochaine_accusation_a": None}
+                "consultation_possible_a": None, "accusations": [], "prochaine_accusation_a": None,
+                "gorgees_heure": 0, "handicap_jusqua": None}
     return {
         "pe": p["pe"],
         "cout_indice": v["pe_par_indice"],
@@ -839,7 +902,9 @@ def vue_privee_t2(etat, nom, maintenant, config=None):
         # puis consultation payante).
         "archive": [{"id": e["id"], "source": e["source"], "recu_a": e["recu_a"], "lu": e["lu"],
                      "tampon": e["tampon"]} for e in p["archive"] if not e.get("retenu")],
-        "consultation_possible_a": (p["derniere_consultation"] + timer) if p["derniere_consultation"] else None,
+        "consultation_possible_a": _consultation_possible(p, timer),
+        "gorgees_heure": gorgees_heure(p, maintenant),
+        "handicap_jusqua": p.get("handicap_jusqua"),
         "accusations": p.get("accusations", []),
         "prochaine_accusation_a": prochaine_accusation(etat, p, maintenant),
     }
@@ -988,6 +1053,9 @@ def _expertiser(etat, nom, message, maintenant, rng, config):
     if p["derniere_consultation"] is not None and maintenant < p["derniere_consultation"] + timer:
         reste = int(p["derniere_consultation"] + timer - maintenant + 0.999)
         return _erreur(nom, f"Archive verrouillée encore {reste} s.")
+    refus = _handicap(etat, nom, maintenant)
+    if refus:
+        return _erreur(nom, refus)
     paiement = message.get("paiement")
     cout = _vitesse(etat, config)["pe_par_indice"]
     if paiement == "pe":
@@ -1317,10 +1385,13 @@ def _rumeur_gratuite(etat, maintenant):
 def prochaine_accusation(etat, p, maintenant):
     """Heure de la prochaine accusation ; pendant une alerte, l attente restante est divisee par 2."""
     prochaine = p.get("prochaine_accusation_a")
-    if prochaine is None or not _actif(etat, "alerte", maintenant):
-        return prochaine
-    derniere = p["accusations"][-1]["t"] if p.get("accusations") else maintenant
-    return derniere + (prochaine - derniere) / 2
+    if prochaine is not None and _actif(etat, "alerte", maintenant):
+        derniere = p["accusations"][-1]["t"] if p.get("accusations") else maintenant
+        prochaine = derniere + (prochaine - derniere) / 2
+    h = p.get("handicap_jusqua")
+    if h and h > maintenant:
+        prochaine = max(prochaine or 0, h)
+    return prochaine
 
 
 def _evenement_public(etat):
@@ -1410,6 +1481,10 @@ def recapitulatif(etat):
                      "expertises": etat["perso"].get(cle_nom(j["nom"]), {}).get("expertises", 0)}
                     for j in etat["joueurs"]],
         "gorgees": gorgees_de_fin(etat),
+        "bues": [{"nom": j["nom"],
+                  "total": sum(n for _, n, _ in etat["perso"].get(cle_nom(j["nom"]), {}).get("gorgees", [])),
+                  "handicap": sum(n for _, n, _ in etat["perso"].get(cle_nom(j["nom"]), {}).get("handicaps", []))}
+                 for j in etat["joueurs"]],
         "sabotages": [{"type": x["type"], "cible": x["cible"], "detecte": x["detecte"]} for x in etat.get("sabotages", [])],
     }
 
