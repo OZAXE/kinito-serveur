@@ -76,6 +76,15 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await appuyer(lea, 'Demarrer la partie');
   verifier(!!await attendreQue(async () => (await etat(code)).jeu === 'kinito', 10000), 'Léa lance Kinito');
 
+  // Zoé verrouille son téléphone : sa connexion reste ouverte mais muette, elle
+  // va rater l'annonce du changement de jeu.
+  await zoe.evaluate(() => {
+    const vrai = Soiree.traiterMessage;
+    Soiree.traiterMessage = (msg, jeu) => (msg && msg.type === 'salon_jeu') ? true : vrai(msg, jeu);
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+
   await lea.goto(SITE + 'index.html');
   const enCours = await attendreQue(async () => (await lea.textContent('#soiree-contenu')).includes('Kinito'), 10000);
   verifier(!!enCours, "l'accueil affiche « En cours : Kinito »");
@@ -86,9 +95,19 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
     'Léa ouvre le casino : il remplace Kinito');
   verifier(dialogues.some(d => d.startsWith('Lea') && d.includes('Kinito')),
     '  après lui avoir demandé de confirmer le remplacement');
-  const suivis = await attendreQue(async () =>
-    /casino-3d-jeu\.html/.test(max.url()) && /casino-3d-jeu\.html/.test(zoe.url()), 15000);
-  verifier(!!suivis, 'Max et Zoé passent tout seuls sur la page du Casino');
+  const suivis = await attendreQue(async () => /casino-3d-jeu\.html/.test(max.url()), 15000);
+  verifier(!!suivis, 'Max passe tout seul sur la page du Casino');
+
+  await attendre(2500);
+  await zoe.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const reveil = await attendreQue(async () =>
+    (await zoe.textContent('body')).includes('Le groupe joue à Casino'), 25000);
+  verifier(!!reveil, 'Zoé, qui dormait pendant le changement, voit au réveil « Le groupe joue à Casino »');
+  await appuyer(zoe, 'Rejoindre');
+  verifier(!!await attendreQue(async () => /casino-3d-jeu\.html/.test(zoe.url()), 15000), '  et rejoint en un appui');
   const assis = await attendreQue(async () => {
     const e = await etat(code); return e.jeu === 'casino' && e.joueurs.filter(j => !j.parti).length === 3;
   }, 15000);
