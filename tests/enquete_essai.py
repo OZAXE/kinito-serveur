@@ -436,6 +436,177 @@ def essai_contre_expertise():
     verifier(len(formes) == 1, "  archives de même forme pour tous")
 
 
+def _tueur_et_autres(e):
+    k = e["tueur"]
+    return k, [j["nom"] for j in e["joueurs"] if j["nom"] != k]
+
+
+def essai_sabotages():
+    print("Sabotages")
+    e, t = en_cours(6, 11)
+    k, autres = _tueur_et_autres(e)
+    pk = m._perso(e, k)
+    c = m.CONFIG["vitesses"][e["vitesse"]]["pe_par_indice"]
+    ev = m.action(e, autres[0], {"type": "enq_charge"}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and ev[0]["msg"]["message"] == "Action impossible.",
+             "un enquêteur ne peut ni acheter de charge…")
+    ev = m.action(e, autres[0], {"type": "enq_sabotage", "sabotage": "interception", "cible": k}, t)
+    verifier(ev[0]["msg"]["message"] == "Action impossible.", "  …ni saboter (même réponse neutre)")
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "interception", "cible": autres[0]}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "sans charge : pas de sabotage")
+    pk["pe"] = 5 * c
+    for _ in range(4):
+        m.action(e, k, {"type": "enq_charge"}, t)
+    verifier(pk["charges"] == 3 and pk["pe"] == 2 * c, "le tueur achète des charges avec ses PE, 3 au plus")
+    vue = m.vue_privee(e, k, t)["console"]
+    verifier(vue and vue["charges"] == 3 and set(vue["cibles"]) == set(autres) and abs(vue["detection"] - 0.5) < 1e-6,
+             "  sa console : charges, cibles, détection de départ (50 %)")
+    verifier(all(m.vue_privee(e, n, t)["console"] is None for n in autres), "  la console n'existe que pour lui (None pour les autres)")
+    pub = json.dumps(m.vue_publique(e, t), ensure_ascii=False)
+    verifier('"charges"' not in pub and "console" not in pub, "  rien dans l'état public")
+
+    # Écoute
+    cible = autres[0]
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "ecoute", "cible": cible}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and pk["charges"] == 3, "écoute d'une archive vide : refusée sans perdre de charge")
+    q = m._perso(e, cible)
+    q["pe"] = 10
+    m.action(e, cible, {"type": "enq_indice"}, t)
+    version = e["version"]
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "ecoute", "cible": cible}, t + 1, rng=random.Random(1))
+    verifier(len(ev) == 1 and ev[0]["a"] == k and ev[0]["msg"]["texte"] == q["archive"][-1]["texte"],
+             "écoute : le tueur lit le dernier indice de la cible")
+    verifier(not any(x["a"] == cible for x in ev), "  sans aucune trace pour la cible")
+    verifier(pk["charges"] == 2 and e["version"] > version, "  une charge dépensée")
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "interception", "cible": cible}, t + 2)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and "s" in ev[0]["msg"]["message"], "délai minimum entre deux sabotages")
+
+    # Interception
+    t2 = t + m.CONFIG["vitesses"][e["vitesse"]]["delai_sabotage"] + 1
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "interception", "cible": cible}, t2, rng=random.Random(2))
+    n = len(m.vue_privee(e, cible, t2)["archive"])
+    ev = m.action(e, cible, {"type": "enq_indice"}, t2 + 5)
+    verifier(not any(x["msg"]["type"] == "enq_nouvel_indice" for x in ev) and len(m.vue_privee(e, cible, t2 + 5)["archive"]) == n,
+             "interception : le prochain pli de la cible n'arrive pas…")
+    retenu = q["archive"][-1]
+    verifier(m.prochaine_echeance(e) <= retenu["visible_a"], "  le serveur se réveillera pour le libérer")
+    ev = m.expirer(e, retenu["visible_a"])
+    verifier(any(x["a"] == cible and x["msg"]["type"] == "enq_nouvel_indice" for x in ev)
+             and retenu["id"] in [x["id"] for x in m.vue_privee(e, cible, retenu["visible_a"])["archive"]],
+             "  …puis arrive " + str(m.CONFIG["sabotage"]["interception"] // 60) + " min plus tard")
+    verifier(retenu["recu_a"] == retenu["visible_a"], "  avec l'heure de son arrivée (rien ne trahit le retard)")
+
+    # Fausse piste en remplacement
+    t3 = t2 + m.CONFIG["vitesses"][e["vitesse"]]["delai_sabotage"] + 1
+    c2 = autres[1]
+    q2 = m._perso(e, c2)
+    risque = m.vue_privee(e, k, t3)["console"]["risques"][c2]["arme"]
+    verifier(risque in ("faible", "moyen", "eleve"), "fausse piste : indicateur de risque affiché (" + str(risque) + ")")
+    taille_pool = len(e["pool"])
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "fausse_piste", "cible": c2, "categorie": "arme", "mode": "remplacement"}, t3, rng=random.Random(3))
+    q2["pe"] = 10
+    m.action(e, c2, {"type": "enq_indice"}, t3 + 1)
+    faux = q2["archive"][-1]
+    verifier(not faux["vrai"] and faux["element"] == e["solution"]["arme"] and faux["categorie"] == "arme",
+             "  le prochain indice de la cible est un faux : il élimine l'arme du crime")
+    verifier(len(e["pool"]) == taille_pool, "  l'indice vrai qu'il remplace reste dans le stock")
+    formes = {tuple(sorted(m._texte(x, True).keys())) for x in q2["archive"] + q["archive"]}
+    verifier(len(formes) == 1 and set(faux.keys()) - {"vrai"} == set(q["archive"][0].keys()) - {"vrai", "retenu", "visible_a"},
+             "  même format qu'un vrai (même message, mêmes champs)")
+    m.action(e, c2, {"type": "enq_lire", "id": faux["id"]}, t3 + 2)
+    ev = m.action(e, c2, {"type": "enq_expertise", "id": faux["id"], "paiement": "gorgee"}, t3 + 3)
+    verifier(ev[0]["msg"]["tampon"] == "falsifie", "  la contre-expertise le démasque : « falsifié »")
+    t4 = t3 + m.CONFIG["vitesses"][e["vitesse"]]["delai_sabotage"] + 1
+    pk["charges"] = 3
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "fausse_piste", "cible": autres[2], "categorie": "arme", "mode": "remplacement"}, t4)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and m.vue_privee(e, k, t4)["console"]["risques"][autres[2]]["arme"] is None,
+             "  deux faux identiques : interdit")
+
+    # Fausse piste en détournement du prochain témoin
+    c3 = autres[2]
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "fausse_piste", "cible": c3, "categorie": "lieu", "mode": "detournement"}, t4, rng=random.Random(4))
+    total = sum(len(x["archive"]) for x in e["perso"].values())
+    ev = m.expirer(e, max(t4, e["prochain_bonus_a"]))
+    q3 = m._perso(e, c3)
+    verifier(ev and ev[0]["a"] == c3 and ev[0]["msg"]["source"] == "Témoin anonyme" and not q3["archive"][-1]["vrai"]
+             and q3["archive"][-1]["element"] == e["solution"]["lieu"],
+             "détournement : le prochain témoin va à la cible, et il est faux")
+    verifier(sum(len(x["archive"]) for x in e["perso"].values()) == total + 1, "  aucun indice de plus n'est créé")
+
+    # Contradiction directe
+    e2, t5 = en_cours(4, 12)
+    k2, a2 = _tueur_et_autres(e2)
+    qa = m._perso(e2, a2[0])
+    for x in e2["lieux"]:
+        if x != e2["solution"]["lieu"]:
+            qa["archive"].append({"id": 900, "categorie": "lieu", "element": x, "vrai": True, "source": "Victoire",
+                                  "recu_a": t5, "lu": True, "tampon": None, "texte": "-"})
+    el, raison = m._fausse_piste(e2, a2[0], "lieu", m.CONFIG)
+    verifier(el is None and "contredirait" in raison, "refus d'un faux qui contredirait l'archive de la cible")
+
+
+def essai_detection_et_rumeurs():
+    print("Détection et rumeurs")
+    e, t = en_cours(6, 13)
+    k, autres = _tueur_et_autres(e)
+    d0, d1 = m.CONFIG["vitesses"][e["vitesse"]]["detection"]
+    verifier(abs(m.detection_actuelle(e, t) - d0) < 1e-9 and abs(m.detection_actuelle(e, e["fin_a"]) - d1) < 1e-9
+             and m.detection_actuelle(e, (t + e["fin_a"]) / 2) < d0, "la détection baisse avec le temps (de 50 % à 15 %)")
+    # Un sabotage détecté : annonce différée, neutre.
+    pk = m._perso(e, k)
+    pk["charges"] = 1
+    class Toujours:
+        def random(self): return 0.0
+        def uniform(self, a, b): return a
+        def choice(self, x): return x[0]
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "interception", "cible": autres[0]}, t, rng=Toujours())
+    texte = m.PACKS[e["univers"]]["textes"]["annonces"]["interference"]
+    verifier(not any(x["texte"] == texte for x in e["journal"]), "détecté : rien d'annoncé sur le moment…")
+    a = m.CONFIG["sabotage"]["delai_annonce"][0]
+    verifier(m.prochaine_echeance(e) <= t + a, "  le serveur se réveille pour l'annonce")
+    m.expirer(e, t + a)
+    j = [x["texte"] for x in e["journal"]]
+    verifier(texte in j and autres[0] not in j[-1] and k not in j[-1], "  …puis « interférence » annoncée, sans cible ni auteur ni type")
+    # Non détecté : aucune annonce.
+    e, t = en_cours(6, 14)
+    k, autres = _tueur_et_autres(e)
+    m._perso(e, k)["charges"] = 1
+    class Jamais(Toujours):
+        def random(self): return 0.99
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "interception", "cible": autres[0]}, t, rng=Jamais())
+    m.expirer(e, t + 200)
+    verifier(texte not in [x["texte"] for x in e["journal"]] and e["sabotages"][-1]["detecte"] is False, "non détecté : silence total")
+
+    # Rumeurs ambiantes et fausse rumeur
+    e, t = en_cours(6, 15)
+    k, autres = _tueur_et_autres(e)
+    r = random.Random(5)
+    for _ in range(6):
+        m.expirer(e, e["prochaine_rumeur_a"], rng=r)
+    pub = m.vue_publique(e, e["prochaine_rumeur_a"])
+    verifier(len(pub["rumeurs"]) == 6, "des rumeurs ambiantes circulent régulièrement (canal public)")
+    pk = m._perso(e, k)
+    pk["charges"] = 2
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "rumeur", "categorie": "lieu", "element": e["solution"]["lieu"]}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "fausse rumeur : jamais sur la solution (elle vise un innocent)")
+    innocent = next(x for x in e["lieux"] if x != e["solution"]["lieu"])
+    m.action(e, k, {"type": "enq_sabotage", "sabotage": "rumeur", "categorie": "lieu", "element": innocent}, t, rng=random.Random(6))
+    n = len(e["rumeurs"])
+    b = m.CONFIG["sabotage"]["delai_publication"][1]
+    ev = m.expirer(e, t + b)
+    rum = [x for x in ev if x["msg"]["type"] == "enq_rumeur"]
+    verifier(len(e["rumeurs"]) >= n + 1 and rum and rum[0]["a"] is None and rum[-1]["msg"]["lieu"] == innocent,
+             "  publiée à tous après un délai, avec un repère sur le lieu")
+    verifier(set(rum[-1]["msg"].keys()) == {"type", "texte", "lieu"}, "  même format qu'une rumeur ambiante")
+    pk["prochain_sabotage_a"] = None
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "rumeur", "categorie": "suspect", "element": autres[0]}, t + 1)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "  une seule fausse rumeur par partie")
+    # Récap de fin
+    m._terminer(e, "tueur", "heure", None)
+    rec = m.recapitulatif(e)
+    verifier(rec["sabotages"] and rec["sabotages"][0]["type"] == "rumeur", "le récapitulatif de fin révèle les sabotages")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -445,6 +616,8 @@ essai_points_et_indices()
 essai_accusations()
 essai_temoin_anonyme()
 essai_contre_expertise()
+essai_sabotages()
+essai_detection_et_rumeurs()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)

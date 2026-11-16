@@ -78,6 +78,9 @@ import enquete  # noqa: E402
 if os.environ.get("ENQ_RAPIDE"):
     for v in enquete.CONFIG["vitesses"].values():
         v["timer_consultation"] = 6
+        v["delai_sabotage"] = 3
+    enquete.CONFIG["sabotage"]["delai_annonce"] = [1, 2]
+    enquete.CONFIG["sabotage"]["delai_publication"] = [1, 2]
 
 
 @serveur.app.get("/test/pe/{code}/{nom}/{n}")

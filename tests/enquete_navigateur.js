@@ -179,6 +179,78 @@ async function sansDefilement(page) {
   verifier(!!await attendreQue(() => ps.evaluate(() => { const t = document.querySelector('.archive-ligne .tampon.authentique'); return t && !t.closest('.archive-ligne').querySelector('[data-expertiser]'); }), 5000),
     '  tampon permanent dans l\'archive, plus de bouton d\'expertise sur cet indice');
 
+  // Dossier et console du tueur (même geste pour tous)
+  const solT = await (await fetch(API + '/test/solution/' + code)).json();
+  const tueur = solT.tueur;
+  const geste = async (page, essai = 0) => {
+    const b = await (await page.$('.bouton-role')).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    const z = await attendreQue(() => page.evaluate(() => { const e = document.querySelector('.role-voile.ouvert .zone-dossier'); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }), 5000);
+    if (!z) { await page.mouse.up(); return essai < 2 ? geste(page, essai + 1) : null; }   // écran redessiné pendant l'appui : on recommence
+    await page.mouse.move(z.x, z.y, { steps: 6 });
+    await page.mouse.up();
+    return attendreQue(() => page.evaluate(() => { const d = document.getElementById('dossier'); return d.classList.contains('ouvert') && d.querySelector('h2').textContent; }), 5000);
+  };
+  const enqs = noms.filter(n => n !== tueur);
+  const titreEnq = await geste(pages[enqs[0]]);
+  verifier(titreEnq === 'Ton dossier', enqs[0] + ' (enquêteur) glisse du bouton Rôle vers la zone : « ' + titreEnq + ' »');
+  await pages[enqs[0]].evaluate(() => [...document.querySelectorAll('#dossier header button')][0].click());
+  const pt = pages[tueur];
+  const titreK = await geste(pt);
+  verifier(titreK === 'Ta console', '  ' + tueur + ' (tueur), même geste : « ' + titreK + ' »');
+  await fetch(API + '/test/pe/' + code + '/' + tueur + '/9');
+  for (let i = 1; i <= 3; i++) {
+    await attendreQue(() => pt.evaluate(() => { const b = [...document.querySelectorAll('#dossier button')].find(x => /Acheter une charge/.test(x.textContent)); if (b && !b.disabled) { b.click(); return true; } return false; }), 10000);
+    await attendreQue(() => pt.evaluate((n) => new RegExp(n + '/3 charges').test(document.getElementById('dossier').innerText), i), 8000);
+  }
+  verifier(!!await attendreQue(() => pt.evaluate(() => /3\/3 charges/.test(document.getElementById('dossier').innerText)), 8000), '  il achète 3 charges avec ses PE (le maximum)');
+  if (CAPTURES) await pt.screenshot({ path: CAPTURES + '/enquete-console.png' });
+  const clic = (page, sel) => attendreQue(() => page.evaluate((s) => { const b = document.querySelector(s); if (b && !b.disabled) { b.click(); return true; } return false; }, sel), 8000);
+  const avecPli = ['Max', servi].find(n => n !== tueur);
+  await clic(pt, '#dossier [data-sabotage="ecoute"]');
+  await clic(pt, '#dossier [data-cible="' + avecPli + '"]');
+  await clic(pt, '#dossier [data-saboter]');
+  const ecoute = await attendreQue(() => pt.evaluate(() => { const h = document.querySelector('.lettre h3'); return h && /Écoute/.test(h.textContent) && document.querySelector('.lettre .corps').textContent; }), 8000);
+  verifier(!!ecoute, '  écoute de ' + avecPli + ' : « ' + (ecoute || '').slice(0, 50) + '… »');
+  await pt.evaluate(() => document.querySelector('.voile button').click());
+  // Fausse piste en remplacement
+  const victime = enqs.find(n => n !== 'Max' && n !== servi) || enqs.find(n => n !== avecPli) || enqs[0];
+  await clic(pt, '#dossier [data-sabotage="fausse_piste"]');
+  await clic(pt, '#dossier [data-cible="' + victime + '"]');
+  await clic(pt, '#dossier [data-categorie]:not([disabled])');
+  await clic(pt, '#dossier [data-mode="remplacement"]');
+  const risque = await pt.evaluate(() => { const b = document.querySelector('#dossier [data-categorie].actif small'); return b && b.textContent; });
+  verifier(!!risque && /risque/.test(risque), '  fausse piste sur ' + victime + ' : indicateur affiché (« ' + risque + ' »)');
+  verifier(!!await clic(pt, '#dossier [data-saboter]'), '  le bouton Saboter attend la fin du délai, puis part');
+  const pv = pages[victime];
+  await fetch(API + '/test/pe/' + code + '/' + victime + '/3');
+  await attendreQue(() => pv.evaluate(() => /3 PE/.test(document.querySelector('.etat-jeu .pe').textContent)), 10000);
+  await onglet(pv, 'indices');
+  await appuyer(pv, 'Demander un indice');
+  await appuyer(pv, 'Ouvrir le pli');
+  await attendreQue(() => pv.evaluate(() => !!document.querySelector('.lettre .corps')), 10000);
+  await appuyer(pv, 'Ranger dans l’archive');
+  await clic(pv, '[data-expertiser]');
+  await attendreQue(() => pv.evaluate(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(x => /gorgée/.test(x.textContent)); if (b) { b.click(); return true; } return false; }), 8000);
+  const cachetF = await attendreQue(() => pv.evaluate(() => { const c = document.querySelector('.lettre .cachet'); return c && c.textContent; }), 10000);
+  verifier(cachetF === 'FALSIFIÉ', '  ' + victime + ' reçoit le faux, et la contre-expertise le démasque : « ' + cachetF + ' »');
+  if (CAPTURES) { await attendre(700); await pv.screenshot({ path: CAPTURES + '/enquete-falsifie.png' }); }
+  await pv.evaluate(() => document.querySelector('.voile button').click());
+  // Fausse rumeur
+  await clic(pt, '#dossier [data-sabotage="rumeur"]');
+  await clic(pt, '#dossier [data-categorie="lieu"]');
+  await clic(pt, '#dossier [data-element]');
+  await clic(pt, '#dossier [data-saboter]');
+  const temoinR = pages[enqs[0]];
+  const toastR = await attendreQue(() => temoinR.evaluate(() => { const t = document.getElementById('toast'); return t && t.style.display !== 'none' && /🗣️/.test(t.textContent) && t.textContent; }), 15000);
+  verifier(!!toastR, 'la fausse rumeur circule chez tout le monde : « ' + (toastR || '') + ' »');
+  await onglet(temoinR, 'fil');
+  verifier((await visible(temoinR)).includes('🗣️'), '  et reste dans le fil de ' + (await temoinR.evaluate(() => document.querySelector('nav button[data-onglet="fil"]').textContent.trim())));
+  verifier(!!await attendreQue(() => pt.evaluate(() => /Tes sabotages/.test(document.getElementById('dossier').innerText) && document.querySelectorAll('#dossier section:last-child p').length === 3), 8000),
+    '  la console garde l\'historique de ses 3 sabotages');
+  await pt.evaluate(() => [...document.querySelectorAll('#dossier header button')][0].click());
+
   // Carnet sur le plan
   await onglet(max, 'plan');
   await max.evaluate(() => { const b = [...document.querySelectorAll('.jetons button')].find(x => x.textContent.includes('Zoe')); b.click(); b.click(); });
@@ -192,7 +264,7 @@ async function sansDefilement(page) {
   verifier(!!marque, 'carnet : Zoé suspecte et une pièce éliminée, toujours là après rechargement (vue 2D gardée)');
   await appuyer(max, 'Vue 3D');
   verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('.plan3d canvas')), 10000), '  bouton « Vue 3D » : retour à la maison 3D');
-  verifier(ENVOIS_MAX.length > 0 && !ENVOIS_MAX.some(t => /suspect:|Zoe|carnet|notes/.test(t)),
+  verifier(ENVOIS_MAX.length > 0 && !ENVOIS_MAX.filter(t => !/enq_sabotage/.test(t)).some(t => /suspect:|Zoe|carnet|notes/.test(t)),
     '  le carnet n\'est jamais envoyé au serveur (' + ENVOIS_MAX.length + ' messages, aucun ne le contient)');
 
   // Accusations
@@ -243,6 +315,7 @@ async function sansDefilement(page) {
   if (CAPTURES) await pages.Lea.screenshot({ path: CAPTURES + '/enquete-fin.png' });
   await onglet(pages.Lea, 'recap');
   const recap = await visible(pages.Lea);
+  verifier(/sabot/i.test(recap), '  récapitulatif : les sabotages du tueur');
   verifier(/Témoin/i.test(recap) && /Expertises/i.test(recap), '  récapitulatif : plis du témoin et contre-expertises par joueur');
   verifier(recap.includes(enqueteur) && recap.includes('2/3') && recap.includes('3/3'), '  récapitulatif : les deux accusations');
 
