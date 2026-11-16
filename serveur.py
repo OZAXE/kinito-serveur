@@ -2953,6 +2953,16 @@ async def couche_action(code_salon, nom, message):
 
 
 async def _couche_action(code_salon, nom, message):
+    avant = sorted(couches.get(code_salon, {}))
+    await _couche_action_brute(code_salon, nom, message)
+    apres = sorted(couches.get(code_salon, {}))
+    if apres != avant:
+        # Une couche vient d etre creee ou de se terminer : tous les abonnes
+        # de la soiree doivent le savoir, pas seulement celui qui a agi.
+        await diffuser_soiree(code_salon, {"type": "soiree_couches", "soiree": code_salon, "couches": apres})
+
+
+async def _couche_action_brute(code_salon, nom, message):
     prefixe = message["type"].split("_", 1)[0]
     couche = couches.get(code_salon, {}).get(prefixe)
     if couche is None:

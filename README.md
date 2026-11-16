@@ -60,6 +60,7 @@ python tests/menteur_essai.py
 python tests/casino_essai.py
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py
+node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
 python tests/banc_reconnexions.py --jeu tous --duree 20
 node tests/navigateur.js                    # serveur_essai.py + site sur localhost:8765
 node tests/soiree_navigateur.js             # parcours d une soirée (accueil, changement de jeu)
