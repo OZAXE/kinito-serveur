@@ -1,0 +1,112 @@
+{
+  "id": "manoir",
+  "nom": "Le Manoir de Valmont",
+  "epoque": "années 1920",
+  "ambiance": "Orage, bougies, boiseries.",
+  "palette": {"fond": "#1a0b0e", "surface": "#2a1216", "accent": "#c9a24a", "texte": "#f3e6cf", "alerte": "#b3261e"},
+  "police": "Cormorant Garamond",
+  "victime": "Lord Edmond de Valmont",
+  "narrateur": {"nom": "Gaspard", "role": "le majordome", "icone": "🎩"},
+  "vocabulaire": {
+    "tueur": "l'Assassin",
+    "detective": "le Grand Détective",
+    "enqueteurs": "les invités",
+    "enqueteur": "invité",
+    "rumeurs": "les chuchotements"
+  },
+  "lieux": [
+    {"id": "bibliotheque", "nom": "Bibliothèque", "le": "la Bibliothèque"},
+    {"id": "serre", "nom": "Serre", "le": "la Serre"},
+    {"id": "salle_de_bal", "nom": "Salle de bal", "le": "la Salle de bal"},
+    {"id": "fumoir", "nom": "Fumoir", "le": "le Fumoir"},
+    {"id": "cave", "nom": "Cave à vin", "le": "la Cave à vin"},
+    {"id": "cuisine", "nom": "Cuisine", "le": "la Cuisine"},
+    {"id": "veranda", "nom": "Véranda", "le": "la Véranda"},
+    {"id": "bureau", "nom": "Bureau", "le": "le Bureau"}
+  ],
+  "armes": [
+    {"id": "chandelier", "nom": "Chandelier", "le": "le Chandelier", "icone": "🕯️"},
+    {"id": "poison", "nom": "Fiole de poison", "le": "la Fiole de poison", "icone": "🧪"},
+    {"id": "corde", "nom": "Corde de rideau", "le": "la Corde de rideau", "icone": "🪢"},
+    {"id": "tisonnier", "nom": "Tisonnier", "le": "le Tisonnier", "icone": "🔥"},
+    {"id": "coupe_papier", "nom": "Coupe-papier", "le": "le Coupe-papier", "icone": "🗡️"},
+    {"id": "bouteille", "nom": "Bouteille de grand cru", "le": "la Bouteille de grand cru", "icone": "🍾"},
+    {"id": "pistolet", "nom": "Pistolet de collection", "le": "le Pistolet de collection", "icone": "🔫"},
+    {"id": "secateur", "nom": "Sécateur", "le": "le Sécateur", "icone": "✂️"}
+  ],
+  "portraits": [
+    {"id": "comtesse", "archetype": "la comtesse", "icone": "👑", "couleur": "#8e2b3a"},
+    {"id": "docteur", "archetype": "le docteur", "icone": "🩺", "couleur": "#2f5d62"},
+    {"id": "lady", "archetype": "la lady anglaise", "icone": "🫖", "couleur": "#6b4f8a"},
+    {"id": "professeur", "archetype": "le professeur", "icone": "📚", "couleur": "#7a5a2f"},
+    {"id": "capitaine", "archetype": "le capitaine", "icone": "⚓", "couleur": "#1f3f6e"},
+    {"id": "gouvernante", "archetype": "la gouvernante", "icone": "🗝️", "couleur": "#4a4a4a"},
+    {"id": "aviateur", "archetype": "l'aviateur", "icone": "🛩️", "couleur": "#5c6b2f"},
+    {"id": "chanteuse", "archetype": "la chanteuse", "icone": "🎤", "couleur": "#a0522d"},
+    {"id": "colonel", "archetype": "le colonel", "icone": "🎖️", "couleur": "#6e3b1f"},
+    {"id": "heritiere", "archetype": "l'héritière", "icone": "💎", "couleur": "#3b6e6a"},
+    {"id": "jardinier", "archetype": "le jardinier", "icone": "🌹", "couleur": "#3f6e2f"},
+    {"id": "voyante", "archetype": "la voyante", "icone": "🔮", "couleur": "#5a2f6e"}
+  ],
+  "textes": {
+    "ouverture": [
+      "Mesdames, messieurs, je suis Gaspard, majordome de cette maison depuis trente et un ans.",
+      "Ce soir, pendant que l'orage frappait les vitres, Lord Edmond de Valmont a été retrouvé sans vie.",
+      "Les portes sont closes, la route est inondée. Personne n'est entré, personne n'est sorti.",
+      "L'assassin est donc parmi vous. Il porte un habit de soirée et sourit comme vous.",
+      "Je répondrai à vos questions avec exactitude. Un majordome ne ment jamais. Les couloirs, eux, chuchotent."
+    ],
+    "fin": "Gaspard s'éclaircit la voix. « C'est {tueur} qui a tué Lord Edmond, dans {lieu}, avec {arme}. » {verdict}",
+    "verdict_enqueteurs": "{detective} a percé le mystère avant l'aube. Le manoir peut enfin dormir.",
+    "verdict_tueur": "L'aube s'est levée sans qu'on démasque {tueur}. Les invités repartent, l'assassin avec eux.",
+    "indices": {
+      "suspect": [
+        "Gaspard certifie que {nom} n'a pas quitté le salon de la soirée.",
+        "Gaspard a servi {nom} toute la soirée : {nom} n'a pas pu frapper.",
+        "Gaspard se porte garant de {nom}, vu à chaque coup de l'horloge."
+      ],
+      "arme": [
+        "Gaspard a vérifié {arme} : l'objet n'a pas bougé de sa place.",
+        "Gaspard assure que {arme} n'a servi à personne ce soir.",
+        "Gaspard a retrouvé {arme} intact, couvert de la poussière d'hier."
+      ],
+      "lieu": [
+        "Gaspard certifie que {lieu} n'a vu personne de la soirée.",
+        "Gaspard a fermé {lieu} à clé avant le dîner : personne n'y est entré.",
+        "Gaspard a inspecté {lieu} : pas une trace, pas un bruit."
+      ]
+    },
+    "rumeurs": {
+      "suspect": [
+        "On chuchote que {nom} avait une dette envers Lord Edmond.",
+        "Quelqu'un a vu {nom} rôder près des escaliers.",
+        "On murmure que {nom} a changé de veste pendant la soirée."
+      ],
+      "arme": [
+        "On dit que {arme} n'était plus à sa place après le dîner.",
+        "Une invitée jure avoir vu quelqu'un manier {arme}.",
+        "On chuchote que {arme} a été essuyé en hâte."
+      ],
+      "lieu": [
+        "On a entendu un cri du côté de {lieu}.",
+        "Une bougie brûlait encore dans {lieu} bien après minuit.",
+        "On dit que la porte de {lieu} grinçait pendant l'orage."
+      ]
+    },
+    "annonces": {
+      "indice": "Gaspard remet discrètement un pli à l'un d'entre vous.",
+      "accusation_ratee": "Une accusation a échoué. Gaspard hausse un sourcil.",
+      "interference": "Gaspard a remarqué une interférence dans le courrier de la maison.",
+      "dossier_epuise": "Gaspard n'a plus rien à révéler : le dossier est épuisé.",
+      "fin": "L'enquête est close."
+    },
+    "evenements": {
+      "coupure": {"nom": "L'orage fait sauter le courant", "debut": "Un éclair, puis le noir. Le courrier attendra la lumière.", "fin": "Le courant revient. Gaspard rallume les chandelles."},
+      "decouverte": {"nom": "Gaspard a trouvé quelque chose", "debut": "Gaspard revient de sa ronde, l'air grave.", "fin": ""},
+      "alerte": {"nom": "L'inspecteur presse l'enquête", "debut": "L'inspecteur exige un coupable, et vite.", "fin": "L'inspecteur se calme. Pour l'instant."},
+      "brouhaha": {"nom": "Le bal masqué", "debut": "L'orchestre attaque une valse : les masques tombent, les langues se délient.", "fin": "La musique s'arrête. On remet les masques."},
+      "interrogatoire": {"nom": "Le salon de thé", "debut": "Gaspard sert le thé et pose ses questions.", "fin": "Le thé a refroidi."},
+      "maree": {"nom": "Le grand dîner", "debut": "Le grand dîner est servi : chaque victoire vaut double.", "fin": "On débarrasse la table."}
+    }
+  }
+}

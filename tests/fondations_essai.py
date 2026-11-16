@@ -181,7 +181,11 @@ async def essai_couches():
     memoire = StockageMemoire()
     await serveur.demarrage(memoire)
     code = "EFGH"
-    (a, wa), (b, wb), (c, wc) = [await entrer(code, n) for n in ("Lea", "Max", "Zoe")]
+    (a, _), (b, _), (c, _) = [await entrer(code, n) for n in ("Lea", "Max", "Zoe")]
+    # Les couches parlent par la connexion « soiree » de chacun.
+    wa, wb, wc = FauxWS(), FauxWS(), FauxWS()
+    for nom, w in (("Lea", wa), ("Max", wb), ("Zoe", wc)):
+        await serveur.abonner(code, nom, w)
 
     await envoyer(code, a, {"type": "tst_action"})
     verifier(code not in serveur.couches, "un message ordinaire ne cree pas la couche")
@@ -211,8 +215,11 @@ async def essai_couches():
     info = await serveur.info_salon(code)
     verifier(info["existe"] and info["couches"] == ["tst"], "/salon/<code> le donne toujours comme existant")
 
-    (a2, wa2) = await entrer(code, "Lea")
+    (a2, _) = await entrer(code, "Lea")
+    wa2 = FauxWS()
+    await serveur.abonner(code, "Lea", wa2)
     verifier({"type": "tst_etat", "n": len(couche.actions)} in wa2.recus, "au retour, la couche renvoie son etat")
+    verifier({"type": "remplace"} in wa.recus, "  l ancienne connexion soiree est prevenue")
 
     # Sauvegarde puis redemarrage du serveur.
     await serveur.sauvegarde.vider()
@@ -274,9 +281,10 @@ async def essai_tables():
     verifier(["casino", "victoire"] in couche.evenements, "  et les victoires de la table 2")
     ctx = serveur._contexte(code, couche)
     verifier(sorted(ctx.noms_presents()) == ["Lea", "Max", "Zoe"], "  elle voit les presents de toutes les tables")
-    wz.recus.clear()
+    sz = FauxWS()
+    await serveur.abonner(code, "Zoe", sz)
     await ctx.envoyer_nom("Zoe", {"type": "tst_prive"})
-    verifier({"type": "tst_prive"} in wz.recus, "  et joint un joueur a sa table")
+    verifier({"type": "tst_prive"} in sz.recus, "  et joint un joueur par sa connexion soiree")
 
     # La table 1 liberee, le code reste pris tant que la table 2 vit.
     del serveur.salons[code]

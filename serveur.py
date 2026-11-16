@@ -43,6 +43,7 @@ from casino import (
 # paralleles d une soiree (l Enquete).
 from stockage import creer_stockage, Sauvegarde
 from couches import Contexte, TYPES_COUCHES
+import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete)
 
 # =============================================================
 # CREATION DE L APPLICATION FASTAPI
@@ -97,7 +98,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-16 fondations"
+VERSION = "2026-11-16 enquete-t1"
 
 
 # =============================================================
@@ -436,7 +437,6 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
                 try:
                     if type_msg == "resync":
                         await envoyer_instantane(code_salon, joueur, complet=False)
-                        await couches_arrivee(code_salon, joueur)
                     else:
                         await traiter_message(code_salon, joueur, message)
                 except Exception:
@@ -533,7 +533,6 @@ async def arrivee(code_salon, salon, ws, nom_joueur):
     })
     await envoyer_indices(code_salon)
     await envoyer_instantane(code_salon, joueur, complet=True, nouveau=not retour)
-    await couches_arrivee(code_salon, joueur)
     return joueur
 
 
@@ -642,7 +641,6 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
             "joueurs": [j["nom"] for j in salon["joueurs"]],
         })
         await envoyer_instantane(code_salon, joueur, complet=True)
-        await couches_arrivee(code_salon, joueur)
 
 
 async def envoyer_instantane(code_salon, joueur, complet=True, nouveau=False):
@@ -924,7 +922,7 @@ async def traiter_message(code_salon, joueur, message):
                                         "joueurs": [j["nom"] for j in salon["joueurs"]]})
         return
     if type_msg.split("_", 1)[0] in TYPES_COUCHES:
-        await couche_action(code_salon, joueur, message)
+        await couche_action(soiree_de(code_salon), joueur["nom"], message)
         return
     for nom, jeu in JEUX.items():
         if type_msg == jeu.demarrage:
@@ -2848,16 +2846,40 @@ def _tables(soiree):
             for c in tables_de(soiree)]
 
 
+# --- Connexions « soiree » (/ws-soiree) ---
+# Distinctes des places aux tables : la page de l Enquete s ouvre par-dessus
+# un jeu sans lui prendre sa connexion. Un prenom = une connexion soiree
+# (la plus recente gagne, l ancienne est prevenue comme pour un onglet en
+# double). Les couches parlent aux joueurs par ici.
+abonnes_soirees = {}    # soiree -> {cle du prenom: {"nom", "ws"}}
+_verrous_soirees = {}
+
+
+def cle_prenom(nom):
+    return " ".join(nom.split()).casefold()
+
+
+def verrou_soiree(soiree):
+    """Un verrou par soiree pour les couches (pris APRES celui d une table, jamais avant)."""
+    v = _verrous_soirees.get(soiree)
+    if v is None:
+        v = _verrous_soirees[soiree] = asyncio.Lock()
+    return v
+
+
+def _abonnes(soiree):
+    return [a["nom"] for a in abonnes_soirees.get(soiree, {}).values()]
+
+
 async def diffuser_soiree(soiree, message):
-    for code in tables_de(soiree):
-        await diffuser(code, message)
+    for a in list(abonnes_soirees.get(soiree, {}).values()):
+        await envoyer(a, message)
 
 
 async def envoyer_nom(soiree, nom, message):
-    for code in tables_de(soiree):
-        for j in salons[code]["joueurs"]:
-            if meme_prenom(j["nom"], nom):
-                await envoyer(j, message)
+    a = abonnes_soirees.get(soiree, {}).get(cle_prenom(nom))
+    if a is not None:
+        await envoyer(a, message)
 
 
 def _contexte(soiree, couche):
@@ -2866,6 +2888,7 @@ def _contexte(soiree, couche):
         diffuser=lambda m: diffuser_soiree(soiree, m),
         envoyer_nom=lambda nom, m: envoyer_nom(soiree, nom, m),
         noms_presents=lambda: _noms_presents(soiree),
+        abonnes=lambda: _abonnes(soiree),
         tables=lambda: _tables(soiree),
         sauvegarder=lambda: _sauvegarder_couche(soiree, couche),
         maintenant=time.time,
@@ -2909,12 +2932,9 @@ async def _minuteur_couche(code_salon, couche, echeance):
     await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
     if couches.get(code_salon, {}).get(couche.prefixe) is not couche:
         return
-    salon = salons.get(code_salon)      # table 1 de la soiree, si elle existe
-    if salon is not None:
-        async with verrou(salon):
+    async with verrou_soiree(code_salon):
+        if couches.get(code_salon, {}).get(couche.prefixe) is couche:
             await _appeler_couche(code_salon, couche, couche.echeance)
-    else:
-        await _appeler_couche(code_salon, couche, couche.echeance)
 
 
 async def _appeler_couche(code_salon, couche, methode, *args):
@@ -2926,8 +2946,13 @@ async def _appeler_couche(code_salon, couche, methode, *args):
     _apres_couche(code_salon, couche)
 
 
-async def couche_action(code_salon, joueur, message):
-    code_salon = soiree_de(code_salon)
+async def couche_action(code_salon, nom, message):
+    """Un message "<prefixe>_..." d un joueur (code_salon : code de la SOIREE)."""
+    async with verrou_soiree(code_salon):
+        await _couche_action(code_salon, nom, message)
+
+
+async def _couche_action(code_salon, nom, message):
     prefixe = message["type"].split("_", 1)[0]
     couche = couches.get(code_salon, {}).get(prefixe)
     if couche is None:
@@ -2935,20 +2960,27 @@ async def couche_action(code_salon, joueur, message):
         # decide si ce message en cree une (ex. l hote lance l Enquete).
         classe = TYPES_COUCHES[prefixe]
         try:
-            couche = await classe.creer(code_salon, joueur["nom"], message)
+            couche = await classe.creer(code_salon, nom, message)
         except Exception:
             journal.exception("Creation de la couche %s ratee dans %s", prefixe, code_salon)
             couche = None
         if couche is None:
             return
         couches.setdefault(code_salon, {})[prefixe] = couche
-    await _appeler_couche(code_salon, couche, couche.action, joueur["nom"], message)
+    await _appeler_couche(code_salon, couche, couche.action, nom, message)
 
 
-async def couches_arrivee(code_salon, joueur):
-    code_salon = soiree_de(code_salon)
-    for couche in list(couches.get(code_salon, {}).values()):
-        await _appeler_couche(code_salon, couche, couche.arrivee, joueur["nom"])
+async def couches_arrivee(soiree, nom):
+    """Un joueur ouvre sa connexion soiree : chaque couche lui envoie ce qu il doit voir."""
+    async with verrou_soiree(soiree):
+        await diffuser_soiree_nom(soiree, nom)
+        for couche in list(couches.get(soiree, {}).values()):
+            await _appeler_couche(soiree, couche, couche.arrivee, nom)
+
+
+async def diffuser_soiree_nom(soiree, nom):
+    await envoyer_nom(soiree, nom, {"type": "soiree_couches", "soiree": soiree,
+                                    "couches": sorted(couches.get(soiree, {}))})
 
 
 async def signaler(code_salon, jeu, type_evt, gagnants=(), perdants=(), details=None):
@@ -2963,6 +2995,11 @@ async def signaler(code_salon, jeu, type_evt, gagnants=(), perdants=(), details=
     if not couches.get(code_salon):
         return
     salon = salons.get(table)
+    async with verrou_soiree(code_salon):
+        await _signaler(code_salon, salon, table, jeu, type_evt, gagnants, perdants, details)
+
+
+async def _signaler(code_salon, salon, table, jeu, type_evt, gagnants, perdants, details):
     evenement = {
         "jeu": jeu, "type": type_evt, "table": table,
         "joueurs": [j["nom"] for j in salon["joueurs"] if not j.get("parti")] if salon else [],
@@ -3002,6 +3039,71 @@ async def arret():
         await sauvegarde.vider()
     if stock is not None:
         await stock.fermer()
+
+
+async def abonner(soiree, nom, ws):
+    """Ouvre la connexion soiree d un joueur (la plus recente remplace l ancienne)."""
+    k = cle_prenom(nom)
+    entree = {"nom": nom, "ws": ws, "parti": False}
+    ancien = abonnes_soirees.setdefault(soiree, {}).get(k)
+    abonnes_soirees[soiree][k] = entree
+    if ancien is not None and ancien["ws"] is not ws:
+        try:
+            await asyncio.wait_for(ancien["ws"].send_text('{"type":"remplace"}'), 1)
+        except Exception:
+            pass
+        asyncio.ensure_future(fermer(ancien["ws"], 4002))
+    await couches_arrivee(soiree, nom)
+    return entree
+
+
+def desabonner(soiree, entree):
+    par_nom = abonnes_soirees.get(soiree, {})
+    k = cle_prenom(entree["nom"])
+    if par_nom.get(k) is entree:
+        del par_nom[k]
+    if not par_nom:
+        abonnes_soirees.pop(soiree, None)
+
+
+@app.websocket("/ws-soiree/{code}/{nom_joueur}")
+async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
+    """
+    Connexion « soiree » d un joueur : celle des couches paralleles (l Enquete),
+    a cote de sa place a une table. Messages "<prefixe>_..." et battements de
+    coeur ; rien d autre.
+    """
+    await ws.accept()
+    soiree = soiree_de(code.upper())
+    nom = " ".join(nom_joueur.split())[:24] or "Joueur"
+    entree = await abonner(soiree, nom, ws)
+    try:
+        async for brut in ws.iter_text():
+            try:
+                message = json.loads(brut)
+            except ValueError:
+                continue
+            if not isinstance(message, dict) or not isinstance(message.get("type"), str):
+                continue
+            if message["type"] == "ping":
+                try:
+                    await asyncio.wait_for(ws.send_text('{"type":"pong"}'), DELAI_ENVOI)
+                except Exception:
+                    pass
+                continue
+            if abonnes_soirees.get(soiree, {}).get(cle_prenom(nom)) is not entree:
+                continue        # remplacee par une connexion plus recente
+            if message["type"].split("_", 1)[0] in TYPES_COUCHES:
+                try:
+                    await couche_action(soiree, nom, message)
+                except Exception:
+                    journal.exception("Erreur couche %r dans la soiree %s", message["type"], soiree)
+            elif message["type"] == "soiree_etat":
+                await couches_arrivee(soiree, nom)
+    except Exception:
+        pass
+    finally:
+        desabonner(soiree, entree)
 
 
 # =============================================================
