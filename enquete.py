@@ -41,6 +41,9 @@ Tranche 7 : vitesses detaillees pour l hote, dosage des gorgees (doux,
 normal, corse) et plafond de gorgees par heure et par joueur : au-dela, la
 penalite devient un handicap de temps (archive et accusations bloquees)
 au lieu de faire boire. Unite de penalite libre (mode sans alcool).
+Tranche 9 : joueurs fictifs (pour tester seul, et pour le simulateur
+tests/simulation.py). Un joueur fictif ne voit que ce qu un vrai joueur
+verrait : ses plis, les decouvertes publiques, le retour de ses accusations.
 
 SECURITE : le tueur ne doit jamais etre deductible techniquement.
 - vue_publique ne contient JAMAIS la solution ni le tueur avant la fin ;
@@ -258,6 +261,8 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_sabotage": _saboter,
         "enq_refuser": _refuser_interrogatoire,
         "enq_bu": _c_est_bu,
+        "enq_bot_ajouter": _ajouter_bot,
+        "enq_bot_retirer": _retirer_bot,
     }.get(t)
     if f is None:
         return []
@@ -463,7 +468,7 @@ def vue_publique(etat, maintenant):
         "jeux": etat["jeux"],
         "duree": etat["duree"],
         "unite": etat["unite"],
-        "joueurs": [{"nom": j["nom"], "portrait": j["portrait"]} for j in etat["joueurs"]],
+        "joueurs": [{"nom": j["nom"], "portrait": j["portrait"], "bot": bool(j.get("bot"))} for j in etat["joueurs"]],
         "joueurs_min": CONFIG["joueurs_min"],
         "joueurs_max": CONFIG["joueurs_max"],
         "lieux": etat["lieux"] if lancee else [],
@@ -514,6 +519,7 @@ def vue_privee(etat, nom, maintenant=0.0):
             solution = dict(etat["solution"])
         else:
             role = "enqueteur"
+            solution = {"tueur": None, "arme": None, "lieu": None}   # equivalent factice, meme forme
     v = {
         "type": "enq_moi",
         "nom": nom,
@@ -524,8 +530,12 @@ def vue_privee(etat, nom, maintenant=0.0):
         "solution": solution,
     }
     v.update(vue_privee_t2(etat, nom if lancee else "\0", maintenant))
-    # Console du tueur : la cle existe pour tout le monde (None sauf pour lui).
-    v["console"] = console(etat, moi["nom"], maintenant) if role == "tueur" and etat["phase"] == "enquete" else None
+    # Console : meme forme pour tout le monde pendant l enquete ; seuls les
+    # champs du tueur sont remplis, les autres recoivent un equivalent factice.
+    if role is not None and etat["phase"] == "enquete":
+        v["console"] = console(etat, moi["nom"], maintenant) if role == "tueur" else console_factice(etat, maintenant)
+    else:
+        v["console"] = None
     return v
 
 
@@ -1242,6 +1252,18 @@ def console(etat, nom, maintenant, config=None):
     }
 
 
+def console_factice(etat, maintenant, config=None):
+    """Meme cles que console(), valeurs neutres : rien dans la forme ne distingue le tueur."""
+    config = config or CONFIG
+    return {
+        "charges": 0, "charges_max": config["sabotage"]["charges_max"], "cout_charge": _vitesse(etat, config)["pe_par_indice"],
+        "prochain_sabotage_a": None, "detection": 0, "detection_fin": 0, "rumeur_gratuite": False, "rumeur_utilisee": False,
+        "detournement_possible": False, "interception_minutes": round(config["sabotage"]["interception"] / 60),
+        "cibles": [], "risques": {}, "innocents": {"suspect": [], "lieu": [], "arme": []},
+        "faux_en_attente": [], "interceptions": [], "historique": [],
+    }
+
+
 def _acheter_charge(etat, nom, message, maintenant, rng, config):
     if etat["phase"] != "enquete" or not _est_tueur(etat, nom):
         return _erreur(nom, "Action impossible.")
@@ -1528,6 +1550,156 @@ def _refuser_interrogatoire(etat, nom, message, maintenant, rng, config):
     e["refus"].append(nom)
     etat["version"] += 1
     return [_imposer(etat, nom, _gorgees(etat, config, config["gorgees"]["refus_interrogatoire"]), "Refus de répondre", maintenant)]
+
+
+# =============================================================
+# TRANCHE 9 : JOUEURS FICTIFS
+# =============================================================
+
+BOT_NOMS = ["Alfred", "Berthe", "Corentin", "Daphné", "Edgar", "Fanny", "Gustave", "Hortense",
+            "Isidore", "Joséphine", "Léon", "Mathilde"]
+
+
+def _ajouter_bot(etat, nom, message, maintenant, rng, config):
+    """L hote ajoute un joueur fictif (pour tester l enquete sans reunir tout le monde)."""
+    if not _est_hote(etat, nom):
+        return _erreur(nom, "Seul l'hôte ajoute des joueurs fictifs.")
+    if etat["phase"] != "lobby":
+        return _erreur(nom, "L'enquête a déjà commencé.")
+    if len(etat["joueurs"]) >= config["joueurs_max"]:
+        return _erreur(nom, f"{config['joueurs_max']} joueurs au plus.")
+    pris = {cle_nom(j["nom"]) for j in etat["joueurs"]}
+    libre = next((b for b in BOT_NOMS if cle_nom(b) not in pris), None)
+    portraits = [x["id"] for x in PACKS[etat["univers"]]["portraits"] if x["id"] not in {j["portrait"] for j in etat["joueurs"]}]
+    if libre is None or not portraits:
+        return _erreur(nom, "Plus de place pour un joueur fictif.")
+    etat["joueurs"].append({"nom": libre, "portrait": rng.choice(portraits), "bot": True})
+    etat["version"] += 1
+    return []
+
+
+def _retirer_bot(etat, nom, message, maintenant, rng, config):
+    if not _est_hote(etat, nom) or etat["phase"] != "lobby":
+        return _erreur(nom, "Action impossible.")
+    avant = len(etat["joueurs"])
+    etat["joueurs"] = [j for j in etat["joueurs"] if not (j.get("bot") and cle_nom(j["nom"]) == cle_nom(message.get("nom", "")))]
+    if len(etat["joueurs"]) != avant:
+        etat["version"] += 1
+    return []
+
+
+def est_bot(etat, nom):
+    j = _joueur(etat, nom)
+    return bool(j and j.get("bot"))
+
+
+def connaissance(etat, nom, partage=()):
+    """
+    Ce que le joueur sait LEGITIMEMENT : ses plis lus (hors tampon falsifie),
+    ceux qu on lui a montres (partage), les decouvertes publiques, et les
+    accusations a 0 juste. Renvoie les candidats restants par categorie et
+    les triplets deja tentes.
+    """
+    p = _perso(etat, nom)
+    elim = {"suspect": set(), "lieu": set(), "arme": set()}
+    for q in [p] + [_perso(etat, x) for x in partage if _perso(etat, x)]:
+        for e in q["archive"]:
+            if e["lu"] and not e.get("retenu") and e["tampon"] != "falsifie":
+                elim[e["categorie"]].add(e["element"])
+    for d in etat.get("decouvertes", []):
+        elim[d["categorie"]].add(d["element"])
+    for a in p["accusations"]:
+        if a["justes"] == 0:
+            elim["suspect"].add(a["suspect"]); elim["arme"].add(a["arme"]); elim["lieu"].add(a["lieu"])
+    cands = {cat: [x for x in _candidats(etat, cat, nom) if x not in elim[cat]] for cat in elim}
+    for cat in cands:
+        if not cands[cat]:          # contradiction (un faux non demasque) : on repart de zero
+            cands[cat] = _candidats(etat, cat, nom)
+    tentes = {(a["suspect"], a["arme"], a["lieu"]) for a in p["accusations"]}
+    return cands, tentes
+
+
+def jouer_bot(etat, nom, maintenant, rng=random, config=None, partage=(), audace=1.0):
+    """Un tour de jeu d un joueur fictif. Renvoie les evenements produits."""
+    config = config or CONFIG
+    if etat["phase"] != "enquete":
+        return []
+    p = _perso(etat, nom)
+    ev = []
+
+    def agir(msg):
+        if etat["phase"] == "enquete":
+            ev.extend(action(etat, nom, msg, maintenant, rng, config))
+
+    for x in etat.get("penalites", []):
+        if cle_nom(x["nom"]) == cle_nom(nom) and not x["bu"]:
+            x["bu"] = True
+            etat["version"] += 1
+    for e in list(p["archive"]):
+        if not e["lu"] and not e.get("retenu"):
+            agir({"type": "enq_lire", "id": e["id"]})
+    cout = _vitesse(etat, config)["pe_par_indice"]
+    autres = [j["nom"] for j in etat["joueurs"] if cle_nom(j["nom"]) != cle_nom(nom)]
+    if _est_tueur(etat, nom):
+        if p["pe"] >= cout:
+            agir({"type": "enq_charge"} if p["charges"] < 2 and rng.random() < 0.6 else {"type": "enq_indice"})
+        pret = p["prochain_sabotage_a"] is None or maintenant >= p["prochain_sabotage_a"]
+        if (p["charges"] > 0 or _rumeur_gratuite(etat, maintenant)) and pret and rng.random() < 0.5:
+            cible = rng.choice(autres)
+            genre = rng.choice(["fausse_piste", "fausse_piste", "interception", "ecoute"] + ([] if p["rumeur_utilisee"] else ["rumeur"]))
+            if _rumeur_gratuite(etat, maintenant):
+                genre = "rumeur"
+            msg = {"type": "enq_sabotage", "sabotage": genre, "cible": cible}
+            if genre == "fausse_piste":
+                possibles = [(cat, r) for cat in ("suspect", "lieu", "arme") for el, r in [_fausse_piste(etat, cible, cat, config)] if el]
+                if not possibles:
+                    return ev
+                doux = [c for c, r in possibles if r != "eleve"] or [c for c, _ in possibles]
+                mode = "detournement" if etat.get("detournement") is None and etat.get("prochain_bonus_a") and rng.random() < 0.3 else "remplacement"
+                msg.update(categorie=rng.choice(doux), mode=mode)
+            elif genre == "rumeur":
+                cat = rng.choice(["suspect", "lieu", "arme"])
+                innocents = [x for x in _candidats(etat, cat) if x != _element_solution(etat, cat) and cle_nom(x) != cle_nom(nom)]
+                msg.update(categorie=cat, element=rng.choice(innocents))
+            agir(msg)
+        return ev
+    # Enqueteur
+    if p["pe"] >= cout:
+        a_verifier = [e for e in p["archive"] if e["lu"] and not e["tampon"] and not e.get("retenu")]
+        if a_verifier and rng.random() < 0.2:
+            agir({"type": "enq_expertise", "id": rng.choice(a_verifier)["id"], "paiement": "pe"})
+        else:
+            agir({"type": "enq_indice"})
+    cands, tentes = connaissance(etat, nom, partage)
+    combos = [(s, a, l) for s in cands["suspect"] for a in cands["arme"] for l in cands["lieu"] if (s, a, l) not in tentes]
+    # Deduction facon Mastermind : un triplet reste possible s il donne, pour
+    # chaque accusation passee, le meme nombre d elements justes.
+    for acc in p["accusations"]:
+        combos = [c for c in combos if min(2, (cle_nom(c[0]) == cle_nom(acc["suspect"])) + (c[1] == acc["arme"]) + (c[2] == acc["lieu"])) == acc["justes"]]
+    prochaine = prochaine_accusation(etat, p, maintenant)
+    avance = (maintenant - etat["ouverture_fin_a"]) / max(1, etat["fin_a"] - etat["ouverture_fin_a"])
+    # On accuse quand le champ s est assez resserre, de plus en plus tot a
+    # mesure que l heure tourne (une accusation ratee renseigne aussi).
+    seuil = 3 + int(60 * avance ** 2)
+    if combos and (prochaine is None or maintenant >= prochaine) and len(combos) <= seuil * audace and rng.random() < 0.5:
+        s_, a_, l_ = rng.choice(combos)
+        agir({"type": "enq_accuser", "suspect": s_, "arme": a_, "lieu": l_})
+    return ev
+
+
+def tic_bots(etat, maintenant, rng=random, config=None):
+    """Appele chaque minute : les joueurs fictifs gagnent des PE comme s ils jouaient, puis jouent leur tour."""
+    config = config or CONFIG
+    if etat["phase"] != "enquete":
+        return []
+    ev = []
+    taux = config.get("bot_pe_heure", 4) / 60
+    for j in [x for x in etat["joueurs"] if x.get("bot")]:
+        if rng.random() < taux:
+            ev += crediter_pe(etat, j["nom"], 1, "menteur", "victoire", config)
+        if rng.random() < 0.5:
+            ev += jouer_bot(etat, j["nom"], maintenant, rng, config)
+    return ev
 
 
 def recapitulatif(etat):

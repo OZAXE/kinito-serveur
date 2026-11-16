@@ -78,6 +78,7 @@ class Enquete(Couche):
         version = self.etat["version"]
         evenements = moteur.expirer(self.etat, ctx.maintenant())   # fin d ouverture, heure butoir, Temoin anonyme
         evenements += moteur.tic_paliers(self.etat, ctx.tables(), ctx.maintenant())
+        evenements += moteur.tic_bots(self.etat, ctx.maintenant())    # joueurs fictifs (mode test)
         if self.etat["version"] != version:
             await self._publier(ctx, evenements)
         else:

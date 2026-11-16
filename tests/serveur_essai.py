@@ -125,6 +125,26 @@ async def evenement(code: str, type_: str):
     return {"ok": True, "evenement": couche.etat["evenement"]}
 
 
+@serveur.app.get("/test/bots/{code}/{tours}")
+async def bots(code: str, tours: int):
+    """Reserve aux tests : fait jouer les joueurs fictifs (avec des PE en poche) plusieurs tours."""
+    soiree = serveur.soiree_de(code)
+    couche = serveur.couches.get(soiree, {}).get("enq")
+    if couche is None:
+        return {"ok": False}
+    import time as _t
+    import random as _r
+    async with serveur.verrou_soiree(soiree):
+        ev = []
+        for _ in range(tours):
+            for j in couche.etat["joueurs"]:
+                if j.get("bot"):
+                    enquete._perso(couche.etat, j["nom"])["pe"] += 3
+                    ev += enquete.jouer_bot(couche.etat, j["nom"], _t.time(), _r.Random())
+        await couche._publier(serveur._contexte(soiree, couche), ev)
+    return {"ok": True, "plis": sum(len(enquete._perso(couche.etat, j["nom"])["archive"]) for j in couche.etat["joueurs"] if j.get("bot"))}
+
+
 @serveur.app.get("/test/solution/{code}")
 async def solution(code: str):
     """Reserve aux tests : la solution secrete de l enquete."""
