@@ -24,6 +24,7 @@ async function attendreQue(test, delai) {
 // Texte VISIBLE de la page (textContent inclut aussi le code des <script>).
 async function visible(page) { return page.evaluate(() => document.body.innerText); }
 // Les confirmations sont des fenêtres dans la page (role=dialog) : on clique le bouton nommé.
+const clicSel = (page, sel) => attendreQue(() => page.evaluate((x) => { const b = document.querySelector(x); if (b && !b.disabled) { b.click(); return true; } return false; }, sel), 8000);
 const document_body_coupure = (c) => /evt-coupure/.test(c);
 
 async function confirmerDansPage(page, libelle) {
@@ -96,6 +97,16 @@ async function sansDefilement(page) {
     '  un portrait déjà pris ne change pas de main');
   verifier(await sansDefilement(pages.Lea), '  la page ne défile pas');
   if (CAPTURES) await pages.Lea.screenshot({ path: CAPTURES + '/enquete-salle.png' });
+  // Réglages de l'hôte : dosage, plafond, résumé de la vitesse
+  await onglet(pages.Lea, 'reglages');
+  await clicSel(pages.Lea, '[data-dosage="corse"]');
+  await clicSel(pages.Lea, '[data-plafond="6"]');
+  const resume = await attendreQue(async () => { const t = await pages.Max.evaluate(() => { const b = [...document.querySelectorAll('nav button')].find(x => /Réglages/.test(x.textContent)); if (b) b.click(); const r = document.querySelector('.resume-vitesse'); return r && r.innerText; }); return t && /corsé/.test(t) && /6 gorgées par heure/.test(t) && t; }, 10000);
+  verifier(!!resume, 'réglages : Léa passe en corsé, plafond 6 ; Max voit le résumé de la vitesse');
+  if (CAPTURES) await pages.Lea.screenshot({ path: CAPTURES + '/enquete-reglages.png' });
+  await clicSel(pages.Lea, '[data-dosage="normal"]');
+  await clicSel(pages.Lea, '[data-plafond="12"]');
+  await attendreQue(() => pages.Lea.evaluate(() => /12 gorgées par heure/.test(document.querySelector('.resume-vitesse').innerText) && !/corsé/.test(document.querySelector('.resume-vitesse').innerText)), 10000);
   await onglet(pages.Lea, 'joueurs');
   verifier(!!await attendreQue(async () => (await visible(pages.Lea)).includes('(4/12)'), 10000), 'onglet Joueurs : 4/12');
   await appuyer(pages.Lea, 'Lancer l’enquête');
@@ -342,6 +353,7 @@ async function sansDefilement(page) {
   await onglet(pages.Lea, 'recap');
   const recap = await visible(pages.Lea);
   verifier(/sabot/i.test(recap), '  récapitulatif : les sabotages du tueur');
+  verifier(/gorgées de la soirée/i.test(recap) && /Changées en attente/i.test(recap), '  récapitulatif : les gorgées bues par chacun');
   verifier(/Témoin/i.test(recap) && /Expertises/i.test(recap), '  récapitulatif : plis du témoin et contre-expertises par joueur');
   verifier(recap.includes(enqueteur) && recap.includes('2/3') && recap.includes('3/3'), '  récapitulatif : les deux accusations');
 

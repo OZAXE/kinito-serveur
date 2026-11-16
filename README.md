@@ -59,6 +59,9 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   détection /2), découverte (indice vrai publié à tous), alerte (délai d'accusation /2, gorgées
   d'accusation ratée x2), brouhaha (rumeurs plus fréquentes, une fausse rumeur gratuite), interrogatoire
   (2 joueurs désignés, `enq_refuser` coûte des gorgées), marée (PE doublés).
+- Gorgées : vitesse x dosage (doux 0,5, normal 1, corsé 1,5), unité libre (mode sans alcool). Plafond
+  par heure et par joueur (6, 12, 20 ou sans) : au-delà, chaque gorgée non bue devient 1 min de handicap
+  (archive et accusations bloquées). Récap de fin : gorgées bues et converties par joueur.
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
   mêmes clés pour tous (`tests/enquete_essai.py`).
 
