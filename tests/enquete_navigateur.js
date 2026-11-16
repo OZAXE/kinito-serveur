@@ -119,8 +119,8 @@ async function sansDefilement(page) {
   verifier(!!resume, 'réglages : Léa passe en corsé, plafond 6 ; Max voit le résumé de la vitesse');
   if (CAPTURES) await pages.Lea.screenshot({ path: CAPTURES + '/enquete-reglages.png' });
   await clicSel(pages.Lea, '[data-dosage="normal"]');
-  await clicSel(pages.Lea, '[data-plafond="12"]');
-  await attendreQue(() => pages.Lea.evaluate(() => /12 gorgées par heure/.test(document.querySelector('.resume-vitesse').innerText) && !/corsé/.test(document.querySelector('.resume-vitesse').innerText)), 10000);
+  await clicSel(pages.Lea, '[data-plafond="0"]');
+  await attendreQue(() => pages.Lea.evaluate(() => /sans plafond/.test(document.querySelector('.resume-vitesse').innerText) && !/corsé/.test(document.querySelector('.resume-vitesse').innerText)), 10000);
   await onglet(pages.Lea, 'joueurs');
   verifier(!!await attendreQue(async () => (await visible(pages.Lea)).includes('(4/12)'), 10000), 'onglet Joueurs : 4/12');
   await appuyer(pages.Lea, 'Lancer l’enquête');
