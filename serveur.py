@@ -104,13 +104,46 @@ VERSION = "2026-11-16 fondations"
 # UTILITAIRES
 # =============================================================
 
+# =============================================================
+# SOIREES ET TABLES
+# Une soiree a un code de 4 lettres ("ABCD"), qui est aussi celui de sa
+# table 1. Ses autres tables sont "ABCD-2" ... "ABCD-9" : chacune est un
+# salon a part entiere (son jeu, ses joueurs, ses reconnexions). Les couches
+# (l Enquete) sont rattachees a la SOIREE et couvrent toutes ses tables.
+# Un prenom n est qu a une table a la fois.
+# =============================================================
+TABLES_MAX = 9
+
+
+def soiree_de(code):
+    return code.split("-", 1)[0]
+
+
+def numero_table(code):
+    _, _, n = code.partition("-")
+    return int(n) if n.isdigit() else 1
+
+
+def code_table(soiree, numero):
+    return soiree if numero == 1 else f"{soiree}-{numero}"
+
+
+def tables_de(soiree):
+    """Codes des tables existantes de la soiree, dans l ordre."""
+    return sorted((c for c in salons if soiree_de(c) == soiree), key=numero_table)
+
+
+def soiree_existe(soiree):
+    return soiree in couches or any(soiree_de(c) == soiree for c in salons)
+
+
 def generer_code():
-    """Genere un code de salon unique a 4 lettres."""
+    """Genere un code de soiree unique a 4 lettres."""
     while True:
         code = "".join(random.choices(string.ascii_uppercase, k=4))
-        # Un code dont la soiree a encore une couche en cours (Enquete) n est
-        # pas libre, meme si son salon a ete libere.
-        if code not in salons and code not in couches:
+        # Un code dont la soiree vit encore (une table, ou une couche en cours
+        # comme l Enquete, meme si tous ses salons ont ete liberes) n est pas libre.
+        if not soiree_existe(code):
             return code
 
 
@@ -489,6 +522,7 @@ async def arrivee(code_salon, salon, ws, nom_joueur):
         arrivee_en_partie(salon, joueur)
 
     annuler_liberation(salon)
+    liberer_autres_tables(code_salon, joueur["nom"])
 
     # On informe tout le monde qu un joueur a rejoint (ou est revenu)
     await diffuser(code_salon, {
@@ -501,6 +535,37 @@ async def arrivee(code_salon, salon, ws, nom_joueur):
     await envoyer_instantane(code_salon, joueur, complet=True, nouveau=not retour)
     await couches_arrivee(code_salon, joueur)
     return joueur
+
+
+def liberer_autres_tables(code_salon, nom):
+    """
+    Un prenom n est qu a une table de la soiree a la fois : en s asseyant ici,
+    il quitte l autre (sa place y est liberee comme pour un depart). Une
+    connexion encore ouverte la-bas (autre telephone) est prevenue qu elle a
+    ete remplacee, comme pour un onglet en double. Le depart est traite a
+    part, sous le verrou de l AUTRE table.
+    """
+    for code in tables_de(soiree_de(code_salon)):
+        if code == code_salon:
+            continue
+        autre = salons.get(code)
+        for j in list(autre["joueurs"]) if autre else []:
+            if meme_prenom(j["nom"], nom) and not j.get("parti"):
+                asyncio.ensure_future(_quitter_table(code, autre, j))
+
+
+async def _quitter_table(code, salon, joueur):
+    ws = joueur.get("ws")
+    if ws is not None:
+        try:
+            await asyncio.wait_for(ws.send_text('{"type":"remplace"}'), 1)
+        except Exception:
+            pass
+    async with verrou(salon):
+        if salons.get(code) is salon:
+            await depart(code, joueur, ws)
+    if ws is not None:
+        asyncio.ensure_future(fermer(ws, 4002))
 
 
 def arrivee_en_partie(salon, joueur):
@@ -2763,32 +2828,46 @@ async def lancer_jeu(code_salon, nom, message):
 # un salon libere (tout le monde parti un moment) ne les efface pas.
 # =============================================================
 
-couches = {}            # code -> {prefixe: Couche}
+couches = {}            # code de SOIREE -> {prefixe: Couche}
 _minuteurs_couches = {}  # (code, prefixe) -> tache
 stock = None
 sauvegarde = None
 
 
-def _noms_presents(code_salon):
-    salon = salons.get(code_salon)
-    return [j["nom"] for j in salon["joueurs"] if not j.get("parti")] if salon else []
+def _noms_presents(soiree):
+    """Les presents de TOUTES les tables de la soiree."""
+    noms = []
+    for code in tables_de(soiree):
+        noms += [j["nom"] for j in salons[code]["joueurs"] if not j.get("parti")]
+    return noms
 
 
-async def envoyer_nom(code_salon, nom, message):
-    salon = salons.get(code_salon)
-    for j in (salon or {}).get("joueurs", []):
-        if meme_prenom(j["nom"], nom):
-            await envoyer(j, message)
+def _tables(soiree):
+    return [{"code": c, "numero": numero_table(c), "jeu": salons[c].get("jeu"),
+             "joueurs": [j["nom"] for j in salons[c]["joueurs"] if not j.get("parti")]}
+            for c in tables_de(soiree)]
 
 
-def _contexte(code_salon, couche):
+async def diffuser_soiree(soiree, message):
+    for code in tables_de(soiree):
+        await diffuser(code, message)
+
+
+async def envoyer_nom(soiree, nom, message):
+    for code in tables_de(soiree):
+        for j in salons[code]["joueurs"]:
+            if meme_prenom(j["nom"], nom):
+                await envoyer(j, message)
+
+
+def _contexte(soiree, couche):
     return Contexte(
-        code_salon,
-        diffuser=lambda m: diffuser(code_salon, m),
-        envoyer_nom=lambda nom, m: envoyer_nom(code_salon, nom, m),
-        noms_presents=lambda: _noms_presents(code_salon),
-        jeu_en_cours=lambda: (salons.get(code_salon) or {}).get("jeu"),
-        sauvegarder=lambda: _sauvegarder_couche(code_salon, couche),
+        soiree,
+        diffuser=lambda m: diffuser_soiree(soiree, m),
+        envoyer_nom=lambda nom, m: envoyer_nom(soiree, nom, m),
+        noms_presents=lambda: _noms_presents(soiree),
+        tables=lambda: _tables(soiree),
+        sauvegarder=lambda: _sauvegarder_couche(soiree, couche),
         maintenant=time.time,
     )
 
@@ -2830,7 +2909,7 @@ async def _minuteur_couche(code_salon, couche, echeance):
     await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
     if couches.get(code_salon, {}).get(couche.prefixe) is not couche:
         return
-    salon = salons.get(code_salon)
+    salon = salons.get(code_salon)      # table 1 de la soiree, si elle existe
     if salon is not None:
         async with verrou(salon):
             await _appeler_couche(code_salon, couche, couche.echeance)
@@ -2848,6 +2927,7 @@ async def _appeler_couche(code_salon, couche, methode, *args):
 
 
 async def couche_action(code_salon, joueur, message):
+    code_salon = soiree_de(code_salon)
     prefixe = message["type"].split("_", 1)[0]
     couche = couches.get(code_salon, {}).get(prefixe)
     if couche is None:
@@ -2866,6 +2946,7 @@ async def couche_action(code_salon, joueur, message):
 
 
 async def couches_arrivee(code_salon, joueur):
+    code_salon = soiree_de(code_salon)
     for couche in list(couches.get(code_salon, {}).values()):
         await _appeler_couche(code_salon, couche, couche.arrivee, joueur["nom"])
 
@@ -2874,13 +2955,17 @@ async def signaler(code_salon, jeu, type_evt, gagnants=(), perdants=(), details=
     """
     Point d entree UNIQUE par lequel les jeux annoncent leurs resultats aux
     couches (fin de manche, victoire, fin de jeu). Les jeux ne savent pas
-    qui ecoute ; sans couche active, ca ne fait rien.
+    qui ecoute ; sans couche active, ca ne fait rien. Les couches sont celles
+    de la soiree : une victoire a n importe quelle table compte.
     """
+    table = code_salon
+    code_salon = soiree_de(code_salon)
     if not couches.get(code_salon):
         return
+    salon = salons.get(table)
     evenement = {
-        "jeu": jeu, "type": type_evt,
-        "joueurs": _noms_presents(code_salon),
+        "jeu": jeu, "type": type_evt, "table": table,
+        "joueurs": [j["nom"] for j in salon["joueurs"] if not j.get("parti")] if salon else [],
         "gagnants": list(gagnants), "perdants": list(perdants),
         "details": details or {},
     }
@@ -2934,8 +3019,8 @@ async def creer_salon():
 
 @app.get("/salon/{code}")
 async def info_salon(code: str):
-    """Retourne les infos d un salon (pour verifier qu il existe)."""
-    if code not in salons and code not in couches:
+    """Retourne les infos d une table (pour verifier qu elle existe)."""
+    if code not in salons and not (code == soiree_de(code) and soiree_existe(code)):
         return {"existe": False}
     salon = salons.get(code) or nouveau_salon()
     jeu = JEUX.get(salon["jeu"])
@@ -2944,8 +3029,40 @@ async def info_salon(code: str):
         "joueurs": [j["nom"] for j in salon["joueurs"]],
         "jeu": salon["jeu"],
         "page": jeu.page if jeu else None,
-        "couches": sorted(couches.get(code, {})),
+        "couches": sorted(couches.get(soiree_de(code), {})),
     }
+
+
+@app.get("/soiree/{code}")
+async def info_soiree(code: str):
+    """La soiree : ses tables (jeu, joueurs presents) et ses couches."""
+    code = soiree_de(code)
+    if not soiree_existe(code):
+        return {"existe": False}
+    tables = []
+    for t in _tables(code):
+        jeu = JEUX.get(t["jeu"])
+        t["titre"] = jeu.titre if jeu else None
+        t["page"] = jeu.page if jeu else None
+        tables.append(t)
+    return {"existe": True, "code": code, "tables": tables, "couches": sorted(couches.get(code, {}))}
+
+
+@app.get("/soiree/{code}/nouvelle-table")
+async def nouvelle_table(code: str):
+    """Ouvre la prochaine table libre de la soiree (ABCD-2, ABCD-3...)."""
+    code = soiree_de(code)
+    if not soiree_existe(code):
+        return {"existe": False}
+    if code not in salons:
+        salons[code] = nouveau_salon()      # la table 1 avait ete liberee
+        return {"existe": True, "code": code}
+    for n in range(2, TABLES_MAX + 1):
+        c = code_table(code, n)
+        if c not in salons:
+            salons[c] = nouveau_salon()
+            return {"existe": True, "code": c}
+    return {"existe": True, "code": None, "message": f"{TABLES_MAX} tables au plus par soiree."}
 
 
 @app.get("/")

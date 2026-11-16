@@ -232,6 +232,60 @@ async def essai_couches():
     serveur.salons.clear()
 
 
+async def essai_tables():
+    print("Plusieurs tables dans une soiree")
+    await serveur.demarrage(StockageMemoire())
+    code = (await serveur.creer_salon())["code"]
+    (lea, wl), (maxi, wm) = [await entrer(code, n) for n in ("Lea", "Max")]
+    t2 = (await serveur.nouvelle_table(code))["code"]
+    verifier(t2 == code + "-2", "nouvelle table : " + str(t2))
+    (zoe, wz) = await entrer(t2, "Zoe")
+    info = await serveur.info_soiree(t2)
+    verifier([t["code"] for t in info["tables"]] == [code, t2], "la soiree liste ses deux tables")
+    verifier(info["tables"][0]["joueurs"] == ["Lea", "Max"] and info["tables"][1]["joueurs"] == ["Zoe"],
+             "  avec leurs joueurs")
+
+    # Chaque table a son propre jeu.
+    await envoyer(code, lea, {"type": "demarrer"})
+    await envoyer(t2, zoe, {"type": "cs_demarrer"})
+    verifier(serveur.salons[code]["jeu"] == "kinito" and serveur.salons[t2]["jeu"] == "casino",
+             "Kinito a la table 1, Casino a la table 2")
+    verifier(not any(m.get("type") == "salon_jeu" and m["jeu"] == "casino" for m in wl.recus),
+             "  le changement de la table 2 n est pas annonce a la table 1")
+
+    # Un prenom n est qu a une table : Max passe a la table 2.
+    wm.recus.clear()
+    (max2, _) = await entrer(t2, "Max")
+    await asyncio.sleep(0.1)
+    j1 = [j for j in serveur.salons[code]["joueurs"] if j["nom"] == "Max"]
+    verifier(all(j.get("parti") for j in j1), "Max qui s assoit a la table 2 quitte la table 1")
+    verifier({"type": "remplace"} in wm.recus, "  son ancienne connexion est prevenue")
+    info = await serveur.info_soiree(code)
+    verifier(info["tables"][0]["joueurs"] == ["Lea"] and sorted(info["tables"][1]["joueurs"]) == ["Max", "Zoe"],
+             "  la soiree le voit a la table 2")
+
+    # Les couches couvrent toute la soiree.
+    await envoyer(t2, zoe, {"type": "tst_lancer"})
+    couche = serveur.couches.get(code, {}).get("tst")
+    verifier(couche is not None and t2 not in serveur.couches, "une couche lancee depuis la table 2 appartient a la soiree")
+    await envoyer(code, lea, {"type": "tst_action"})
+    verifier(couche.actions[-1] == ["Lea", "tst_action"], "  elle recoit les messages de la table 1")
+    await serveur.signaler(t2, "casino", "victoire", gagnants=["Zoe"])
+    verifier(["casino", "victoire"] in couche.evenements, "  et les victoires de la table 2")
+    ctx = serveur._contexte(code, couche)
+    verifier(sorted(ctx.noms_presents()) == ["Lea", "Max", "Zoe"], "  elle voit les presents de toutes les tables")
+    wz.recus.clear()
+    await ctx.envoyer_nom("Zoe", {"type": "tst_prive"})
+    verifier({"type": "tst_prive"} in wz.recus, "  et joint un joueur a sa table")
+
+    # La table 1 liberee, le code reste pris tant que la table 2 vit.
+    del serveur.salons[code]
+    verifier(serveur.soiree_existe(code) and (await serveur.info_salon(code))["existe"],
+             "table 1 liberee : la soiree existe toujours")
+    serveur.salons.clear()
+    serveur.couches.clear()
+
+
 async def essai_postgres(url):
     print("Stockage Postgres")
     s = StockagePostgres(url)
@@ -256,6 +310,7 @@ async def essai_postgres(url):
 async def principal():
     await essai_changement_de_jeu()
     await essai_couches()
+    await essai_tables()
     url = os.environ.get("TEST_DATABASE_URL")
     if url:
         await essai_postgres(url)

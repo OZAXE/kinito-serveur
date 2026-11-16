@@ -11,7 +11,16 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
-## Une soirée = un salon = un code
+## Une soirée, ses tables
+
+- Une soirée a un code de 4 lettres (`ABCD`), qui est aussi sa table 1. Ses autres tables sont
+  `ABCD-2` … `ABCD-9` (8 places chacune) : chacune est un salon complet, avec son jeu.
+  `GET /soiree/{code}` liste les tables, `GET /soiree/{code}/nouvelle-table` en ouvre une.
+- Un prénom n'est qu'à une table à la fois : s'asseoir à une autre le fait quitter la première.
+- Les couches (l'Enquête) appartiennent à la soirée : elles voient les joueurs et les victoires
+  de toutes les tables.
+
+## Une table = un salon
 
 - Le même code sert toute la soirée. **Règle unique de lancement** : en salle d'attente le jeu démarre ;
   le même jeu en cours ne se relance que s'il est fini ; un autre jeu le remplace (le nombre de joueurs

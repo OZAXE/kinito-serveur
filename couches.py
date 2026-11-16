@@ -1,8 +1,9 @@
 """
 Couches paralleles d une soiree.
 
-Une soiree (un salon, un code) a un jeu en cours (ou aucun) et 0, 1 ou
-plusieurs couches qui tournent A COTE des jeux, pendant toute la soiree :
+Une soiree (un code) a une ou plusieurs tables (chacune un salon avec son
+jeu en cours) et 0, 1 ou plusieurs couches qui tournent A COTE des jeux,
+sur toutes les tables, pendant toute la soiree :
 la premiere est l Enquete. Une couche est optionnelle : une soiree sans
 couche est une soiree normale.
 
@@ -19,8 +20,8 @@ Regles du contrat :
 - elle ne fait jamais planter un jeu : le serveur attrape ses erreurs.
 
 Evenement signale par un jeu (dict) :
-  {"jeu": "kinito", "type": "manche" | "victoire" | "fin_jeu",
-   "joueurs": [noms presents], "gagnants": [noms], "perdants": [noms],
+  {"jeu": "kinito", "type": "manche" | "victoire" | "fin_jeu", "table": "ABCD-2",
+   "joueurs": [noms presents a cette table], "gagnants": [noms], "perdants": [noms],
    "details": {...propre au jeu}}
 """
 
@@ -28,13 +29,13 @@ Evenement signale par un jeu (dict) :
 class Contexte:
     """Ce que le serveur met a disposition d une couche (reseau, horloge, sauvegarde)."""
 
-    def __init__(self, code, diffuser, envoyer_nom, noms_presents, jeu_en_cours,
+    def __init__(self, code, diffuser, envoyer_nom, noms_presents, tables,
                  sauvegarder, maintenant):
-        self.code = code
-        self.diffuser = diffuser            # async (message) -> a tous les connectes
-        self.envoyer_nom = envoyer_nom      # async (nom, message) -> a ce joueur s il est la
-        self.noms_presents = noms_presents  # () -> [noms connectes]
-        self.jeu_en_cours = jeu_en_cours    # () -> nom du jeu ou None
+        self.code = code                    # code de la SOIREE (toutes tables)
+        self.diffuser = diffuser            # async (message) -> a tous les connectes, toutes tables
+        self.envoyer_nom = envoyer_nom      # async (nom, message) -> a ce joueur, ou qu il soit
+        self.noms_presents = noms_presents  # () -> [noms connectes, toutes tables]
+        self.tables = tables                # () -> [{"code", "numero", "jeu", "joueurs"}]
         self.sauvegarder = sauvegarder      # () -> marque la couche a sauvegarder
         self.maintenant = maintenant        # () -> horodatage (secondes)
 

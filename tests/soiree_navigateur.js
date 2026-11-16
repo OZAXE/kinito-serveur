@@ -104,7 +104,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
     document.dispatchEvent(new Event('visibilitychange'));
   });
   const reveil = await attendreQue(async () =>
-    (await zoe.textContent('body')).includes('Le groupe joue à Casino'), 25000);
+    (await zoe.textContent('body')).includes('Ta table joue à Casino'), 25000);
   verifier(!!reveil, 'Zoé, qui dormait pendant le changement, voit au réveil « Le groupe joue à Casino »');
   await appuyer(zoe, 'Rejoindre');
   verifier(!!await attendreQue(async () => /casino-3d-jeu\.html/.test(zoe.url()), 15000), '  et rejoint en un appui');
@@ -124,13 +124,37 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await tom.waitForSelector('.code-grand');
   await tom.click('a.jeu.kinito');
   const bandeau = await attendreQue(async () =>
-    (await tom.textContent('body')).includes('Le groupe joue à Casino'), 25000);
+    (await tom.textContent('body')).includes('Ta table joue à Casino'), 25000);
   if (!bandeau) console.log('   (url ' + tom.url() + ', bandeaux : ' + JSON.stringify(await tom.evaluate(() =>
     [[...document.querySelectorAll('[role=status]')].map(b => b.textContent), Soiree.nom(), Soiree.actuelle(),
      (document.querySelector('#panneau') || {}).innerText])) + ')');
   verifier(!!bandeau, 'un retardataire sur Kinito voit « Le groupe joue à Casino »');
   await appuyer(tom, 'Rejoindre');
   verifier(!!await attendreQue(async () => /casino-3d-jeu\.html/.test(tom.url()), 10000), '  et le rejoint en un appui');
+
+  // Deuxième table : Tom en ouvre une et choisit Kinito ; Léa vient s'y asseoir.
+  await tom.goto(SITE + 'index.html');
+  await appuyer(tom, 'Nouvelle table');
+  const ouverte = await attendreQue(async () => (await tom.textContent('#soiree-contenu')).includes('Table 2 · ta table'), 15000);
+  verifier(!!ouverte, 'Tom ouvre une deuxième table');
+  await tom.click('a.jeu.kinito');
+  await tom.waitForURL(new RegExp('kinito-3d-jeu\\.html\\?salon=' + code + '-2'));
+  verifier(!!await attendreQue(async () => (await etat(code + '-2')).joueurs.some(j => j.nom === 'Tom' && !j.parti), 15000),
+    '  et s\'y assoit en choisissant Kinito');
+  verifier(!!await attendreQue(async () => (await etat(code)).joueurs.every(j => j.nom !== 'Tom' || j.parti), 10000),
+    '  il a quitté la table 1');
+
+  await lea.goto(SITE + 'index.html');
+  const deux = await attendreQue(async () => {
+    const t = await lea.textContent('#soiree-contenu'); return t.includes('Table 2') && t.includes('Tom');
+  }, 15000);
+  verifier(!!deux, "l'accueil de Léa liste les deux tables et leurs joueurs");
+  await appuyer(lea, "S'asseoir ici");
+  await lea.click('a.jeu.kinito');
+  await lea.waitForURL(new RegExp('salon=' + code + '-2'));
+  await appuyer(lea, 'Demarrer la partie', 25000);
+  verifier(!!await attendreQue(async () => (await etat(code + '-2')).jeu === 'kinito', 15000), 'Léa lance Kinito à la table 2');
+  verifier((await etat(code)).jeu === 'casino', '  la table 1 joue toujours au Casino');
 
   verifier(erreurs.length === 0, 'aucune erreur JavaScript' + (erreurs.length ? ' : ' + erreurs.join(' | ') : ''));
   await nav.close();
