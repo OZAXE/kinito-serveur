@@ -17,6 +17,11 @@ plafonne, distribution, archive officielle (lecture gratuite une fois, puis
 chrono et gorgee), achat d indice contre des gorgees, fil du narrateur.
 Tranche 3 : accusations (delai double a chaque echec, gorgees, seuil de
 patience), fin de partie et recapitulatif.
+Tranche 4 : bonus aleatoires (« Temoin anonyme » : un indice offert de
+temps en temps a un joueur tire au sort, tueur compris) et contre-expertise
+(un indice de l archive recoit un tampon permanent Authentique ou Falsifie,
+payee en PE a la place d un indice ou en gorgees ; elle compte comme une
+consultation).
 
 SECURITE : le tueur ne doit jamais etre deductible techniquement.
 - vue_publique ne contient JAMAIS la solution ni le tueur avant la fin ;
@@ -155,6 +160,10 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         # --- tranche 3 ---
         "accusations": [],          # SECRET jusqu a la fin : [{t, nom, suspect, arme, lieu, justes}]
         "echecs": 0,                # public : accusations ratees, tous joueurs
+        # --- tranche 4 ---
+        "prochain_bonus_a": None,   # SECRET (heure exacte) : prochain Temoin anonyme
+        "dernier_bonus": None,      # SECRET : cle du dernier joueur servi
+        "bonus": [],                # SECRET jusqu a la fin : [{t, nom}]
     }
 
 
@@ -184,6 +193,7 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_lire": _lire,
         "enq_consulter": _consulter,
         "enq_accuser": _accuser,
+        "enq_expertise": _expertiser,
     }.get(t)
     if f is None:
         return []
@@ -286,6 +296,7 @@ def _lancer(etat, nom, message, maintenant, rng, config):
     etat["debut_a"] = maintenant
     etat["ouverture_fin_a"] = maintenant + config["duree_ouverture"]
     etat["fin_a"] = maintenant + config["duree_ouverture"] + etat["duree"]
+    etat["prochain_bonus_a"] = etat["ouverture_fin_a"] + _intervalle_bonus(etat, config, rng)
     etat["version"] += 1
     return []
 
@@ -308,17 +319,20 @@ def prochaine_echeance(etat):
     if etat["phase"] == "enquete":
         # Reveil regulier pour compter le temps passe aux jeux longs (paliers).
         tic = (etat["dernier_tic"] or etat["ouverture_fin_a"]) + TIC_PALIERS
-        return min(etat["fin_a"], tic)
+        return min(x for x in (etat["fin_a"], tic, etat.get("prochain_bonus_a")) if x is not None)
     return None
 
 
-def expirer(etat, maintenant, config=None):
+def expirer(etat, maintenant, config=None, rng=random):
+    config = config or CONFIG
     ev = []
     if etat["phase"] == "ouverture" and maintenant >= etat["ouverture_fin_a"]:
         etat["phase"] = "enquete"
         etat["version"] += 1
     if etat["phase"] == "enquete" and maintenant >= etat["fin_a"]:
         _terminer(etat, "tueur", "heure", None)
+    if etat["phase"] == "enquete" and etat.get("prochain_bonus_a") is not None and maintenant >= etat["prochain_bonus_a"]:
+        ev += temoin_anonyme(etat, maintenant, rng, config)
     return ev
 
 
@@ -365,6 +379,9 @@ def vue_publique(etat, maintenant):
                                            * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
         "gorgees_achat": max(1, int(CONFIG["gorgees"]["indice_achete"]
                                     * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
+        "gorgees_expertise": max(1, int(CONFIG["gorgees"]["contre_expertise_achetee"]
+                                        * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
+        "bonus_toutes": CONFIG["vitesses"][etat["vitesse"]]["bonus_toutes"],
         "echecs": etat.get("echecs", 0),
         "seuil_patience": seuil_patience(etat) if lancee else None,
         "delai_accusation": CONFIG["vitesses"][etat["vitesse"]]["delai_accusation"],
@@ -446,6 +463,7 @@ def perso_vide():
         "obtenus": [],              # horodatages des indices obtenus (plafond horaire)
         "gorgees": [],              # [horodatage, nombre, raison]
         "manches_kinito": 0,
+        "expertises": 0,
         "temps_palier": {},         # jeu -> secondes accumulees
         "derniere_source": None,
         "accusations": [],          # les siennes : [{t, suspect, arme, lieu, justes}]
@@ -605,9 +623,11 @@ def _entree(etat, nom, message):
     return None
 
 
-def _texte(entree, gratuit):
+def _texte(entree, gratuit, expertise=False):
     return {"type": "enq_texte", "id": entree["id"], "texte": entree["texte"], "source": entree["source"],
-            "recu_a": entree["recu_a"], "tampon": entree["tampon"], "gratuit": gratuit}
+            "recu_a": entree["recu_a"], "tampon": entree["tampon"], "gratuit": gratuit, "expertise": expertise,
+            # Pour l illustration de la lettre : rien de plus que ce que dit deja le texte.
+            "categorie": entree["categorie"], "element": entree["element"]}
 
 
 def _lire(etat, nom, message, maintenant, rng, config):
@@ -810,13 +830,95 @@ def _accuser(etat, nom, message, maintenant, rng, config):
     return ev
 
 
+# =============================================================
+# TRANCHE 4 : TEMOIN ANONYME ET CONTRE-EXPERTISE
+# =============================================================
+
+def _intervalle_bonus(etat, config, rng):
+    """Toutes les X minutes selon la vitesse, a +/- bonus_alea pres (pas d horloge previsible)."""
+    base = _vitesse(etat, config)["bonus_toutes"]
+    alea = config.get("bonus_alea", 0.25)
+    return base * (1 + rng.uniform(-alea, alea))
+
+
+def _peut_recevoir(etat, nom):
+    k = cle_nom(nom)
+    return any(not (e["categorie"] == "suspect" and cle_nom(e["element"]) == k) for e in etat["pool"])
+
+
+def temoin_anonyme(etat, maintenant, rng=random, config=None):
+    """
+    Un indice offert a un joueur tire au sort, tueur compris (pour lui,
+    c est un indice de couverture, toujours vrai). Source « Temoin anonyme »
+    : un indice qui arrive sans victoire est donc normal. Hors plafond
+    horaire. Plus de stock pour personne : les bonus s arretent.
+    """
+    config = config or CONFIG
+    candidats = [j["nom"] for j in etat["joueurs"] if _peut_recevoir(etat, j["nom"])]
+    if not candidats:
+        etat["prochain_bonus_a"] = None
+        donner_indice(etat, etat["joueurs"][0]["nom"], "Témoin anonyme", maintenant, rng, config)   # annonce « dossier epuise »
+        etat["version"] += 1
+        return []
+    # Pas deux fois de suite le meme, quand c est possible.
+    autres = [n for n in candidats if cle_nom(n) != etat.get("dernier_bonus")]
+    nom = rng.choice(autres or candidats)
+    ev = donner_indice(etat, nom, "Témoin anonyme", maintenant, rng, config) or []
+    etat["dernier_bonus"] = cle_nom(nom)
+    etat.setdefault("bonus", []).append({"t": maintenant, "nom": nom})
+    etat["prochain_bonus_a"] = maintenant + _intervalle_bonus(etat, config, rng)
+    etat["version"] += 1
+    return ev
+
+
+def _expertiser(etat, nom, message, maintenant, rng, config):
+    """
+    Contre-expertise d un indice de son archive : tampon permanent
+    « authentique » ou « falsifie ». Payee en PE (a la place d un indice) ou
+    en gorgees. Compte comme une consultation : meme chrono, pas de gorgee
+    de consultation en plus. Aucune annonce publique.
+    """
+    if etat["phase"] != "enquete":
+        return _erreur(nom, "L'enquête n'est pas en cours.")
+    e = _entree(etat, nom, message)
+    if e is None or not e["lu"]:
+        return _erreur(nom, "Cet indice n'est pas dans ton archive.")
+    if e["tampon"]:
+        return _erreur(nom, "Cet indice porte déjà un tampon d'expertise.")
+    p = _perso(etat, nom)
+    timer = _vitesse(etat, config)["timer_consultation"]
+    if p["derniere_consultation"] is not None and maintenant < p["derniere_consultation"] + timer:
+        reste = int(p["derniere_consultation"] + timer - maintenant + 0.999)
+        return _erreur(nom, f"Archive verrouillée encore {reste} s.")
+    paiement = message.get("paiement")
+    cout = _vitesse(etat, config)["pe_par_indice"]
+    if paiement == "pe":
+        if p["pe"] < cout:
+            return _erreur(nom, f"Il faut {cout} PE pour une contre-expertise (tu en as {p['pe']}).")
+        p["pe"] -= cout
+    elif paiement != "gorgee":
+        return _erreur(nom, "Paiement inconnu.")
+    e["tampon"] = "authentique" if e["vrai"] else "falsifie"
+    p["derniere_consultation"] = maintenant
+    p["expertises"] = p.get("expertises", 0) + 1
+    etat["version"] += 1
+    ev = [_a(nom, _texte(e, False, expertise=True))]
+    if paiement == "gorgee":
+        ev.append(_imposer(etat, nom, _gorgees(etat, config, config["gorgees"]["contre_expertise_achetee"]),
+                           "Contre-expertise", maintenant))
+    return ev
+
+
 def recapitulatif(etat):
     """Ecran de fin : tout est revele (accusations, indices recus, solution)."""
     return {
         "accusations": [{"nom": a["nom"], "suspect": a["suspect"], "arme": a["arme"], "lieu": a["lieu"],
                          "justes": a["justes"], "par_le_tueur": a["par_le_tueur"]} for a in etat["accusations"]],
         "indices": [{"nom": j["nom"], "recus": len(etat["perso"].get(cle_nom(j["nom"]), {}).get("archive", [])),
-                     "faux": sum(1 for e in etat["perso"].get(cle_nom(j["nom"]), {}).get("archive", []) if not e["vrai"])}
+                     "faux": sum(1 for e in etat["perso"].get(cle_nom(j["nom"]), {}).get("archive", []) if not e["vrai"]),
+                     "temoins": sum(1 for e in etat["perso"].get(cle_nom(j["nom"]), {}).get("archive", [])
+                                    if e["source"] == "Témoin anonyme"),
+                     "expertises": etat["perso"].get(cle_nom(j["nom"]), {}).get("expertises", 0)}
                     for j in etat["joueurs"]],
         "gorgees": gorgees_de_fin(etat),
     }

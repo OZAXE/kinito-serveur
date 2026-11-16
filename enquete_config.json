@@ -21,6 +21,7 @@
     "casino":     {"type": "palier", "pe": 1, "palier": 900, "bonus_victoire": 2}
   },
   "indices_par_heure_max": 2,
+  "bonus_alea": 0.25,
   "gorgees": {
     "unite_defaut": "gorgée",
     "consultation": 1,

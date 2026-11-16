@@ -23,6 +23,15 @@ async function attendreQue(test, delai) {
 }
 // Texte VISIBLE de la page (textContent inclut aussi le code des <script>).
 async function visible(page) { return page.evaluate(() => document.body.innerText); }
+// Les confirmations sont des fenêtres dans la page (role=dialog) : on clique le bouton nommé.
+async function confirmerDansPage(page, libelle) {
+  return attendreQue(() => page.evaluate((l) => {
+    const b = [...document.querySelectorAll('[role=dialog] button')].find(x => x.textContent === l);
+    if (b) { b.click(); return true; }
+    return false;
+  }, libelle), 8000);
+}
+
 async function appuyer(page, texte, delai = 15000) {
   const ok = await attendreQue(() => page.evaluate(t => {
     const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === t && !x.disabled);
@@ -134,13 +143,41 @@ async function sansDefilement(page) {
   await appuyer(max, 'Ouvrir le pli');
   const lettre = await attendreQue(() => max.evaluate(() => { const l = document.querySelector('.lettre .corps'); return l && l.textContent; }), 10000);
   verifier(!!lettre && /Gaspard/.test(lettre), '  il le lit : « ' + (lettre || '').slice(0, 55) + '… »');
+  const vignette = await max.evaluate(() => { const v = document.querySelector('.lettre .vignette'); return v && v.querySelector('.image').textContent.trim() && v.querySelector('.legende-photo').textContent; });
+  verifier(!!vignette, '  la lettre est illustrée : photo « ' + vignette + ' », bandeau Hors de cause');
+  if (CAPTURES) await max.screenshot({ path: CAPTURES + '/enquete-lettre.png' });
   await appuyer(max, 'Ranger dans l’archive');
   await attendreQue(() => max.evaluate(() => { const b = document.querySelector('[data-relire]'); if (b && !b.disabled) { b.click(); return true; } return false; }), 10000);
+  verifier(!!await confirmerDansPage(max, 'Relire'), '  confirmation dans la page (pas de fenêtre native qui gèle la connexion)');
   const gorgee = await attendreQue(() => max.evaluate(() => { const t = document.getElementById('toast'); return t && t.style.display !== 'none' && /Bois/.test(t.textContent) && t.textContent; }), 10000);
   verifier(!!gorgee, '  le relire coûte une gorgée : « ' + (gorgee || '') + ' »');
   await max.evaluate(() => document.querySelector('.voile button').click());
   verifier(!!await attendreQue(() => max.evaluate(() => { const b = document.querySelector('[data-relire]'); return b && b.disabled && /Relire dans/.test(b.textContent); }), 5000),
     '  puis chrono avant la prochaine relecture');
+
+  // Témoin anonyme et contre-expertise
+  const servi = (await (await fetch(API + '/test/temoin/' + code)).json()).nom;
+  verifier(!!servi, 'un témoin anonyme glisse un pli à ' + servi);
+  const ps = pages[servi];
+  const toastTemoin = await attendreQue(() => ps.evaluate(() => { const t = document.getElementById('toast'); return t && /témoin anonyme/i.test(t.textContent) && t.textContent; }), 10000);
+  verifier(!!toastTemoin, '  ' + servi + ' est prévenu : « ' + (toastTemoin || '') + ' »');
+  await onglet(ps, 'indices');
+  verifier(!!await attendreQue(async () => (await visible(ps)).includes('Témoin anonyme'), 10000), '  le pli affiche sa source « Témoin anonyme »');
+  await appuyer(ps, 'Ouvrir le pli');
+  await attendreQue(() => ps.evaluate(() => !!document.querySelector('.lettre .corps')), 10000);
+  await appuyer(ps, 'Ranger dans l’archive');
+  await fetch(API + '/test/pe/' + code + '/' + servi + '/3');
+  await attendreQue(() => ps.evaluate(() => /3 PE/.test(document.querySelector('.etat-jeu .pe').textContent)), 10000);
+  await attendreQue(() => ps.evaluate(() => { const b = document.querySelector('[data-expertiser]'); if (b && !b.disabled) { b.click(); return true; } return false; }), 15000);
+  const choixPE = await attendreQue(() => ps.evaluate(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(x => / PE$/.test(x.textContent)); return b && !b.disabled && b.textContent; }), 10000);
+  verifier(!!choixPE, '  contre-expertise : payer en PE (' + choixPE + ') ou en gorgée');
+  await ps.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find(x => / PE$/.test(x.textContent)).click());
+  const cachet = await attendreQue(() => ps.evaluate(() => { const c = document.querySelector('.lettre .cachet'); return c && c.textContent; }), 10000);
+  verifier(cachet === 'AUTHENTIQUE', '  le verdict tombe en tampon sur la lettre : « ' + cachet + ' »');
+  if (CAPTURES) { await attendre(700); await ps.screenshot({ path: CAPTURES + '/enquete-expertise.png' }); }
+  await ps.evaluate(() => document.querySelector('.voile button').click());
+  verifier(!!await attendreQue(() => ps.evaluate(() => { const t = document.querySelector('.archive-ligne .tampon.authentique'); return t && !t.closest('.archive-ligne').querySelector('[data-expertiser]'); }), 5000),
+    '  tampon permanent dans l\'archive, plus de bouton d\'expertise sur cet indice');
 
   // Carnet sur le plan
   await onglet(max, 'plan');
@@ -177,6 +214,7 @@ async function sansDefilement(page) {
   verifier(await page.evaluate(() => { const b = document.querySelector('[data-accuser]').getBoundingClientRect(); return b.bottom <= document.querySelector('nav.onglets').getBoundingClientRect().top + 1 && b.top > 0; }),
     '  le bouton Accuser est visible sans faire défiler');
   await page.evaluate(() => document.querySelector('[data-accuser]').click());
+  await confirmerDansPage(page, 'Accuser');
   const verdict = await attendreQue(() => page.evaluate(() => { const l = document.querySelector('.lettre .corps'); return l && l.textContent; }), 10000);
   verifier(verdict === '2 éléments justes sur 3.', enqueteur + ' accuse (mauvais lieu) : « ' + verdict + ' »');
   await page.evaluate(() => document.querySelector('.voile button').click());
@@ -198,12 +236,14 @@ async function sansDefilement(page) {
   };
   await choisir2(sol.lieu, sol.arme, sol.tueur);
   await p2.evaluate(() => document.querySelector('[data-accuser]').click());
+  await confirmerDansPage(p2, 'Accuser');
   const fin = await attendreQue(async () => (await visible(pages.Lea)).includes('Grand Détective'), 10000);
   verifier(!!fin, juste + ' accuse juste : tout le monde voit la fin (le Grand Détective)');
   verifier(await pages.Lea.evaluate(l => !!document.querySelector('.plan .zone.crime[data-lieu="' + l + '"]'), sol.lieu), '  le plan met en lumière le lieu du crime');
   if (CAPTURES) await pages.Lea.screenshot({ path: CAPTURES + '/enquete-fin.png' });
   await onglet(pages.Lea, 'recap');
   const recap = await visible(pages.Lea);
+  verifier(/Témoin/i.test(recap) && /Expertises/i.test(recap), '  récapitulatif : plis du témoin et contre-expertises par joueur');
   verifier(recap.includes(enqueteur) && recap.includes('2/3') && recap.includes('3/3'), '  récapitulatif : les deux accusations');
 
   // Onglet par-dessus un jeu
