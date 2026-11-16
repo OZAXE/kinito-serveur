@@ -292,6 +292,12 @@ async def essai_tables():
              "table 1 liberee : la soiree existe toujours")
     serveur.salons.clear()
     serveur.couches.clear()
+    # Redemarrage du serveur : la soiree inconnue est rouverte sous le meme code.
+    verifier(not (await serveur.info_soiree(code))["existe"], "apres redemarrage, la soiree est inconnue")
+    r = await serveur.rouvrir_soiree(code)
+    verifier(r["rouverte"] and (await serveur.info_soiree(code))["existe"], "  /rouvrir la rouvre sous le meme code")
+    verifier(not (await serveur.rouvrir_soiree("ab1"))["existe"], "  un code invalide n est pas ouvert")
+    serveur.salons.clear()
 
 
 async def essai_postgres(url):

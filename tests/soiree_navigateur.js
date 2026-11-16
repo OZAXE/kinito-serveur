@@ -66,8 +66,10 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   verifier((await zoe.textContent('.code-grand')) === code, 'Max et Zoé rejoignent la soirée');
 
   for (const p of [lea, max, zoe]) {
+    const lien = await p.getAttribute('a.jeu.kinito', 'href');
     await p.click('a.jeu.kinito');
-    await p.waitForURL(/kinito-3d-jeu\.html\?salon=/);
+    const arrive = await attendreQue(async () => /kinito-3d-jeu\.html\?salon=/.test(p.url()), 30000);
+    if (!arrive) console.log('   (lien ' + lien + ', adresse ' + p.url() + ')');
   }
   const tous = await attendreQue(async () => { const e = await etat(code); return e.joueurs.length === 3 ? e : null; }, 15000);
   verifier(!!tous && tous.joueurs.map(j => j.nom).sort().join() === 'Lea,Max,Zoe',
@@ -91,6 +93,10 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await lea.click('a.jeu.casino');
   await lea.waitForURL(/casino-3d-jeu\.html\?salon=/);
   await appuyer(lea, 'Ouvrir le casino');
+  // Confirmation dessinée dans la page (pas de boîte native qui figerait tout).
+  const question = await attendreQue(() => lea.evaluate(() => { const d = document.querySelector('[role=dialog]'); return d && d.innerText; }), 10000);
+  if (question) dialogues.push('Lea : ' + question);
+  await appuyer(lea, 'Remplacer');
   verifier(!!await attendreQue(async () => (await etat(code)).jeu === 'casino', 10000),
     'Léa ouvre le casino : il remplace Kinito');
   verifier(dialogues.some(d => d.startsWith('Lea') && d.includes('Kinito')),
