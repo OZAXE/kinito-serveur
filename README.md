@@ -54,6 +54,11 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   délai entre deux sabotages, détection qui baisse avec le temps ; l'annonce « interférence » et la
   fausse rumeur sortent après un délai aléatoire. Rumeurs ambiantes (`rumeurs_toutes`) en bruit de fond.
   La console (`console` dans la vue privée) vaut `None` pour tous les autres.
+- Événements d'ambiance (programme secret tiré au lancement, nombre et durée selon la vitesse, jamais
+  deux à la fois ni deux fois de suite le même) : coupure (archive verrouillée, plis illisibles,
+  détection /2), découverte (indice vrai publié à tous), alerte (délai d'accusation /2, gorgées
+  d'accusation ratée x2), brouhaha (rumeurs plus fréquentes, une fausse rumeur gratuite), interrogatoire
+  (2 joueurs désignés, `enq_refuser` coûte des gorgées), marée (PE doublés).
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
   mêmes clés pour tous (`tests/enquete_essai.py`).
 

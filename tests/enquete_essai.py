@@ -607,6 +607,107 @@ def essai_detection_et_rumeurs():
     verifier(rec["sabotages"] and rec["sabotages"][0]["type"] == "rumeur", "le récapitulatif de fin révèle les sabotages")
 
 
+def essai_evenements():
+    print("Événements d'ambiance")
+    bons = True
+    for vitesse in ("flash", "express", "soiree", "marathon"):
+        for g in range(30):
+            e, t = en_cours(6, g, vitesse)
+            v = m.CONFIG["vitesses"][vitesse]
+            pr = e["programme"]
+            d = v["duree_evenement"]
+            bons &= len(pr) == v["evenements"]
+            bons &= all(b["t"] - a["t"] >= 3 * d - 1e-6 for a, b in zip(pr, pr[1:]))
+            bons &= all(a["type"] != b["type"] for a, b in zip(pr, pr[1:]))
+            bons &= all(t < x["t"] and x["t"] + d < e["fin_a"] for x in pr)
+    verifier(bons, "programme : bon nombre selon la vitesse, jamais deux à la fois (2 D d'écart), jamais deux fois le même de suite")
+    e, t = en_cours(6, 1)
+    verifier("programme" not in json.dumps(m.vue_publique(e, t)) and m.vue_publique(e, t)["evenement"] is None,
+             "  le programme reste secret")
+    verifier(m.prochaine_echeance(e) <= e["programme"][0]["t"], "  le serveur se réveille pour le premier")
+    premier = e["programme"][0]
+    ev = m.expirer(e, premier["t"], rng=random.Random(1))
+    pub = m.vue_publique(e, premier["t"])
+    verifier(pub["evenement"] and pub["evenement"]["type"] == premier["type"] and any(x["msg"]["type"] == "enq_evenement" and x["a"] is None for x in ev),
+             "à l'heure dite, l'événement démarre et est annoncé à tous en même temps")
+    fin = pub["evenement"]["fin"]
+    ev = m.expirer(e, fin, rng=random.Random(1))
+    verifier(m.vue_publique(e, fin)["evenement"] is None and any(x["msg"]["type"] == "enq_evenement_fin" for x in ev), "  puis s'arrête après sa durée")
+
+    def partie_evt(type_, g=2):
+        e, t = en_cours(6, g)
+        e["programme"] = []
+        return e, t, m.demarrer_evenement(e, type_, t, random.Random(g))
+
+    # Coupure
+    e, t, _ = partie_evt("coupure")
+    k = e["tueur"]
+    autre = next(j["nom"] for j in e["joueurs"] if j["nom"] != k)
+    q = m._perso(e, autre)
+    q["pe"] = 10
+    m.action(e, autre, {"type": "enq_indice"}, t)
+    i = q["archive"][-1]["id"]
+    ev = m.action(e, autre, {"type": "enq_lire", "id": i}, t + 1)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and not q["archive"][-1]["lu"], "coupure : les plis reçus restent illisibles")
+    q["archive"][-1]["lu"] = True
+    ev = m.action(e, autre, {"type": "enq_consulter", "id": i}, t + 1)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and "verrouill" in ev[0]["msg"]["message"], "  archive verrouillée")
+    verifier(abs(m.detection_actuelle(e, t + 1) * 2 - m.CONFIG["vitesses"][e["vitesse"]]["detection"][0]) < 0.01, "  détection des sabotages divisée par 2")
+    m.expirer(e, e["evenement"]["fin"])
+    ev = m.action(e, autre, {"type": "enq_consulter", "id": i}, e["fin_a"] - 10)
+    verifier(ev[0]["msg"]["type"] == "enq_texte", "  le courant revient : archive rouverte")
+
+    # Découverte
+    e, t, ev = partie_evt("decouverte")
+    d = [x for x in ev if x["msg"]["type"] == "enq_decouverte"]
+    verifier(d and d[0]["a"] is None and e["decouvertes"] and d[0]["msg"]["element"] not in (e["solution"]["lieu"], e["solution"]["arme"], e["solution"]["tueur"]),
+             "découverte : un indice vrai publié à tous")
+    verifier(m.vue_publique(e, t)["decouvertes"][0]["texte"] == d[0]["msg"]["texte"], "  il reste visible dans l'état public")
+
+    # Alerte
+    e, t = en_cours(6, 3)
+    e["programme"] = []
+    a = e["joueurs"][0]["nom"]
+    pa = m._perso(e, a)
+    sol = e["solution"]
+    mauvais = next(x for x in e["lieux"] if x != sol["lieu"])
+    m.action(e, a, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": mauvais}, t)
+    pa["prochaine_accusation_a"] = normal = t + 100      # attente courte pour tenir dans l'alerte
+    m.demarrer_evenement(e, "alerte", t + 1, random.Random(1))
+    verifier(m.vue_privee(e, a, t + 1)["prochaine_accusation_a"] == t + (normal - t) / 2, "alerte : délai d'accusation divisé par 2")
+    ev = m.action(e, a, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": mauvais}, t + (normal - t) / 2 + 1)
+    g = [x["msg"]["nombre"] for x in ev if x["msg"]["type"] == "enq_gorgee"]
+    verifier(g and g[0] == 2 * m._gorgees(e, m.CONFIG, m.CONFIG["gorgees"]["accusation_ratee"][1]), "  gorgées d'accusation ratée doublées")
+
+    # Brouhaha
+    e, t, _ = partie_evt("brouhaha")
+    verifier(e["prochaine_rumeur_a"] < t + m.CONFIG["vitesses"][e["vitesse"]]["rumeurs_toutes"] / 2, "brouhaha : les rumeurs s'accélèrent")
+    k = e["tueur"]
+    pk = m._perso(e, k)
+    pk["rumeur_utilisee"] = True
+    verifier(m.vue_privee(e, k, t)["console"]["rumeur_gratuite"], "  le tueur voit qu'il peut glisser une rumeur gratuite")
+    innocent = next(x for x in e["armes"] if x != e["solution"]["arme"])
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "rumeur", "categorie": "arme", "element": innocent}, t + 1)
+    verifier(not ev and pk["charges"] == 0 and len(e["sabotages"]) == 1, "  sans charge, même après sa rumeur de la partie")
+    ev = m.action(e, k, {"type": "enq_sabotage", "sabotage": "rumeur", "categorie": "arme", "element": innocent}, t + 2)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "  une seule fois par brouhaha")
+
+    # Interrogatoire
+    e, t, ev = partie_evt("interrogatoire")
+    inter = e["evenement"]["interroges"]
+    verifier(len(inter) == 2 and m.vue_publique(e, t)["evenement"]["interroges"] == inter, "interrogatoire : 2 joueurs désignés, vus par tous")
+    ev = m.action(e, inter[0], {"type": "enq_refuser"}, t + 1)
+    verifier(ev and ev[0]["msg"]["type"] == "enq_gorgee" and ev[0]["msg"]["raison"] == "Refus de répondre", "  refuser coûte des gorgées")
+    hors = next(j["nom"] for j in e["joueurs"] if j["nom"] not in inter)
+    verifier(m.action(e, hors, {"type": "enq_refuser"}, t + 1)[0]["msg"]["type"] == "enq_erreur", "  seuls les désignés sont concernés")
+
+    # Marée
+    e, t, _ = partie_evt("maree")
+    a = e["joueurs"][1]["nom"]
+    m.evenement_jeu(e, {"jeu": "menteur", "type": "victoire", "gagnants": [a]}, t + 1)
+    verifier(m._perso(e, a)["pe"] == 2, "marée : une victoire rapporte le double de PE")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -618,6 +719,7 @@ essai_temoin_anonyme()
 essai_contre_expertise()
 essai_sabotages()
 essai_detection_et_rumeurs()
+essai_evenements()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)
