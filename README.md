@@ -21,7 +21,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   de toutes les tables.
 
 - Qui est là : `/soiree/{code}?nom=Lea` compte Léa présente sur l'accueil (30 s sans nouvelles : plus
-  comptée) ; `presents` réunit les joueurs des tables (avec le jeu), ceux qui ont l'Enquête ouverte et l'accueil.
+  comptée ; `&table=` donne sa table) ; `presents` réunit les joueurs des tables (avec le jeu), ceux qui ont l'Enquête
+  ouverte et l'accueil, avec la table de chacun pour la rejoindre d'un toucher.
 
 ## Une table = un salon
 

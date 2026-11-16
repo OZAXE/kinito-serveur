@@ -3160,19 +3160,23 @@ def presents_soiree(soiree, tables):
     for k in [k for k, v in vus.items() if maintenant - v["vu"] > 4 * PRESENCE_ACCUEIL]:
         del vus[k]
     out = {}
+    codes = {t["code"] for t in tables}
     for t in tables:
         for nom in t["joueurs"]:
-            out.setdefault(cle_prenom(nom), {"nom": nom, "ou": "Table " + str(t["numero"]) + (" · " + t["titre"] if t.get("titre") else "")})
+            out.setdefault(cle_prenom(nom), {"nom": nom, "ou": "Table " + str(t["numero"]) + (" · " + t["titre"] if t.get("titre") else ""),
+                                             "table": t["code"]})
     for a in abonnes_soirees.get(soiree, {}).values():
-        out.setdefault(cle_prenom(a["nom"]), {"nom": a["nom"], "ou": "Enquête"})
+        out.setdefault(cle_prenom(a["nom"]), {"nom": a["nom"], "ou": "Enquête", "table": None})
     for k, v in vus.items():
         if maintenant - v["vu"] <= PRESENCE_ACCUEIL:
-            out.setdefault(k, {"nom": v["nom"], "ou": "Accueil"})
+            # Sur l accueil : sa table (en salle d attente) si elle existe encore
+            table = v.get("table") if v.get("table") in codes else None
+            out.setdefault(k, {"nom": v["nom"], "ou": "Accueil", "table": table})
     return sorted(out.values(), key=lambda x: x["nom"].casefold())
 
 
 @app.get("/soiree/{code}")
-async def info_soiree(code: str, nom: str = ""):
+async def info_soiree(code: str, nom: str = "", table: str = ""):
     """La soiree : ses tables (jeu, joueurs presents), ses couches et qui est la."""
     code = soiree_de(code)
     if not soiree_existe(code):
@@ -3181,7 +3185,8 @@ async def info_soiree(code: str, nom: str = ""):
     if nom:
         vus = presences_accueil.setdefault(code, {})
         k = cle_prenom(nom)
-        vus[k] = {"nom": nom, "vu": time.time(), "arrive": vus.get(k, {}).get("arrive", time.time())}
+        vus[k] = {"nom": nom, "vu": time.time(), "arrive": vus.get(k, {}).get("arrive", time.time()),
+                  "table": table.upper() if soiree_de(table.upper()) == code else None}
     tables = []
     for t in _tables(code):
         jeu = JEUX.get(t["jeu"])

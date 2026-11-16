@@ -292,6 +292,9 @@ async def essai_tables():
     verifier(p.get("Ana") == "Accueil" and p.get("Lea", "").startswith("Table 1") and p.get("Zoe", "").startswith("Table 2"),
              "presents : Ana sur l accueil, Lea a la table 1, Zoe a la table 2 (" + str(p) + ")")
     verifier("Kinito" in p.get("Lea", ""), "  avec le jeu de la table")
+    tab = {x["nom"]: x["table"] for x in (await serveur.info_soiree(code, nom="Ana", table=t2))["presents"]}
+    verifier(tab.get("Lea") == code and tab.get("Zoe") == t2 and tab.get("Ana") == t2,
+             "  et la table de chacun, pour la rejoindre d un toucher (Ana, sur l accueil, est a la table 2)")
     noe = FauxWS()
     await serveur.abonner(code, "Noe", noe)
     verifier({x["nom"]: x["ou"] for x in (await serveur.info_soiree(code))["presents"]}.get("Noe") == "Enquête",
