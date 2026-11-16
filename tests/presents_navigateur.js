@@ -55,6 +55,13 @@ async function attendreQue(test, delai) {
   await attendreQue(() => lea.evaluate(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(x => x.textContent === 'Rejoindre'); if (b) { b.click(); return true; } return false; }), 5000);
   verifier(!!await attendreQue(() => lea.evaluate((c) => JSON.parse(localStorage.getItem('shield.soiree')).table === c, code), 10000),
     'toucher la ligne d’une table (et confirmer) y fait asseoir aussi');
+  // Quelqu'un ouvre Kinito à la table de Max : son accueil lui propose de suivre
+  const zoe = new WebSocket(API.replace('http', 'ws') + '/ws/' + t2 + '/Zoe?bat=1&page=kinito');
+  const prop = await attendreQue(() => max.evaluate(() => { const d = document.querySelector('[role=dialog]'); return d && d.innerText; }), 25000);
+  verifier(!!prop && /Ta table passe à Kinito/.test(prop), 'Zoé ouvre Kinito à la table 2 : l’accueil de Max propose « ' + (prop || '').split('\n')[0] + ' »');
+  await max.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find(x => x.textContent === 'Plus tard').click());
+  verifier(await max.evaluate(() => /Salle d'attente · 🎲 Kinito/.test(document.querySelector('.tables').innerText)), '  et sa table affiche « Salle d’attente · 🎲 Kinito »');
+  zoe.close();
   // Animation de défaite (commune à tous les jeux, dans commun/soiree.js)
   const resultat = { type: 'table_resultat', jeu: 'kinito', evt: 'manche', gagnants: [], perdants: ['Lea'], gorgees: { Lea: 3 } };
   await lea.evaluate((m) => Soiree.traiterMessage(m, 'kinito'), resultat);

@@ -349,10 +349,41 @@ async def essai_postgres(url):
     await s.fermer()
 
 
+async def essai_changer_de_jeu_apres_abandon():
+    print("Changer de jeu quand tout le monde a quitte la partie")
+    await serveur.demarrage(StockageMemoire())
+    code = (await serveur.creer_salon())["code"]
+    (lea, wl), (maxi, wm) = [await entrer(code, n) for n in ("Lea", "Max")]
+    await envoyer(code, lea, {"type": "demarrer"})
+    salon = serveur.salons[code]
+    verifier(salon["jeu"] == "kinito", "Lea et Max jouent a Kinito")
+    # Max reste, Lea ouvre le Menteur : la partie de Max n est pas cassee
+    ws = FauxWS(); ws.query_params = {"page": "menteur"}
+    async with serveur.verrou(salon):
+        await serveur.depart(code, lea, wl)
+        await serveur.arrivee(code, salon, ws, "Lea")
+    verifier(salon["jeu"] == "kinito", "  Max joue encore : la partie de Kinito continue")
+    # Tout le monde quitte, puis Lea ouvre le Menteur
+    lea2 = next(j for j in salon["joueurs"] if j["nom"] == "Lea")
+    async with serveur.verrou(salon):
+        await serveur.depart(code, lea2, ws)
+        await serveur.depart(code, maxi, wm)
+    verifier(all(j.get("parti") for j in salon["joueurs"]), "tous deux quittent la partie")
+    ws2 = FauxWS(); ws2.query_params = {"page": "menteur"}
+    async with serveur.verrou(salon):
+        await serveur.arrivee(code, salon, ws2, "Lea")
+    verifier(salon["jeu"] is None and salon["etat"] is None, "  Lea ouvre le Menteur : la partie abandonnee est close, salle d attente")
+    verifier([j["nom"] for j in salon["joueurs"]] == ["Lea"], "  elle y est seule, sans fantome")
+    info = await serveur.info_soiree(code)
+    verifier(info["tables"][0]["attente"] == "menteur", "  l accueil sait que la table attend au Menteur")
+    serveur.salons.clear()
+
+
 async def principal():
     await essai_changement_de_jeu()
     await essai_couches()
     await essai_tables()
+    await essai_changer_de_jeu_apres_abandon()
     url = os.environ.get("TEST_DATABASE_URL")
     if url:
         await essai_postgres(url)
