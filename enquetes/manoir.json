@@ -78,54 +78,104 @@
     "vue": "0 0 320 440",
     "zones": {
       "serre": [
-        10,
-        10,
-        140,
-        100
+        0,
+        0,
+        150,
+        120
       ],
       "bibliotheque": [
-        160,
-        10,
         150,
-        100
+        0,
+        170,
+        120
       ],
       "bureau": [
-        10,
+        0,
         120,
-        100,
+        110,
+        110
+      ],
+      "fumoir": [
+        0,
+        230,
+        110,
         110
       ],
       "salle_de_bal": [
+        150,
         120,
-        120,
-        190,
+        170,
         150
       ],
-      "fumoir": [
-        10,
-        240,
-        100,
-        100
-      ],
       "veranda": [
-        120,
-        280,
-        190,
-        60
+        150,
+        270,
+        170,
+        70
       ],
       "cuisine": [
-        10,
-        350,
-        140,
-        80
+        0,
+        340,
+        150,
+        100
       ],
       "cave": [
-        160,
-        350,
         150,
-        80
+        340,
+        170,
+        100
       ]
-    }
+    },
+    "couloirs": {
+      "couloir": [
+        110,
+        120,
+        40,
+        220
+      ]
+    },
+    "portes": [
+      [
+        "serre",
+        "bibliotheque"
+      ],
+      [
+        "serre",
+        "bureau"
+      ],
+      [
+        "bibliotheque",
+        "salle_de_bal"
+      ],
+      [
+        "bureau",
+        "couloir"
+      ],
+      [
+        "fumoir",
+        "couloir"
+      ],
+      [
+        "couloir",
+        "salle_de_bal"
+      ],
+      [
+        "salle_de_bal",
+        "veranda"
+      ],
+      [
+        "couloir",
+        "cuisine"
+      ],
+      [
+        "cuisine",
+        "cave"
+      ],
+      [
+        "fumoir",
+        "cuisine"
+      ]
+    ]
   },
   "armes": [
     {

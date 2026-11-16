@@ -63,5 +63,7 @@ python tests/enquete_essai.py
 node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
 python tests/banc_reconnexions.py --jeu tous --duree 20
 node tests/navigateur.js                    # serveur_essai.py + site sur localhost:8765
+# Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :
+#   DELAI_SILENCE=30 ENQ_RAPIDE=1 python tests/serveur_essai.py
 node tests/soiree_navigateur.js             # parcours d une soirée (accueil, changement de jeu)
 ```

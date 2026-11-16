@@ -98,7 +98,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-16 enquete-t3"
+VERSION = "2026-11-16 enquete-3d"
 
 
 # =============================================================
@@ -3160,12 +3160,28 @@ async def info_soiree(code: str):
     return {"existe": True, "code": code, "tables": tables, "couches": sorted(couches.get(code, {}))}
 
 
+@app.get("/soiree/{code}/rouvrir")
+async def rouvrir_soiree(code: str):
+    """
+    Une soiree que le serveur ne connait plus (il a redemarre : les salons
+    vivent en memoire) est rouverte sous le meme code, tables vides. Le code
+    et le QR deja partages restent valables.
+    """
+    code = soiree_de(code.upper())
+    if not (len(code) == 4 and code.isalpha() and code.isupper()):
+        return {"existe": False}
+    if not soiree_existe(code):
+        salons[code] = nouveau_salon()
+        return {"existe": True, "rouverte": True}
+    return {"existe": True, "rouverte": False}
+
+
 @app.get("/soiree/{code}/nouvelle-table")
 async def nouvelle_table(code: str):
     """Ouvre la prochaine table libre de la soiree (ABCD-2, ABCD-3...)."""
     code = soiree_de(code)
     if not soiree_existe(code):
-        return {"existe": False}
+        await rouvrir_soiree(code)
     if code not in salons:
         salons[code] = nouveau_salon()      # la table 1 avait ete liberee
         return {"existe": True, "code": code}
