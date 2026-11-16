@@ -195,7 +195,35 @@
       "hall": "#6b4a2e",
       "serre": "#e9efe6",
       "veranda": "#efe9dc"
-    }
+    },
+    "niveaux": {
+      "cave": -0.16,
+      "salle_de_bal": 0.07,
+      "serre": -0.05,
+      "veranda": -0.05
+    },
+    "tours": [
+      [
+        392,
+        98,
+        20
+      ]
+    ],
+    "cheminees": [
+      [
+        360,
+        320
+      ],
+      [
+        200,
+        30
+      ],
+      [
+        0,
+        180
+      ]
+    ],
+    "mezzanine": "hall"
   },
   "armes": [
     {
