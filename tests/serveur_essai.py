@@ -72,5 +72,25 @@ async def couper(code: str, nom: str):
     return {"coupe": False}
 
 
+# --- Enquete : crediter des PE sans jouer, et chrono d archive raccourci ---
+import enquete  # noqa: E402
+
+if os.environ.get("ENQ_RAPIDE"):
+    for v in enquete.CONFIG["vitesses"].values():
+        v["timer_consultation"] = 6
+
+
+@serveur.app.get("/test/pe/{code}/{nom}/{n}")
+async def crediter(code: str, nom: str, n: int):
+    soiree = serveur.soiree_de(code)
+    couche = serveur.couches.get(soiree, {}).get("enq")
+    if couche is None:
+        return {"ok": False}
+    async with serveur.verrou_soiree(soiree):
+        ev = enquete.crediter_pe(couche.etat, nom, n, "menteur", "victoire")
+        await couche._publier(serveur._contexte(soiree, couche), ev)
+    return {"ok": True}
+
+
 if __name__ == "__main__":
     uvicorn.run(serveur.app, host="127.0.0.1", port=8000, log_level="warning")

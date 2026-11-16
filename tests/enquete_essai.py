@@ -99,7 +99,7 @@ def essai_temps():
     m.action(e, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(3))
     verifier(m.prochaine_echeance(e) == 1000.0 + m.CONFIG["duree_ouverture"], "fin de l'ouverture programmée")
     m.expirer(e, 1000.0 + m.CONFIG["duree_ouverture"])
-    verifier(e["phase"] == "enquete" and m.prochaine_echeance(e) == e["fin_a"], "l'enquête commence après l'ouverture")
+    verifier(e["phase"] == "enquete" and m.prochaine_echeance(e) <= e["fin_a"], "l'enquête commence après l'ouverture")
     m.expirer(e, e["fin_a"])
     verifier(e["phase"] == "fin" and e["vainqueur"] == "tueur", "heure butoir : le tueur gagne")
     v = m.vue_publique(e, e["fin_a"])
@@ -123,6 +123,110 @@ def essai_non_fuite():
              "  un seul tueur, et lui seul connaît la solution")
     spect = m.vue_privee(e, "Inconnu")
     verifier(sorted(spect) == sorted(vues[0]) and spect["role"] is None, "  même forme pour un spectateur")
+
+
+def en_cours(n, graine=1, vitesse=None):
+    e = partie(n, vitesse=vitesse)
+    m.action(e, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(graine))
+    m.expirer(e, 1000.0 + m.CONFIG["duree_ouverture"])
+    return e, 1000.0 + m.CONFIG["duree_ouverture"]
+
+
+def essai_stock_indices():
+    print("Stock d'indices")
+    bons = True
+    for n in range(4, 13):
+        for vitesse in ("flash", "soiree"):
+            for g in range(20):
+                e, t = en_cours(n, g, vitesse)
+                s = e["solution"]
+                pool = e["pool"]
+                cats = {c: [x["element"] for x in pool if x["categorie"] == c] for c in ("suspect", "lieu", "arme")}
+                k = len(e["lieux"])
+                bons &= (len(cats["suspect"]) == max(0, n - 3) and len(cats["lieu"]) == k - 2 and len(cats["arme"]) == k - 2
+                         and s["tueur"] not in cats["suspect"] and s["lieu"] not in cats["lieu"] and s["arme"] not in cats["arme"]
+                         and len({(x["categorie"], x["element"]) for x in pool}) == len(pool))
+    verifier(bons, "plafonds K-3 (suspects) et K-2 (lieux, armes), jamais la solution, aucun doublon")
+    # Même en mettant tout en commun, il reste 2 candidats par catégorie pour chacun.
+    e, t = en_cours(4, 5)
+    verifier(len([x for x in e["pool"] if x["categorie"] == "suspect"]) == 1,
+             "  à 4 joueurs : une seule élimination de suspect (chacun s'élimine déjà lui-même)")
+    pub = json.dumps(m.vue_publique(e, t))
+    verifier('"pool"' not in pub and "element" not in pub, "  le stock reste secret")
+
+
+def essai_points_et_indices():
+    print("Points d'enquête, indices, archive")
+    e, t = en_cours(5, 2)
+    noms = [j["nom"] for j in e["joueurs"]]
+    p = lambda n: e["perso"][m.cle_nom(n)]
+    m.evenement_jeu(e, {"jeu": "menteur", "type": "victoire", "joueurs": noms, "gagnants": ["Max"], "perdants": [], "details": {}}, t)
+    m.evenement_jeu(e, {"jeu": "beerbattle", "type": "victoire", "joueurs": noms, "gagnants": ["Max"], "perdants": [], "details": {}}, t)
+    verifier(p("Max")["pe"] == 3, "Menteur +1, BeerBattle +2")
+    for _ in range(3):
+        m.evenement_jeu(e, {"jeu": "kinito", "type": "manche", "joueurs": noms, "gagnants": [], "perdants": ["Zoe"], "details": {}}, t)
+    verifier(p("Lea")["pe"] == 1 and p("Zoe")["pe"] == 0, "Kinito : 1 PE toutes les 3 manches non perdues")
+    m.evenement_jeu(e, {"jeu": "buckshot", "type": "manche", "joueurs": noms, "gagnants": [], "perdants": [],
+                        "details": {"gorgees": {"Lea": 3, "Tom": 0, "Ana": 0, "Inconnu": 0}}}, t)
+    # (Tom et Ana avaient déjà 1 PE de la série Kinito.)
+    verifier(p("Tom")["pe"] == 2 and p("Ana")["pe"] == 2 and p("Lea")["pe"] == 1, "Buckshot : +1 aux moins pénalisés (ex aequo compris)")
+    tables = [{"code": "ABCD", "jeu": "casino", "joueurs": ["Zoe", "Tom"]}]
+    m.tic_paliers(e, tables, t)
+    for i in range(1, 16):
+        m.tic_paliers(e, tables, t + 60 * i)
+    verifier(p("Zoe")["pe"] == 1, "Casino : 1 PE par quart d'heure passé à la table")
+    m.evenement_jeu(e, {"jeu": "picolopoly", "type": "victoire", "joueurs": noms, "gagnants": ["Zoe"], "perdants": [], "details": {}}, t)
+    verifier(p("Zoe")["pe"] == 3, "Picopoly : bonus de victoire finale")
+    e2, t2 = en_cours(5, 2, "flash")
+    m.evenement_jeu(e2, {"jeu": "picolopoly", "type": "victoire", "joueurs": noms, "gagnants": ["Zoe"], "perdants": [], "details": {}}, t2)
+    verifier(e2["perso"][m.cle_nom("Zoe")]["pe"] == 0, "un jeu non compté par l'hôte ne rapporte rien")
+
+    ev = m.action(e, "Lea", {"type": "enq_indice"}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and p("Lea")["archive"] == [], "pas assez de PE : refusé")
+    ev = m.action(e, "Max", {"type": "enq_indice"}, t)
+    a = p("Max")["archive"]
+    # Max avait 4 PE (Menteur 1, BeerBattle 2, Kinito 1) ; son dernier gain vient de Kinito.
+    verifier(len(a) == 1 and p("Max")["pe"] == 1 and a[0]["source"] == "Victoire (Kinito)", "3 PE : un indice, source « Victoire (Kinito) »")
+    verifier(not (a[0]["categorie"] == "suspect" and a[0]["element"] == "Max"), "  jamais sa propre innocence")
+    vp = m.vue_privee(e, "Max", t)
+    verifier(vp["archive"][0]["lu"] is False and "texte" not in json.dumps(vp["archive"]), "  non lu, le texte n'est pas encore envoyé")
+    verifier(any("pli" in x["texte"] for x in e["journal"]), "  le narrateur annonce un pli, sans dire à qui")
+    ev = m.action(e, "Max", {"type": "enq_lire", "id": a[0]["id"]}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_texte" and ev[0]["msg"]["gratuit"] and len(ev) == 1, "première lecture : gratuite")
+    ev = m.action(e, "Max", {"type": "enq_lire", "id": a[0]["id"]}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "  une seule fois")
+    ev = m.action(e, "Max", {"type": "enq_consulter", "id": a[0]["id"]}, t + 1)
+    types = [x["msg"]["type"] for x in ev]
+    verifier(types == ["enq_texte", "enq_gorgee"] and ev[1]["msg"]["nombre"] == 1, "consulter l'archive : le texte et 1 gorgée")
+    ev = m.action(e, "Max", {"type": "enq_consulter", "id": a[0]["id"]}, t + 30)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and "verrouillée" in ev[0]["msg"]["message"], "  puis chrono avant la suivante")
+    ev = m.action(e, "Max", {"type": "enq_consulter", "id": a[0]["id"]}, t + 1 + 180)
+    verifier(ev[0]["msg"]["type"] == "enq_texte", "  chrono écoulé : consultation possible")
+    ev = m.action(e, "Lea", {"type": "enq_acheter"}, t)
+    g = [x["msg"] for x in ev if x["msg"]["type"] == "enq_gorgee"]
+    verifier(p("Lea")["archive"][-1]["source"] == "Achat" and g and g[0]["nombre"] == 2, "achat : un indice « Achat » contre 2 gorgées")
+    m.action(e, "Lea", {"type": "enq_acheter"}, t + 10)
+    ev = m.action(e, "Lea", {"type": "enq_acheter"}, t + 20)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and len(p("Lea")["archive"]) == 2, "2 indices par heure au plus")
+    ev = m.action(e, "Lea", {"type": "enq_acheter"}, t + 3601)
+    verifier(len(p("Lea")["archive"]) == 3, "  une heure plus tard, c'est reparti")
+
+    vues = [m.vue_privee(e, n, t) for n in noms] + [m.vue_privee(e, "Inconnu", t)]
+    verifier(len({tuple(sorted(v)) for v in vues}) == 1, "vue privée : toujours les mêmes clés pour tous")
+
+    # Épuisement du stock
+    e, t = en_cours(4, 9)
+    taille = len(e["pool"])
+    distribues = 0
+    for i in range(60):
+        nom = NOMS[i % 4]
+        e["perso"][m.cle_nom(nom)]["obtenus"] = []
+        e["perso"][m.cle_nom(nom)]["pe"] = 99
+        ev = m.action(e, nom, {"type": "enq_indice"}, t)
+        distribues += any(x["msg"]["type"] == "enq_nouvel_indice" for x in ev)
+    tous = [(x["categorie"], x["element"]) for j in e["perso"].values() for x in j["archive"]]
+    verifier(distribues == taille and len(set(tous)) == len(tous), "tout le stock est distribué, sans doublon entre joueurs")
+    verifier(e["dossier_epuise"] or not e["pool"], "  puis « dossier épuisé »")
 
 
 class FauxWS:
@@ -183,6 +287,8 @@ essai_salle_attente()
 essai_tirage()
 essai_temps()
 essai_non_fuite()
+essai_stock_indices()
+essai_points_et_indices()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)

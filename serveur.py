@@ -98,7 +98,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-16 enquete-t1"
+VERSION = "2026-11-16 enquete-t2"
 
 
 # =============================================================
