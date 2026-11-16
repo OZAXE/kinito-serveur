@@ -15,6 +15,8 @@ tirage du tueur et de la solution, scene d ouverture, fin a l heure butoir.
 Tranche 2 : points d enquete (PE) gagnes aux jeux, stock d indices vrais
 plafonne, distribution, archive officielle (lecture gratuite une fois, puis
 chrono et gorgee), achat d indice contre des gorgees, fil du narrateur.
+Tranche 3 : accusations (delai double a chaque echec, gorgees, seuil de
+patience), fin de partie et recapitulatif.
 
 SECURITE : le tueur ne doit jamais etre deductible techniquement.
 - vue_publique ne contient JAMAIS la solution ni le tueur avant la fin ;
@@ -49,6 +51,9 @@ def valider_pack(pack, joueurs_max):
             raise ValueError(f"pack {pack['id']} : {NOMBRE_ELEMENTS_PACK} {cle} attendus")
     if len(pack["portraits"]) < joueurs_max:
         raise ValueError(f"pack {pack['id']} : au moins {joueurs_max} portraits attendus")
+    zones = pack.get("plan", {}).get("zones", {})
+    if set(zones) != {l["id"] for l in pack["lieux"]}:
+        raise ValueError(f"pack {pack['id']} : le plan doit avoir une zone par lieu")
     for cle in ("lieux", "armes", "portraits"):
         ids = [e["id"] for e in pack[cle]]
         if len(set(ids)) != len(ids):
@@ -95,6 +100,7 @@ def pack_public(pack):
         "police": pack.get("police"), "victime": pack["victime"],
         "narrateur": pack["narrateur"], "vocabulaire": pack["vocabulaire"],
         "lieux": pack["lieux"], "armes": pack["armes"], "portraits": pack["portraits"],
+        "plan": pack["plan"],
         "ouverture": pack["textes"]["ouverture"],
     }
 
@@ -141,6 +147,9 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "prochain_id": 1,
         "dernier_tic": None,
         "dossier_epuise": False,
+        # --- tranche 3 ---
+        "accusations": [],          # SECRET jusqu a la fin : [{t, nom, suspect, arme, lieu, justes}]
+        "echecs": 0,                # public : accusations ratees, tous joueurs
     }
 
 
@@ -169,6 +178,7 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_acheter": _acheter_indice,
         "enq_lire": _lire,
         "enq_consulter": _consulter,
+        "enq_accuser": _accuser,
     }.get(t)
     if f is None:
         return []
@@ -350,6 +360,9 @@ def vue_publique(etat, maintenant):
                                            * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
         "gorgees_achat": max(1, int(CONFIG["gorgees"]["indice_achete"]
                                     * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
+        "echecs": etat.get("echecs", 0),
+        "seuil_patience": seuil_patience(etat) if lancee else None,
+        "delai_accusation": CONFIG["vitesses"][etat["vitesse"]]["delai_accusation"],
         "fin": None,
     }
     if etat["phase"] == "fin":
@@ -359,6 +372,7 @@ def vue_publique(etat, maintenant):
             "detective": etat["detective"],
             "raison": etat["raison_fin"],
             "recit": recit_de_fin(etat),
+            "recap": recapitulatif(etat),
         }
     return v
 
@@ -429,6 +443,9 @@ def perso_vide():
         "manches_kinito": 0,
         "temps_palier": {},         # jeu -> secondes accumulees
         "derniere_source": None,
+        "accusations": [],          # les siennes : [{t, suspect, arme, lieu, justes}]
+        "echecs": 0,
+        "prochaine_accusation_a": None,
     }
 
 
@@ -710,7 +727,7 @@ def vue_privee_t2(etat, nom, maintenant, config=None):
     if p is None:
         return {"pe": 0, "cout_indice": v["pe_par_indice"], "indices_heure": 0,
                 "indices_heure_max": config["indices_par_heure_max"], "archive": [],
-                "consultation_possible_a": None}
+                "consultation_possible_a": None, "accusations": [], "prochaine_accusation_a": None}
     return {
         "pe": p["pe"],
         "cout_indice": v["pe_par_indice"],
@@ -721,4 +738,90 @@ def vue_privee_t2(etat, nom, maintenant, config=None):
         "archive": [{"id": e["id"], "source": e["source"], "recu_a": e["recu_a"], "lu": e["lu"],
                      "tampon": e["tampon"]} for e in p["archive"]],
         "consultation_possible_a": (p["derniere_consultation"] + timer) if p["derniere_consultation"] else None,
+        "accusations": p.get("accusations", []),
+        "prochaine_accusation_a": p.get("prochaine_accusation_a"),
     }
+
+
+# =============================================================
+# TRANCHE 3 : ACCUSATIONS ET FIN
+# =============================================================
+
+def seuil_patience(etat, config=None):
+    """Accusations ratees (tous joueurs confondus) au-dela desquelles le tueur gagne."""
+    config = config or CONFIG
+    return _vitesse(etat, config)["echecs_par_joueur"] * len(etat["joueurs"])
+
+
+def _accuser(etat, nom, message, maintenant, rng, config):
+    """
+    Un joueur accuse (personnage, arme, lieu). Il apprend combien d elements
+    sont justes, sans savoir lesquels ; 3 sur 3 : il devient le Detective.
+    A tous : seulement « une accusation a echoue », sans auteur ni contenu.
+    Le tueur peut accuser aussi (pour bluffer) : pour tout le monde, son
+    accusation est une accusation ratee comme les autres.
+    """
+    if etat["phase"] != "enquete":
+        return _erreur(nom, "L'enquête n'est pas en cours.")
+    p = _perso(etat, nom)
+    if p is None:
+        return _erreur(nom, "Tu ne participes pas à cette enquête.")
+    suspect, arme, lieu = message.get("suspect"), message.get("arme"), message.get("lieu")
+    if _joueur(etat, suspect or "") is None or arme not in etat["armes"] or lieu not in etat["lieux"]:
+        return _erreur(nom, "Accusation incomplète : un personnage, une arme et un lieu.")
+    if p["prochaine_accusation_a"] is not None and maintenant < p["prochaine_accusation_a"]:
+        reste = int(p["prochaine_accusation_a"] - maintenant + 0.999)
+        return _erreur(nom, f"Prochaine accusation possible dans {reste // 60} min {reste % 60:02d} s.")
+    sol = etat["solution"]
+    suspect = _joueur(etat, suspect)["nom"]
+    justes = (int(cle_nom(suspect) == cle_nom(sol["tueur"])) + int(arme == sol["arme"]) + int(lieu == sol["lieu"]))
+    tueur = cle_nom(nom) == cle_nom(sol["tueur"])
+    etat["accusations"].append({"t": maintenant, "nom": nom, "suspect": suspect, "arme": arme, "lieu": lieu,
+                                "justes": justes, "par_le_tueur": tueur})
+    pack = PACKS[etat["univers"]]
+    ev = []
+    if justes == 3 and not tueur:
+        p["accusations"].append({"t": maintenant, "suspect": suspect, "arme": arme, "lieu": lieu, "justes": 3})
+        _terminer(etat, "enqueteurs", "accusation", nom)
+        _annoncer(etat, maintenant, pack["textes"]["annonces"]["fin"])
+        return ev
+    # Accusation ratee (ou bluff du tueur : il ne peut pas se denoncer).
+    vue_justes = min(justes, 2)
+    p["accusations"].append({"t": maintenant, "suspect": suspect, "arme": arme, "lieu": lieu, "justes": vue_justes})
+    gorgees_echecs = config["gorgees"]["accusation_ratee"]
+    base = gorgees_echecs[min(p["echecs"], len(gorgees_echecs) - 1)]
+    p["echecs"] += 1
+    etat["echecs"] += 1
+    delai = _vitesse(etat, config)["delai_accusation"] * (2 ** p["echecs"])
+    p["prochaine_accusation_a"] = maintenant + delai
+    _annoncer(etat, maintenant, pack["textes"]["annonces"]["accusation_ratee"])
+    ev.append(_a(nom, {"type": "enq_verdict", "justes": vue_justes, "suspect": suspect, "arme": arme, "lieu": lieu,
+                       "prochaine_a": p["prochaine_accusation_a"]}))
+    ev.append(_imposer(etat, nom, _gorgees(etat, config, base), "Accusation ratée", maintenant))
+    etat["version"] += 1
+    if etat["echecs"] >= seuil_patience(etat, config):
+        _terminer(etat, "tueur", "patience", None)
+        _annoncer(etat, maintenant, pack["textes"]["annonces"]["fin"])
+    return ev
+
+
+def recapitulatif(etat):
+    """Ecran de fin : tout est revele (accusations, indices recus, solution)."""
+    return {
+        "accusations": [{"nom": a["nom"], "suspect": a["suspect"], "arme": a["arme"], "lieu": a["lieu"],
+                         "justes": a["justes"], "par_le_tueur": a["par_le_tueur"]} for a in etat["accusations"]],
+        "indices": [{"nom": j["nom"], "recus": len(etat["perso"].get(cle_nom(j["nom"]), {}).get("archive", [])),
+                     "faux": sum(1 for e in etat["perso"].get(cle_nom(j["nom"]), {}).get("archive", []) if not e["vrai"])}
+                    for j in etat["joueurs"]],
+        "gorgees": gorgees_de_fin(etat),
+    }
+
+
+def gorgees_de_fin(etat, config=None):
+    config = config or CONFIG
+    n = _gorgees(etat, config, config["gorgees"]["victoire_distribuee"])
+    sol = etat["solution"]
+    if etat["vainqueur"] == "enqueteurs":
+        return [{"qui": etat["detective"], "action": "distribue", "nombre": n},
+                {"qui": sol["tueur"], "action": "boit", "nombre": n}]
+    return [{"qui": sol["tueur"], "action": "distribue aux enquêteurs", "nombre": n}]

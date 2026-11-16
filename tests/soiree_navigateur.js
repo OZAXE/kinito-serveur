@@ -156,6 +156,20 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   verifier(!!await attendreQue(async () => (await etat(code + '-2')).jeu === 'kinito', 15000), 'Léa lance Kinito à la table 2');
   verifier((await etat(code)).jeu === 'casino', '  la table 1 joue toujours au Casino');
 
+  // QR code d'invitation : un nouveau téléphone, sans prénom, scanne et rejoint.
+  await lea.goto(SITE + 'index.html');
+  await appuyer(lea, '📱 QR code');
+  const qr = await attendreQue(() => lea.evaluate(() => { const c = document.querySelector('.qr-soiree canvas'); return c && c.width > 100; }), 10000);
+  verifier(!!qr, "l'accueil affiche le QR code de la soirée");
+  const ctxNouveau = await nav.newContext({ viewport: { width: 390, height: 844 } });
+  const nouveau = await ctxNouveau.newPage();
+  nouveau.on('pageerror', e => erreurs.push('Nouveau : ' + e.message));
+  await nouveau.goto(SITE + 'index.html?soiree=' + code);
+  const dedans = await attendreQue(async () => (await nouveau.textContent('.code-grand')) === code, 15000);
+  verifier(!!dedans, '  scanner le QR (lien ?soiree=' + code + ') fait rejoindre la soirée');
+  verifier(/Entre ton prénom/.test(await nouveau.textContent('#soiree-erreur')) && !/soiree=/.test(nouveau.url()),
+    '  il ne reste qu’à entrer son prénom (et le lien est nettoyé)');
+
   verifier(erreurs.length === 0, 'aucune erreur JavaScript' + (erreurs.length ? ' : ' + erreurs.join(' | ') : ''));
   await nav.close();
   console.log(echecs ? echecs + ' ECHEC(S)' : 'OK');

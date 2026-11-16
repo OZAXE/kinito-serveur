@@ -3,10 +3,20 @@
   "nom": "Le Manoir de Valmont",
   "epoque": "années 1920",
   "ambiance": "Orage, bougies, boiseries.",
-  "palette": {"fond": "#1a0b0e", "surface": "#2a1216", "accent": "#c9a24a", "texte": "#f3e6cf", "alerte": "#b3261e"},
+  "palette": {
+    "fond": "#1a0b0e",
+    "surface": "#2a1216",
+    "accent": "#c9a24a",
+    "texte": "#f3e6cf",
+    "alerte": "#b3261e"
+  },
   "police": "Cormorant Garamond",
   "victime": "Lord Edmond de Valmont",
-  "narrateur": {"nom": "Gaspard", "role": "le majordome", "icone": "🎩"},
+  "narrateur": {
+    "nom": "Gaspard",
+    "role": "le majordome",
+    "icone": "🎩"
+  },
   "vocabulaire": {
     "tueur": "l'Assassin",
     "detective": "le Grand Détective",
@@ -15,38 +25,231 @@
     "rumeurs": "les chuchotements"
   },
   "lieux": [
-    {"id": "bibliotheque", "nom": "Bibliothèque", "le": "la Bibliothèque"},
-    {"id": "serre", "nom": "Serre", "le": "la Serre"},
-    {"id": "salle_de_bal", "nom": "Salle de bal", "le": "la Salle de bal"},
-    {"id": "fumoir", "nom": "Fumoir", "le": "le Fumoir"},
-    {"id": "cave", "nom": "Cave à vin", "le": "la Cave à vin"},
-    {"id": "cuisine", "nom": "Cuisine", "le": "la Cuisine"},
-    {"id": "veranda", "nom": "Véranda", "le": "la Véranda"},
-    {"id": "bureau", "nom": "Bureau", "le": "le Bureau"}
+    {
+      "id": "bibliotheque",
+      "nom": "Bibliothèque",
+      "le": "la Bibliothèque",
+      "icone": "📚"
+    },
+    {
+      "id": "serre",
+      "nom": "Serre",
+      "le": "la Serre",
+      "icone": "🌿"
+    },
+    {
+      "id": "salle_de_bal",
+      "nom": "Salle de bal",
+      "le": "la Salle de bal",
+      "icone": "💃"
+    },
+    {
+      "id": "fumoir",
+      "nom": "Fumoir",
+      "le": "le Fumoir",
+      "icone": "🚬"
+    },
+    {
+      "id": "cave",
+      "nom": "Cave à vin",
+      "le": "la Cave à vin",
+      "icone": "🍷"
+    },
+    {
+      "id": "cuisine",
+      "nom": "Cuisine",
+      "le": "la Cuisine",
+      "icone": "🍳"
+    },
+    {
+      "id": "veranda",
+      "nom": "Véranda",
+      "le": "la Véranda",
+      "icone": "🪴"
+    },
+    {
+      "id": "bureau",
+      "nom": "Bureau",
+      "le": "le Bureau",
+      "icone": "🖋️"
+    }
   ],
+  "plan": {
+    "vue": "0 0 320 440",
+    "zones": {
+      "serre": [
+        10,
+        10,
+        140,
+        100
+      ],
+      "bibliotheque": [
+        160,
+        10,
+        150,
+        100
+      ],
+      "bureau": [
+        10,
+        120,
+        100,
+        110
+      ],
+      "salle_de_bal": [
+        120,
+        120,
+        190,
+        150
+      ],
+      "fumoir": [
+        10,
+        240,
+        100,
+        100
+      ],
+      "veranda": [
+        120,
+        280,
+        190,
+        60
+      ],
+      "cuisine": [
+        10,
+        350,
+        140,
+        80
+      ],
+      "cave": [
+        160,
+        350,
+        150,
+        80
+      ]
+    }
+  },
   "armes": [
-    {"id": "chandelier", "nom": "Chandelier", "le": "le Chandelier", "icone": "🕯️"},
-    {"id": "poison", "nom": "Fiole de poison", "le": "la Fiole de poison", "icone": "🧪"},
-    {"id": "corde", "nom": "Corde de rideau", "le": "la Corde de rideau", "icone": "🪢"},
-    {"id": "tisonnier", "nom": "Tisonnier", "le": "le Tisonnier", "icone": "🔥"},
-    {"id": "coupe_papier", "nom": "Coupe-papier", "le": "le Coupe-papier", "icone": "🗡️"},
-    {"id": "bouteille", "nom": "Bouteille de grand cru", "le": "la Bouteille de grand cru", "icone": "🍾"},
-    {"id": "pistolet", "nom": "Pistolet de collection", "le": "le Pistolet de collection", "icone": "🔫"},
-    {"id": "secateur", "nom": "Sécateur", "le": "le Sécateur", "icone": "✂️"}
+    {
+      "id": "chandelier",
+      "nom": "Chandelier",
+      "le": "le Chandelier",
+      "icone": "🕯️"
+    },
+    {
+      "id": "poison",
+      "nom": "Fiole de poison",
+      "le": "la Fiole de poison",
+      "icone": "🧪"
+    },
+    {
+      "id": "corde",
+      "nom": "Corde de rideau",
+      "le": "la Corde de rideau",
+      "icone": "🪢"
+    },
+    {
+      "id": "tisonnier",
+      "nom": "Tisonnier",
+      "le": "le Tisonnier",
+      "icone": "🔥"
+    },
+    {
+      "id": "coupe_papier",
+      "nom": "Coupe-papier",
+      "le": "le Coupe-papier",
+      "icone": "🗡️"
+    },
+    {
+      "id": "bouteille",
+      "nom": "Bouteille de grand cru",
+      "le": "la Bouteille de grand cru",
+      "icone": "🍾"
+    },
+    {
+      "id": "pistolet",
+      "nom": "Pistolet de collection",
+      "le": "le Pistolet de collection",
+      "icone": "🔫"
+    },
+    {
+      "id": "secateur",
+      "nom": "Sécateur",
+      "le": "le Sécateur",
+      "icone": "✂️"
+    }
   ],
   "portraits": [
-    {"id": "comtesse", "archetype": "la comtesse", "icone": "👑", "couleur": "#8e2b3a"},
-    {"id": "docteur", "archetype": "le docteur", "icone": "🩺", "couleur": "#2f5d62"},
-    {"id": "lady", "archetype": "la lady anglaise", "icone": "🫖", "couleur": "#6b4f8a"},
-    {"id": "professeur", "archetype": "le professeur", "icone": "📚", "couleur": "#7a5a2f"},
-    {"id": "capitaine", "archetype": "le capitaine", "icone": "⚓", "couleur": "#1f3f6e"},
-    {"id": "gouvernante", "archetype": "la gouvernante", "icone": "🗝️", "couleur": "#4a4a4a"},
-    {"id": "aviateur", "archetype": "l'aviateur", "icone": "🛩️", "couleur": "#5c6b2f"},
-    {"id": "chanteuse", "archetype": "la chanteuse", "icone": "🎤", "couleur": "#a0522d"},
-    {"id": "colonel", "archetype": "le colonel", "icone": "🎖️", "couleur": "#6e3b1f"},
-    {"id": "heritiere", "archetype": "l'héritière", "icone": "💎", "couleur": "#3b6e6a"},
-    {"id": "jardinier", "archetype": "le jardinier", "icone": "🌹", "couleur": "#3f6e2f"},
-    {"id": "voyante", "archetype": "la voyante", "icone": "🔮", "couleur": "#5a2f6e"}
+    {
+      "id": "comtesse",
+      "archetype": "la comtesse",
+      "icone": "👑",
+      "couleur": "#8e2b3a"
+    },
+    {
+      "id": "docteur",
+      "archetype": "le docteur",
+      "icone": "🩺",
+      "couleur": "#2f5d62"
+    },
+    {
+      "id": "lady",
+      "archetype": "la lady anglaise",
+      "icone": "🫖",
+      "couleur": "#6b4f8a"
+    },
+    {
+      "id": "professeur",
+      "archetype": "le professeur",
+      "icone": "📚",
+      "couleur": "#7a5a2f"
+    },
+    {
+      "id": "capitaine",
+      "archetype": "le capitaine",
+      "icone": "⚓",
+      "couleur": "#1f3f6e"
+    },
+    {
+      "id": "gouvernante",
+      "archetype": "la gouvernante",
+      "icone": "🗝️",
+      "couleur": "#4a4a4a"
+    },
+    {
+      "id": "aviateur",
+      "archetype": "l'aviateur",
+      "icone": "🛩️",
+      "couleur": "#5c6b2f"
+    },
+    {
+      "id": "chanteuse",
+      "archetype": "la chanteuse",
+      "icone": "🎤",
+      "couleur": "#a0522d"
+    },
+    {
+      "id": "colonel",
+      "archetype": "le colonel",
+      "icone": "🎖️",
+      "couleur": "#6e3b1f"
+    },
+    {
+      "id": "heritiere",
+      "archetype": "l'héritière",
+      "icone": "💎",
+      "couleur": "#3b6e6a"
+    },
+    {
+      "id": "jardinier",
+      "archetype": "le jardinier",
+      "icone": "🌹",
+      "couleur": "#3f6e2f"
+    },
+    {
+      "id": "voyante",
+      "archetype": "la voyante",
+      "icone": "🔮",
+      "couleur": "#5a2f6e"
+    }
   ],
   "textes": {
     "ouverture": [
@@ -101,12 +304,36 @@
       "fin": "L'enquête est close."
     },
     "evenements": {
-      "coupure": {"nom": "L'orage fait sauter le courant", "debut": "Un éclair, puis le noir. Le courrier attendra la lumière.", "fin": "Le courant revient. Gaspard rallume les chandelles."},
-      "decouverte": {"nom": "Gaspard a trouvé quelque chose", "debut": "Gaspard revient de sa ronde, l'air grave.", "fin": ""},
-      "alerte": {"nom": "L'inspecteur presse l'enquête", "debut": "L'inspecteur exige un coupable, et vite.", "fin": "L'inspecteur se calme. Pour l'instant."},
-      "brouhaha": {"nom": "Le bal masqué", "debut": "L'orchestre attaque une valse : les masques tombent, les langues se délient.", "fin": "La musique s'arrête. On remet les masques."},
-      "interrogatoire": {"nom": "Le salon de thé", "debut": "Gaspard sert le thé et pose ses questions.", "fin": "Le thé a refroidi."},
-      "maree": {"nom": "Le grand dîner", "debut": "Le grand dîner est servi : chaque victoire vaut double.", "fin": "On débarrasse la table."}
+      "coupure": {
+        "nom": "L'orage fait sauter le courant",
+        "debut": "Un éclair, puis le noir. Le courrier attendra la lumière.",
+        "fin": "Le courant revient. Gaspard rallume les chandelles."
+      },
+      "decouverte": {
+        "nom": "Gaspard a trouvé quelque chose",
+        "debut": "Gaspard revient de sa ronde, l'air grave.",
+        "fin": ""
+      },
+      "alerte": {
+        "nom": "L'inspecteur presse l'enquête",
+        "debut": "L'inspecteur exige un coupable, et vite.",
+        "fin": "L'inspecteur se calme. Pour l'instant."
+      },
+      "brouhaha": {
+        "nom": "Le bal masqué",
+        "debut": "L'orchestre attaque une valse : les masques tombent, les langues se délient.",
+        "fin": "La musique s'arrête. On remet les masques."
+      },
+      "interrogatoire": {
+        "nom": "Le salon de thé",
+        "debut": "Gaspard sert le thé et pose ses questions.",
+        "fin": "Le thé a refroidi."
+      },
+      "maree": {
+        "nom": "Le grand dîner",
+        "debut": "Le grand dîner est servi : chaque victoire vaut double.",
+        "fin": "On débarrasse la table."
+      }
     }
   }
 }

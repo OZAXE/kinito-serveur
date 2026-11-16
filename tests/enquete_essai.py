@@ -229,6 +229,63 @@ def essai_points_et_indices():
     verifier(e["dossier_epuise"] or not e["pool"], "  puis « dossier épuisé »")
 
 
+def essai_accusations():
+    print("Accusations et fin")
+    e, t = en_cours(5, 4)
+    sol = e["solution"]
+    p = lambda n: e["perso"][m.cle_nom(n)]
+    enq = [j["nom"] for j in e["joueurs"] if j["nom"] != sol["tueur"]]
+    a, b = enq[0], enq[1]
+    autre_arme = [x for x in e["armes"] if x != sol["arme"]][0]
+    autre_lieu = [x for x in e["lieux"] if x != sol["lieu"]][0]
+    ev = m.action(e, a, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": autre_arme, "lieu": autre_lieu}, t)
+    types = [x["msg"]["type"] for x in ev]
+    verdict = ev[0]["msg"]
+    verifier(types == ["enq_verdict", "enq_gorgee"] and verdict["justes"] == 1 and ev[1]["msg"]["nombre"] == 2,
+             "1 élément juste : on l'apprend sans savoir lequel, et 2 gorgées")
+    verifier("suspect" in verdict and "bon" not in json.dumps(verdict), "  le verdict ne dit pas lequel est juste")
+    verifier(e["echecs"] == 1 and "a échoué" in e["journal"][-1]["texte"], "  annonce publique, sans auteur ni contenu")
+    pub = json.dumps(m.vue_publique(e, t))
+    verifier(autre_arme not in pub.split('"armes"')[0] and '"accusations"' not in pub, "  le contenu de l'accusation n'est pas public")
+    ev = m.action(e, a, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": sol["lieu"]}, t + 60)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "délai avant la prochaine accusation")
+    attente = p(a)["prochaine_accusation_a"] - t
+    verifier(attente == 600 * 2, "  doublé après un échec (20 min en Soirée)")
+    ev = m.action(e, a, {"type": "enq_accuser", "suspect": "Personne", "arme": sol["arme"], "lieu": sol["lieu"]}, t + 5000)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and e["echecs"] == 1, "accusation incomplète ou invalide : refusée, ne compte pas")
+    m.action(e, a, {"type": "enq_accuser", "suspect": b, "arme": autre_arme, "lieu": autre_lieu}, t + 5000)
+    verifier(p(a)["prochaine_accusation_a"] - (t + 5000) == 600 * 4 and p(a)["gorgees"][-1][1] == 4,
+             "deuxième échec : délai x4, 4 gorgées")
+    # Le tueur bluffe : même en accusant juste, c'est un échec pour tous.
+    ev = m.action(e, sol["tueur"], {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": sol["lieu"]}, t)
+    verifier(e["phase"] == "enquete" and ev[0]["msg"]["type"] == "enq_verdict" and ev[0]["msg"]["justes"] == 2,
+             "le tueur peut accuser pour bluffer : jamais une victoire, échec pour tous")
+    ev = m.action(e, b, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": sol["arme"], "lieu": sol["lieu"]}, t)
+    verifier(e["phase"] == "fin" and e["vainqueur"] == "enqueteurs" and e["detective"] == b, "3 sur 3 : victoire, " + b + " devient le Détective")
+    v = m.vue_publique(e, t)
+    r = v["fin"]["recap"]
+    verifier(len(r["accusations"]) == 4 and any(x["par_le_tueur"] for x in r["accusations"]), "récapitulatif : toutes les accusations, bluff du tueur compris")
+    verifier(r["gorgees"][0] == {"qui": b, "action": "distribue", "nombre": 6} and r["gorgees"][1]["qui"] == sol["tueur"],
+             "  le Détective distribue 6, le tueur boit 6")
+    verifier(b in v["fin"]["recit"] and sol["tueur"] in v["fin"]["recit"], "  récit de fin avec la solution")
+
+    # Seuil de patience
+    e, t = en_cours(4, 8)
+    seuil = m.seuil_patience(e)
+    sol = e["solution"]
+    enq = [j["nom"] for j in e["joueurs"] if j["nom"] != sol["tueur"]]
+    autre = [x for x in e["armes"] if x != sol["arme"]][0]
+    n = 0
+    while e["phase"] == "enquete" and n < 20:
+        nom = enq[n % len(enq)]
+        e["perso"][m.cle_nom(nom)]["prochaine_accusation_a"] = None
+        m.action(e, nom, {"type": "enq_accuser", "suspect": sol["tueur"], "arme": autre, "lieu": sol["lieu"]}, t)
+        n += 1
+    verifier(e["phase"] == "fin" and e["vainqueur"] == "tueur" and e["raison_fin"] == "patience" and n == seuil,
+             f"seuil de patience ({seuil} échecs à 4 en Soirée) : le tueur gagne")
+    verifier(m.vue_publique(e, t)["fin"]["recap"]["gorgees"][0]["action"].startswith("distribue"), "  et distribue ses gorgées")
+
+
 class FauxWS:
     def __init__(self):
         self.recus = []
@@ -289,6 +346,7 @@ essai_temps()
 essai_non_fuite()
 essai_stock_indices()
 essai_points_et_indices()
+essai_accusations()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)
