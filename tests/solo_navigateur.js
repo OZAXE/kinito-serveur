@@ -36,6 +36,16 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
   const demo = await attendreQue(() => p.evaluate(() => { const r = document.querySelector('.resume-vitesse'); return r && /Mode démo/.test(r.innerText) && r.innerText.split('\n')[0]; }), 10000);
   verifier(!!demo, 'vitesse Démo (10 min) : « ' + (demo || '') + ' »');
   if (CAPTURES) await p.screenshot({ path: CAPTURES + '/solo-demo.png' });
+  // Règles : onglet de la salle d'attente
+  await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="regles"]').click());
+  const regles = await attendreQue(() => p.evaluate(() => { const r = document.querySelector('.regles'); return r && r.querySelectorAll('details').length; }), 10000);
+  verifier(regles >= 10, 'onglet Règles : ' + regles + ' sections (principe, rôles, indices, accusations, événements…)');
+  const principe = await p.evaluate(() => document.querySelector('.regles details[open]').innerText);
+  verifier(/Saboteur|Assassin|Tueur/.test(principe) && /PE/.test(principe), '  le principe est ouvert d’office, avec le vocabulaire de l’univers');
+  await p.evaluate(() => document.querySelectorAll('.regles details')[8].querySelector('summary').click());
+  const evts = await p.evaluate(() => document.querySelectorAll('.regles details')[8].innerText);
+  verifier(/Panne du réacteur|L.orage fait sauter le courant/.test(evts), '  les événements portent leur nom dans l’univers choisi');
+  if (CAPTURES) await p.screenshot({ path: CAPTURES + '/regles.png' });
   await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="joueurs"]').click());
   for (let i = 0; i < 3; i++) { await clic(p, 'Ajouter un joueur fictif'); await attendre(500); }
   const liste = await attendreQue(() => p.evaluate(() => { const t = document.querySelector('.joueurs').innerText; return (t.match(/🤖/g) || []).length === 3 && t; }), 10000);
@@ -43,6 +53,10 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
   if (CAPTURES) await p.screenshot({ path: CAPTURES + '/solo-salle.png' });
   verifier(!!await clic(p, 'Lancer l’enquête'), '  4 joueurs : elle peut lancer l’enquête');
   verifier(!!await attendreQue(() => p.evaluate(() => !!document.querySelector('.plan3d canvas')), 60000), 'l’enquête commence, maison 3D');
+  await p.evaluate(() => document.getElementById('aide').click());
+  verifier(!!await attendreQue(() => p.evaluate(() => document.getElementById('regles').classList.contains('ouvert') && document.querySelectorAll('#regles details').length >= 10), 5000),
+    '  le bouton ❓ ouvre les règles par-dessus la partie');
+  await p.evaluate(() => document.querySelector('#regles header button').click());
   const pe = await attendreQue(() => p.evaluate(() => { const t = document.querySelector('.etat-jeu .pe'); const m = t && t.textContent.match(/(\d+) PE/); return m && Number(m[1]) > 0 && m[0]; }), 240000);
   verifier(!!pe, '  Léa gagne des PE toute seule, sans jouer aux autres jeux (' + pe + ')');
   const r = await (await fetch(API + '/test/bots/' + code + '/3')).json();
