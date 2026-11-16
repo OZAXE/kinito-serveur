@@ -16,6 +16,7 @@ import random
 import secrets
 import string
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 # Le moteur de Picolopoly vit dans son propre fichier : c est un Monopoly
@@ -38,10 +39,24 @@ from casino import (
     cs_main_poker, cs_prochaine_echeance, cs_joueur_parti, cs_joueur_revenu,
 )
 
+# Stockage durable (base Neon si DATABASE_URL est defini) et couches
+# paralleles d une soiree (l Enquete).
+from stockage import creer_stockage, Sauvegarde
+from couches import Contexte, TYPES_COUCHES
+
 # =============================================================
 # CREATION DE L APPLICATION FASTAPI
 # =============================================================
-app = FastAPI()
+
+
+@asynccontextmanager
+async def cycle_de_vie(_app):
+    await demarrage()
+    yield
+    await arret()
+
+
+app = FastAPI(lifespan=cycle_de_vie)
 
 # CORS : autorise les pages HTML a se connecter au serveur
 # meme si elles viennent d un autre domaine (important pour GitHub Pages).
@@ -82,7 +97,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-15 casino"
+VERSION = "2026-11-16 fondations"
 
 
 # =============================================================
@@ -93,7 +108,9 @@ def generer_code():
     """Genere un code de salon unique a 4 lettres."""
     while True:
         code = "".join(random.choices(string.ascii_uppercase, k=4))
-        if code not in salons:
+        # Un code dont la soiree a encore une couche en cours (Enquete) n est
+        # pas libre, meme si son salon a ete libere.
+        if code not in salons and code not in couches:
             return code
 
 
@@ -386,6 +403,7 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
                 try:
                     if type_msg == "resync":
                         await envoyer_instantane(code_salon, joueur, complet=False)
+                        await couches_arrivee(code_salon, joueur)
                     else:
                         await traiter_message(code_salon, joueur, message)
                 except Exception:
@@ -481,51 +499,62 @@ async def arrivee(code_salon, salon, ws, nom_joueur):
     })
     await envoyer_indices(code_salon)
     await envoyer_instantane(code_salon, joueur, complet=True, nouveau=not retour)
+    await couches_arrivee(code_salon, joueur)
     return joueur
 
 
 def arrivee_en_partie(salon, joueur):
     """Un nouveau venu en pleine partie : on lui fait une place si le jeu le permet."""
-    etat_courant = salon.get("etat")
-    nom_joueur = joueur["nom"]
     # Arrivee en pleine partie : on agrandit le plateau pour que le
     # nouveau venu entre vraiment dans le tour, au lieu de rester
     # spectateur avec un index hors bornes. Ajouter en fin de liste ne
     # decale l index de personne.
-    if etat_courant is not None and salon.get("jeu") == "kinito":
-        etat_courant["nb_joueurs"] = len(salon["joueurs"])
-        etat_courant["partis"].append(False)
-        etat_courant["message"] = nom_joueur + " rejoint la partie."
-        kinito_reprendre(etat_courant)
+    jeu = JEUX.get(salon.get("jeu"))
+    if salon.get("etat") is not None and jeu is not None and jeu.arrivee is not None:
+        jeu.arrivee(salon, joueur)
 
+
+def _kinito_arrivee(salon, joueur):
+    etat_courant = salon["etat"]
+    etat_courant["nb_joueurs"] = len(salon["joueurs"])
+    etat_courant["partis"].append(False)
+    etat_courant["message"] = joueur["nom"] + " rejoint la partie."
+    kinito_reprendre(etat_courant)
+
+
+def _buckshot_arrivee(salon, joueur):
     # Buckshot n a pas de fin de partie : un arrivant laisse spectateur
     # le resterait pour toujours. On lui fait donc une place, verre vide
     # (il sera le chargeur de la prochaine manche) et sans objet jusqu a
     # la prochaine distribution. Au-dela de 8 presents, il regarde.
-    elif etat_courant is not None and salon.get("jeu") == "buckshot":
-        presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
-        if presents <= BT_JOUEURS_MAX and joueur["index"] == etat_courant["nb_joueurs"]:
-            etat_courant["nb_joueurs"] += 1
-            etat_courant["gorgees"].append(0)
-            etat_courant["objets"].append(None)
-            etat_courant["menottes"].append(False)
-            etat_courant["dernier_reel"].append(0)
-            etat_courant["message"] = nom_joueur + " rejoint la partie."
+    etat_courant = salon["etat"]
+    presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+    if presents <= BT_JOUEURS_MAX and joueur["index"] == etat_courant["nb_joueurs"]:
+        etat_courant["nb_joueurs"] += 1
+        etat_courant["gorgees"].append(0)
+        etat_courant["objets"].append(None)
+        etat_courant["menottes"].append(False)
+        etat_courant["dernier_reel"].append(0)
+        etat_courant["message"] = joueur["nom"] + " rejoint la partie."
 
+
+def _picolopoly_arrivee(salon, joueur):
     # Picolopoly : une partie dure une heure, on fait une place a
     # l arrivant (argent de depart, case Depart) tant qu on reste a 8.
-    elif etat_courant is not None and salon.get("jeu") == "picolopoly":
-        presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
-        if (presents <= PP_JOUEURS_MAX and etat_courant["phase"] != "fin"
-                and joueur["index"] == etat_courant["nb_joueurs"]):
-            pp_ajouter_joueur(etat_courant, nom_joueur)
+    etat_courant = salon["etat"]
+    presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+    if (presents <= PP_JOUEURS_MAX and etat_courant["phase"] != "fin"
+            and joueur["index"] == etat_courant["nb_joueurs"]):
+        pp_ajouter_joueur(etat_courant, joueur["nom"])
 
+
+def _casino_arrivee(salon, joueur):
     # Casino : on s assoit a tout moment avec ses jetons de depart, et on
     # joue des le coup suivant.
-    elif etat_courant is not None and salon.get("jeu") == "casino":
-        presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
-        if presents <= CS_JOUEURS_MAX and joueur["index"] == etat_courant["nb_joueurs"]:
-            cs_ajouter_joueur(etat_courant, nom_joueur)
+    etat_courant = salon["etat"]
+    presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+    if presents <= CS_JOUEURS_MAX and joueur["index"] == etat_courant["nb_joueurs"]:
+        cs_ajouter_joueur(etat_courant, joueur["nom"])
 
 
 async def revenir(code_salon, salon, joueur, annoncer=True):
@@ -537,21 +566,9 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
     etat = salon.get("etat")
     if not etait_parti or etat is None:
         return
-    idx = joueur["index"]
-    jeu = salon.get("jeu")
-    if jeu in ("kinito", "picolopoly") and idx < len(etat.get("partis", [])):
-        etat["partis"][idx] = False
-        if jeu == "kinito":
-            kinito_reprendre(etat)
-        else:
-            etat["version"] += 1
-            pp_rearmer_si_attendu(etat, idx)
-    elif jeu == "menteur" and idx < etat["nb_joueurs"]:
-        mt_joueur_revenu(etat, idx, time.time())
-        mt_programmer(code_salon)
-    elif jeu == "casino" and idx < etat["nb_joueurs"]:
-        cs_joueur_revenu(etat, idx, time.time())
-        cs_programmer(code_salon)
+    jeu = JEUX.get(salon.get("jeu"))
+    if jeu is not None and jeu.joueur_revenu is not None:
+        jeu.joueur_revenu(code_salon, salon, joueur["index"])
     if annoncer:
         await diffuser(code_salon, {
             "type": "joueur_rejoint",
@@ -560,6 +577,7 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
             "joueurs": [j["nom"] for j in salon["joueurs"]],
         })
         await envoyer_instantane(code_salon, joueur, complet=True)
+        await couches_arrivee(code_salon, joueur)
 
 
 async def envoyer_instantane(code_salon, joueur, complet=True, nouveau=False):
@@ -576,114 +594,143 @@ async def envoyer_instantane(code_salon, joueur, complet=True, nouveau=False):
     salon = salons.get(code_salon)
     if not salon or salon.get("etat") is None:
         return
+    jeu = JEUX.get(salon.get("jeu"))
+    if jeu is not None:
+        await jeu.instantane(code_salon, joueur, complet, nouveau)
+
+
+
+async def _kinito_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
     etat = salon["etat"]
-    jeu = salon.get("jeu")
     idx = joueur["index"]
     noms = [j["nom"] for j in salon["joueurs"]]
+    if complet:
+        await envoyer(joueur, {"type": "partie_demarree", "jeu": "kinito", "joueurs": noms})
+    if nouveau:
+        await diffuser(code_salon, construire_etat_public(code_salon))
+    else:
+        await envoyer(joueur, construire_etat_public(code_salon))
+    phase = etat["phase"]
+    if phase == "annonce" and etat["joueur_courant"] == idx:
+        # Il avait lance : on lui redonne son score (secret).
+        await envoyer(joueur, {
+            "type": "ton_score",
+            "score": etat["score_reel"],
+            "scores_possibles": SCORES_ANNONCABLES,
+            "premiere_annonce": etat["premiere_annonce"],
+        })
+    elif phase == "reaction" and joueur_suivant(etat, etat["joueur_courant"]) == idx:
+        nom_annonceur = noms[etat["joueur_courant"]]
+        await envoyer(joueur, {
+            "type": "annonce",
+            "annonceur": nom_annonceur,
+            "reacteur": joueur["nom"],
+            "index_reacteur": idx,
+            "score_annonce": etat["score_annonce"],
+        })
+        await envoyer(joueur, {
+            "type": "a_toi_de_reagir",
+            "annonceur": nom_annonceur,
+            "premiere_annonce": etat["premiere_annonce"],
+        })
+    elif phase == "resultat" and etat.get("dernier_resultat"):
+        # Sans le panneau de resultat, il n avait pas de bouton
+        # "Nouvelle manche" et ne voyait plus rien se passer.
+        await envoyer(joueur, etat["dernier_resultat"])
 
-    if jeu == "kinito":
-        if complet:
-            await envoyer(joueur, {"type": "partie_demarree", "jeu": "kinito", "joueurs": noms})
-        if nouveau:
-            await diffuser(code_salon, construire_etat_public(code_salon))
-        else:
-            await envoyer(joueur, construire_etat_public(code_salon))
-        phase = etat["phase"]
-        if phase == "annonce" and etat["joueur_courant"] == idx:
-            # Il avait lance : on lui redonne son score (secret).
-            await envoyer(joueur, {
-                "type": "ton_score",
-                "score": etat["score_reel"],
-                "scores_possibles": SCORES_ANNONCABLES,
-                "premiere_annonce": etat["premiere_annonce"],
-            })
-        elif phase == "reaction" and joueur_suivant(etat, etat["joueur_courant"]) == idx:
-            nom_annonceur = noms[etat["joueur_courant"]]
-            await envoyer(joueur, {
-                "type": "annonce",
-                "annonceur": nom_annonceur,
-                "reacteur": joueur["nom"],
-                "index_reacteur": idx,
-                "score_annonce": etat["score_annonce"],
-            })
-            await envoyer(joueur, {
-                "type": "a_toi_de_reagir",
-                "annonceur": nom_annonceur,
-                "premiere_annonce": etat["premiere_annonce"],
-            })
-        elif phase == "resultat" and etat.get("dernier_resultat"):
-            # Sans le panneau de resultat, il n avait pas de bouton
-            # "Nouvelle manche" et ne voyait plus rien se passer.
-            await envoyer(joueur, etat["dernier_resultat"])
 
-    elif jeu == "beerbattle":
-        # BeerBattle ne renvoyait RIEN a la reconnexion : le client restait
-        # sur l etat d avant la coupure. Et si c etait le tour du revenant,
-        # personne d autre ne jouait -- donc plus aucune diffusion pour le
-        # reveiller : la partie etait figee pour de bon.
-        if complet:
-            await envoyer(joueur, {"type": "bb_demarree", "joueurs": noms})
-        await envoyer(joueur, bb_etat_public(salon))
-        # Sa main est secrete : elle part sur sa seule connexion. Un
-        # arrivant tardif n a pas de place dans l etat (les cartes sont
-        # distribuees au lancement) : il n a donc pas de main.
-        if idx < etat["nb_joueurs"]:
-            await envoyer(joueur, {"type": "bb_ta_main", "main": etat["mains"][idx], "mon_index": idx})
-            # S il s etait coupe en plein ramassage, il lui faut aussi le
-            # contenu de sa case pour pouvoir finir son tour.
-            if etat["phase"] == "jeu" and etat["joueur_courant"] == idx and etat["action_faite"]:
-                pos = etat["positions"][idx]
-                if pos:
-                    await envoyer(joueur, {
-                        "type": "bb_carte_case",
-                        "carte": etat["plateau"][pos["ligne"]][pos["colonne"]],
-                    })
-        if etat["phase"] == "fini" and etat.get("gagnant_nom"):
-            await envoyer(joueur, {"type": "bb_victoire", "gagnant": etat["gagnant_nom"]})
+async def _beerbattle_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    idx = joueur["index"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    # BeerBattle ne renvoyait RIEN a la reconnexion : le client restait
+    # sur l etat d avant la coupure. Et si c etait le tour du revenant,
+    # personne d autre ne jouait -- donc plus aucune diffusion pour le
+    # reveiller : la partie etait figee pour de bon.
+    if complet:
+        await envoyer(joueur, {"type": "bb_demarree", "joueurs": noms})
+    await envoyer(joueur, bb_etat_public(salon))
+    # Sa main est secrete : elle part sur sa seule connexion. Un
+    # arrivant tardif n a pas de place dans l etat (les cartes sont
+    # distribuees au lancement) : il n a donc pas de main.
+    if idx < etat["nb_joueurs"]:
+        await envoyer(joueur, {"type": "bb_ta_main", "main": etat["mains"][idx], "mon_index": idx})
+        # S il s etait coupe en plein ramassage, il lui faut aussi le
+        # contenu de sa case pour pouvoir finir son tour.
+        if etat["phase"] == "jeu" and etat["joueur_courant"] == idx and etat["action_faite"]:
+            pos = etat["positions"][idx]
+            if pos:
+                await envoyer(joueur, {
+                    "type": "bb_carte_case",
+                    "carte": etat["plateau"][pos["ligne"]][pos["colonne"]],
+                })
+    if etat["phase"] == "fini" and etat.get("gagnant_nom"):
+        await envoyer(joueur, {"type": "bb_victoire", "gagnant": etat["gagnant_nom"]})
 
-    elif jeu == "buckshot":
-        if complet:
-            await envoyer(joueur, {"type": "bt_demarree", "joueurs": noms})
-        await envoyer(joueur, {"type": "bt_mon_index", "index": idx})
-        # A tout le monde : un arrivant agrandit la table pour les autres aussi.
-        if nouveau:
-            await diffuser(code_salon, bt_etat_public(salon))
-        else:
-            await envoyer(joueur, bt_etat_public(salon))
 
-    elif jeu == "picolopoly":
-        # Retour ou arrivee : le plateau a lui seul, l etat a tous (la table a
-        # pu s agrandir). Le revenant n est plus absent : on lui rend un
-        # delai normal au lieu de celui, tres court, qui joue a sa place.
-        if complet:
-            await envoyer(joueur, {"type": "pp_demarree", "joueurs": noms, "plateau": PP_CASES})
-        if complet or nouveau:
-            pp_rearmer_si_attendu(etat, idx)
-            await pp_publier(code_salon, [])
-        else:
-            await envoyer(joueur, pp_etat_public(etat, time.time()))
+async def _buckshot_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    idx = joueur["index"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    if complet:
+        await envoyer(joueur, {"type": "bt_demarree", "joueurs": noms})
+    await envoyer(joueur, {"type": "bt_mon_index", "index": idx})
+    # A tout le monde : un arrivant agrandit la table pour les autres aussi.
+    if nouveau:
+        await diffuser(code_salon, bt_etat_public(salon))
+    else:
+        await envoyer(joueur, bt_etat_public(salon))
 
-    elif jeu == "menteur":
-        # Sa main est secrete : elle ne part que vers lui. Un arrivant en
-        # pleine partie regarde (pas de main) jusqu a la partie suivante.
-        if complet:
-            await envoyer(joueur, {"type": "mt_demarree", "joueurs": noms})
-        await envoyer(joueur, mt_etat_public(etat, time.time()))
-        main = mt_main(etat, idx)
+
+async def _picolopoly_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    idx = joueur["index"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    # Retour ou arrivee : le plateau a lui seul, l etat a tous (la table a
+    # pu s agrandir). Le revenant n est plus absent : on lui rend un
+    # delai normal au lieu de celui, tres court, qui joue a sa place.
+    if complet:
+        await envoyer(joueur, {"type": "pp_demarree", "joueurs": noms, "plateau": PP_CASES})
+    if complet or nouveau:
+        pp_rearmer_si_attendu(etat, idx)
+        await pp_publier(code_salon, [])
+    else:
+        await envoyer(joueur, pp_etat_public(etat, time.time()))
+
+
+async def _menteur_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    idx = joueur["index"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    # Sa main est secrete : elle ne part que vers lui. Un arrivant en
+    # pleine partie regarde (pas de main) jusqu a la partie suivante.
+    if complet:
+        await envoyer(joueur, {"type": "mt_demarree", "joueurs": noms})
+    await envoyer(joueur, mt_etat_public(etat, time.time()))
+    main = mt_main(etat, idx)
+    if main is not None:
+        await envoyer(joueur, main)
+
+
+async def _casino_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    idx = joueur["index"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    # Un arrivant agrandit la table : tout le monde doit le voir.
+    if complet:
+        await envoyer(joueur, {"type": "cs_demarree", "joueurs": noms})
+    if nouveau:
+        await cs_publier(code_salon, [])
+    else:
+        await envoyer(joueur, cs_etat_public(etat, time.time()))
+        main = cs_main_poker(etat, idx)
         if main is not None:
             await envoyer(joueur, main)
-
-    elif jeu == "casino":
-        # Un arrivant agrandit la table : tout le monde doit le voir.
-        if complet:
-            await envoyer(joueur, {"type": "cs_demarree", "joueurs": noms})
-        if nouveau:
-            await cs_publier(code_salon, [])
-        else:
-            await envoyer(joueur, cs_etat_public(etat, time.time()))
-            main = cs_main_poker(etat, idx)
-            if main is not None:
-                await envoyer(joueur, main)
 
 
 async def depart(code_salon, joueur, ws):
@@ -721,25 +768,9 @@ async def depart(code_salon, joueur, ws):
             "nom": joueur["nom"],
             "joueurs": [j["nom"] for j in salon["joueurs"]],
         })
-        jeu = salon.get("jeu")
-        if jeu == "kinito":
-            await kinito_joueur_parti(code_salon, index_parti)
-        elif jeu == "beerbattle":
-            await bb_joueur_parti(code_salon, index_parti)
-        elif jeu == "buckshot":
-            await bt_joueur_parti(code_salon, index_parti)
-        elif jeu == "picolopoly":
-            await pp_joueur_parti(code_salon, index_parti)
-        elif jeu == "menteur":
-            etat = salon["etat"]
-            if index_parti < etat["nb_joueurs"]:
-                mt_joueur_parti(etat, index_parti, time.time())
-                await mt_publier(code_salon, [])
-        elif jeu == "casino":
-            etat = salon["etat"]
-            if index_parti < etat["nb_joueurs"]:
-                evenements = cs_joueur_parti(etat, index_parti, time.time())
-                await cs_publier(code_salon, evenements)
+        jeu = JEUX.get(salon.get("jeu"))
+        if jeu is not None and jeu.joueur_parti is not None:
+            await jeu.joueur_parti(code_salon, index_parti)
 
     # Plus personne de connecte : le salon sera libere s il le reste.
     if all(j.get("parti") for j in salon["joueurs"]):
@@ -767,10 +798,9 @@ def programmer_liberation(code_salon):
     async def liberer():
         await asyncio.sleep(DELAI_SALON_VIDE)
         if salons.get(code_salon) is salon and all(j.get("parti") for j in salon["joueurs"]):
-            for cle in ("pp_minuteur", "mt_minuteur", "cs_minuteur"):
-                m = salon.get(cle)
-                if m is not None and not m.done():
-                    m.cancel()
+            arreter_minuteurs(salon)
+            # Les couches de la soiree (l Enquete) survivent au salon : elles
+            # restent attachees au code, qui ne sera pas redonne.
             salons.pop(code_salon, None)
 
     salon["liberation"] = asyncio.ensure_future(liberer())
@@ -809,100 +839,37 @@ async def veilleur():
 async def traiter_message(code_salon, joueur, message):
     """
     Aiguille chaque message vers la bonne fonction de traitement.
-    Le "type" du message indique quelle action le joueur veut faire.
+    Le "type" du message indique quelle action le joueur veut faire :
+    - le message de demarrage d un jeu passe par lancer_jeu (regle unique
+      de lancement et de changement de jeu) ;
+    - une action d un jeu ne compte que si CE jeu est en cours (sinon etat
+      vaut None ou appartient a un autre jeu, et l action plantait) ;
+    - "<prefixe>_..." d une couche (l Enquete) va a la couche, quel que soit
+      le jeu en cours ;
+    - "retour_salon" ramene tout le monde en salle d attente.
     """
     type_msg = message.get("type")
     salon = salons[code_salon]
     if not isinstance(type_msg, str):
         return
-    # Une action d un jeu qui n est pas (ou plus) en cours est ignoree : sans
-    # partie, etat vaut None et l action plantait.
-    jeu = salon.get("jeu")
-    en_cours = salon.get("etat") is not None
-    actions_kinito = ("lancer", "annoncer", "reaction", "abandonner", "nouvelle_manche")
-    if type_msg in actions_kinito and not (en_cours and jeu == "kinito"):
+    if type_msg == "retour_salon":
+        if salon.get("etat") is not None:
+            await terminer_jeu(code_salon, "retour")
+            await diffuser(code_salon, {"type": "salon_retour",
+                                        "joueurs": [j["nom"] for j in salon["joueurs"]]})
         return
-    if type_msg.startswith("bb_") and type_msg != "bb_demarrer" and not (en_cours and jeu == "beerbattle"):
+    if type_msg.split("_", 1)[0] in TYPES_COUCHES:
+        await couche_action(code_salon, joueur, message)
         return
-    if type_msg.startswith("bt_") and type_msg != "bt_demarrer" and not (en_cours and jeu == "buckshot"):
-        return
-    if type_msg.startswith("mt_") and type_msg != "mt_demarrer" and not (en_cours and jeu == "menteur"):
-        return
-    if type_msg.startswith("cs_") and type_msg != "cs_demarrer" and not (en_cours and jeu == "casino"):
-        return
+    for nom, jeu in JEUX.items():
+        if type_msg == jeu.demarrage:
+            await lancer_jeu(code_salon, nom, message)
+            return
+        if jeu.possede(type_msg):
+            if salon.get("etat") is not None and salon.get("jeu") == nom:
+                await jeu.traiter(code_salon, joueur, message)
+            return
 
-    # --- Demarrer une partie ---
-    if type_msg == "demarrer":
-        # Kinito n a pas de fin : un "demarrer" en pleine partie (double clic,
-        # vieil onglet) remettait tout a zero sous les pieds des joueurs.
-        if salon.get("etat") is None:
-            await demarrer_kinito(code_salon, message)
-
-    # --- Actions du Kinito ---
-    elif type_msg == "lancer":
-        await kinito_lancer(code_salon, joueur)
-    elif type_msg == "annoncer":
-        await kinito_annoncer(code_salon, joueur, message.get("score"))
-    elif type_msg == "reaction":
-        await kinito_reaction(code_salon, joueur, message.get("choix"), message.get("score_cite"))
-    elif type_msg == "abandonner":
-        await kinito_abandonner(code_salon, joueur)
-    elif type_msg == "nouvelle_manche":
-        await kinito_nouvelle_manche(code_salon, joueur)
-
-# --- Actions de BeerBattle ---
-    elif type_msg == "bb_demarrer":
-        # Relance seulement depuis la salle d attente ou une partie finie :
-        # deux "Relancer" (deux joueurs, double clic) redemarraient la
-        # partie qui venait de commencer.
-        etat = salon.get("etat")
-        if etat is None or jeu != "beerbattle" or etat.get("phase") == "fini":
-            await bb_demarrer(code_salon, salons, diffuser)
-    elif type_msg == "bb_placer":
-        await bb_placer(code_salon, salons, diffuser, joueur, message.get("ligne"), message.get("colonne"))
-    elif type_msg == "bb_deplacer":
-        await bb_deplacer(code_salon, salons, diffuser, joueur, message.get("ligne"), message.get("colonne"), message.get("via_carte"), message.get("index_carte"))
-    elif type_msg == "bb_attaquer":
-        await bb_attaquer(code_salon, salons, diffuser, joueur, message.get("cible"), message.get("index_carte"), message.get("type_attaque"))
-    elif type_msg == "bb_as_deplacer":
-        await bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, message.get("ligne"), message.get("colonne"), message.get("cible"), message.get("index_carte"))
-    elif type_msg == "bb_poser_arme":
-        await bb_poser_arme(code_salon, salons, diffuser, joueur, message.get("index_carte"))
-    elif type_msg == "bb_dame":
-        await bb_dame(code_salon, salons, diffuser, joueur, message.get("cible"), message.get("index_carte"))
-    elif type_msg == "bb_ne_rien_faire":
-        await bb_ne_rien_faire(code_salon, salons, diffuser, joueur)
-    elif type_msg == "bb_ramasser":
-        await bb_ramasser(code_salon, salons, diffuser, joueur, message.get("decision"), message.get("index_echange"))
-
-    # --- Actions de Buckshot ---
-    elif type_msg == "bt_demarrer":
-        if salon.get("etat") is None:
-            await bt_demarrer(code_salon, salons, diffuser)
-    elif type_msg == "bt_composer":
-        await bt_composer(code_salon, salons, diffuser, joueur, message.get("total"), message.get("reel"))
-    elif type_msg == "bt_jouer_objet":
-        await bt_jouer_objet(code_salon, salons, diffuser, joueur, message.get("cible"))
-    elif type_msg == "bt_tirer":
-        await bt_tirer(code_salon, salons, diffuser, joueur, message.get("cible"))
-
-    # --- Actions de Picolopoly (le moteur valide tout) ---
-    elif type_msg == "pp_demarrer":
-        await pp_demarrer(code_salon, message.get("difficulte"))
-    elif isinstance(type_msg, str) and type_msg.startswith("pp_"):
-        await pp_traiter(code_salon, joueur, message)
-
-    # --- Actions de Menteur (le moteur valide tout) ---
-    elif type_msg == "mt_demarrer":
-        await mt_demarrer(code_salon, message.get("mode"))
-    elif type_msg.startswith("mt_"):
-        await mt_traiter(code_salon, joueur, message)
-
-    # --- Casino (le moteur valide tout) ---
-    elif type_msg == "cs_demarrer":
-        await cs_demarrer(code_salon)
-    elif type_msg.startswith("cs_"):
-        await cs_traiter(code_salon, joueur, message)
 
 # =============================================================
 # ACTIONS DU KINITO
@@ -1162,6 +1129,8 @@ async def fin_manche(code_salon, index_perdant, menteur, message, gorgees, score
     # Garde pour un joueur qui revient pendant l ecran de resultat.
     etat["dernier_resultat"] = resultat
     await diffuser(code_salon, resultat)
+    await signaler(code_salon, "kinito", "manche", perdants=[nom_perdant],
+                   details={"gorgees": gorgees, "menteur": menteur})
 
 
 def kinito_reprendre(etat):
@@ -1809,6 +1778,8 @@ async def bb_verifier_victoire(code_salon, salons, diffuser):
         etat["phase"] = "fini"
         etat["gagnant_nom"] = nom
         await diffuser(code_salon, {"type": "bb_victoire", "gagnant": nom})
+        await signaler(code_salon, "beerbattle", "victoire",
+                       gagnants=[nom] if gagnant is not None else [])
         return True
     return False
  
@@ -2144,6 +2115,16 @@ async def bt_manche_fin(code_salon, salons, diffuser):
         "chargeur": etat["chargeur"],
     })
     await diffuser(code_salon, bt_etat_public(salon))
+    # Les gorgees de Buckshot se cumulent : les couches recoivent celles de
+    # CETTE manche, pour les presents.
+    avant = etat.get("gorgees_signalees") or []
+    manche = {}
+    for j in salon["joueurs"]:
+        i = j["index"]
+        if not j.get("parti") and i < etat["nb_joueurs"]:
+            manche[j["nom"]] = etat["gorgees"][i] - (avant[i] if i < len(avant) else 0)
+    etat["gorgees_signalees"] = list(etat["gorgees"])
+    await signaler(code_salon, "buckshot", "manche", details={"gorgees": manche})
 
 
 async def bt_joueur_parti(code_salon, index):
@@ -2215,13 +2196,23 @@ async def pp_publier(code_salon, evenements):
     salon = salons.get(code_salon)
     if not salon or salon.get("jeu") != "picolopoly" or not salon.get("etat"):
         return
+    fin = None
     for e in evenements:
+        if e["msg"].get("type") == "pp_fin":
+            fin = e["msg"]
         if e["a"] is None:
             await diffuser(code_salon, e["msg"])
         else:
             await bt_envoyer_prive(salon, e["a"], e["msg"])
     await diffuser(code_salon, pp_etat_public(salon["etat"], time.time()))
     pp_programmer(code_salon)
+    if fin is not None:
+        noms = salon["etat"]["noms"]
+        nom = lambda i: noms[i] if i is not None and i < len(noms) else None
+        await signaler(code_salon, "picolopoly", "victoire",
+                       gagnants=[n for n in [nom(fin.get("gagnant"))] if n],
+                       details={"raison": fin.get("raison"),
+                                "classement": [nom(c["joueur"]) for c in fin.get("classement", [])]})
 
 
 def pp_programmer(code_salon):
@@ -2360,6 +2351,12 @@ async def mt_publier(code_salon, evenements):
             if main is not None:
                 await envoyer(joueur, main)
     mt_programmer(code_salon)
+    if etat.get("phase") == "fin" and not etat.get("fin_signalee"):
+        etat["fin_signalee"] = True
+        g = etat.get("gagnant")
+        noms = [j["nom"] for j in salon["joueurs"]]
+        await signaler(code_salon, "menteur", "victoire",
+                       gagnants=[noms[g]] if g is not None and g < len(noms) else [])
 
 
 def mt_programmer(code_salon):
@@ -2513,6 +2510,395 @@ async def cs_traiter(code_salon, joueur, message):
 
 
 # =============================================================
+# REGISTRE DES JEUX
+# Chaque jeu se declare UNE fois ici, avec la meme interface. Le reste du
+# serveur (aiguillage des messages, arrivees, departs, retours, reprise
+# apres coupure, liberation du salon) passe par ce registre au lieu de
+# chaines de "if jeu == ...". Ajouter un jeu = ajouter une entree.
+# =============================================================
+
+class Jeu:
+    def __init__(self, nom, titre, page, demarrage, possede, demarrer, traiter, instantane,
+                 joueur_parti=None, joueur_revenu=None, arrivee=None,
+                 peut_relancer=None, minuteurs=(), min_joueurs=2, max_joueurs=8):
+        self.nom = nom
+        self.titre = titre
+        self.page = page                    # page du site qui joue ce jeu
+        self.demarrage = demarrage          # type du message qui lance une partie
+        self.possede = possede              # (type_msg) -> ce message est une action du jeu
+        self.demarrer = demarrer            # async (code, message)
+        self.traiter = traiter              # async (code, joueur, message)
+        self.instantane = instantane        # async (code, joueur, complet, nouveau)
+        self.joueur_parti = joueur_parti    # async (code, index)
+        self.joueur_revenu = joueur_revenu  # (code, salon, index)
+        self.arrivee = arrivee              # (salon, joueur) : nouveau venu en pleine partie
+        # Relancer le MEME jeu alors qu il occupe le salon : seulement s il
+        # est fini (sinon un double clic remettait tout a zero).
+        self.peut_relancer = peut_relancer or (lambda etat: False)
+        self.minuteurs = minuteurs          # cles des minuteurs dans le salon
+        self.min_joueurs = min_joueurs
+        self.max_joueurs = max_joueurs
+
+
+ACTIONS_KINITO = ("lancer", "annoncer", "reaction", "abandonner", "nouvelle_manche")
+
+
+async def _kinito_traiter(code_salon, joueur, message):
+    t = message["type"]
+    if t == "lancer":
+        await kinito_lancer(code_salon, joueur)
+    elif t == "annoncer":
+        await kinito_annoncer(code_salon, joueur, message.get("score"))
+    elif t == "reaction":
+        await kinito_reaction(code_salon, joueur, message.get("choix"), message.get("score_cite"))
+    elif t == "abandonner":
+        await kinito_abandonner(code_salon, joueur)
+    elif t == "nouvelle_manche":
+        await kinito_nouvelle_manche(code_salon, joueur)
+
+
+def _kinito_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < len(etat.get("partis", [])):
+        etat["partis"][idx] = False
+        kinito_reprendre(etat)
+
+
+async def _bb_traiter(code_salon, joueur, m):
+    t = m["type"]
+    if t == "bb_placer":
+        await bb_placer(code_salon, salons, diffuser, joueur, m.get("ligne"), m.get("colonne"))
+    elif t == "bb_deplacer":
+        await bb_deplacer(code_salon, salons, diffuser, joueur, m.get("ligne"), m.get("colonne"), m.get("via_carte"), m.get("index_carte"))
+    elif t == "bb_attaquer":
+        await bb_attaquer(code_salon, salons, diffuser, joueur, m.get("cible"), m.get("index_carte"), m.get("type_attaque"))
+    elif t == "bb_as_deplacer":
+        await bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, m.get("ligne"), m.get("colonne"), m.get("cible"), m.get("index_carte"))
+    elif t == "bb_poser_arme":
+        await bb_poser_arme(code_salon, salons, diffuser, joueur, m.get("index_carte"))
+    elif t == "bb_dame":
+        await bb_dame(code_salon, salons, diffuser, joueur, m.get("cible"), m.get("index_carte"))
+    elif t == "bb_ne_rien_faire":
+        await bb_ne_rien_faire(code_salon, salons, diffuser, joueur)
+    elif t == "bb_ramasser":
+        await bb_ramasser(code_salon, salons, diffuser, joueur, m.get("decision"), m.get("index_echange"))
+
+
+async def _bt_traiter(code_salon, joueur, m):
+    t = m["type"]
+    if t == "bt_composer":
+        await bt_composer(code_salon, salons, diffuser, joueur, m.get("total"), m.get("reel"))
+    elif t == "bt_jouer_objet":
+        await bt_jouer_objet(code_salon, salons, diffuser, joueur, m.get("cible"))
+    elif t == "bt_tirer":
+        await bt_tirer(code_salon, salons, diffuser, joueur, m.get("cible"))
+
+
+def _pp_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < len(etat.get("partis", [])):
+        etat["partis"][idx] = False
+        etat["version"] += 1
+        pp_rearmer_si_attendu(etat, idx)
+
+
+def _mt_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        mt_joueur_revenu(etat, idx, time.time())
+        mt_programmer(code_salon)
+
+
+async def _mt_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        mt_joueur_parti(etat, index, time.time())
+        await mt_publier(code_salon, [])
+
+
+def _cs_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        cs_joueur_revenu(etat, idx, time.time())
+        cs_programmer(code_salon)
+
+
+async def _cs_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        evenements = cs_joueur_parti(etat, index, time.time())
+        await cs_publier(code_salon, evenements)
+
+
+def _prefixe(p):
+    return lambda t: t.startswith(p)
+
+
+JEUX = {
+    "kinito": Jeu(
+        "kinito", "Kinito", "kinito-3d-jeu.html", "demarrer",
+        lambda t: t in ACTIONS_KINITO,
+        demarrer_kinito, _kinito_traiter, _kinito_instantane,
+        joueur_parti=kinito_joueur_parti, joueur_revenu=_kinito_revenu, arrivee=_kinito_arrivee,
+        min_joueurs=2, max_joueurs=99),
+    "beerbattle": Jeu(
+        "beerbattle", "BeerBattle", "beerbattle-3d-jeu.html", "bb_demarrer", _prefixe("bb_"),
+        lambda code, m: bb_demarrer(code, salons, diffuser), _bb_traiter, _beerbattle_instantane,
+        joueur_parti=bb_joueur_parti,
+        peut_relancer=lambda etat: etat.get("phase") == "fini",
+        min_joueurs=3, max_joueurs=5),
+    "buckshot": Jeu(
+        "buckshot", "Buckshot", "buckshot-3d-jeu.html", "bt_demarrer", _prefixe("bt_"),
+        lambda code, m: bt_demarrer(code, salons, diffuser), _bt_traiter, _buckshot_instantane,
+        joueur_parti=bt_joueur_parti, arrivee=_buckshot_arrivee,
+        min_joueurs=2, max_joueurs=BT_JOUEURS_MAX),
+    "picolopoly": Jeu(
+        "picolopoly", "Picopoly", "picolopoly-3d-jeu.html", "pp_demarrer", _prefixe("pp_"),
+        lambda code, m: pp_demarrer(code, m.get("difficulte")), pp_traiter, _picolopoly_instantane,
+        joueur_parti=pp_joueur_parti, joueur_revenu=_pp_revenu, arrivee=_picolopoly_arrivee,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("pp_minuteur",),
+        min_joueurs=PP_JOUEURS_MIN, max_joueurs=PP_JOUEURS_MAX),
+    "menteur": Jeu(
+        "menteur", "Menteur", "menteur-3d-jeu.html", "mt_demarrer", _prefixe("mt_"),
+        lambda code, m: mt_demarrer(code, m.get("mode")), mt_traiter, _menteur_instantane,
+        joueur_parti=_mt_parti, joueur_revenu=_mt_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("mt_minuteur",),
+        min_joueurs=MT_JOUEURS_MIN, max_joueurs=MT_JOUEURS_MAX),
+    "casino": Jeu(
+        "casino", "Casino", "casino-3d-jeu.html", "cs_demarrer", _prefixe("cs_"),
+        lambda code, m: cs_demarrer(code), cs_traiter, _casino_instantane,
+        joueur_parti=_cs_parti, joueur_revenu=_cs_revenu, arrivee=_casino_arrivee,
+        minuteurs=("cs_minuteur",),
+        min_joueurs=CS_JOUEURS_MIN, max_joueurs=CS_JOUEURS_MAX),
+}
+
+
+def arreter_minuteurs(salon):
+    for jeu in JEUX.values():
+        for cle in jeu.minuteurs:
+            m = salon.get(cle)
+            if m is not None and not m.done():
+                m.cancel()
+            salon[cle] = None
+
+
+async def terminer_jeu(code_salon, raison):
+    """
+    Le jeu en cours s arrete (remplace par un autre, ou retour en salle
+    d attente). Les couches en sont prevenues, les minuteurs coupes, et les
+    places laissees vides sont retirees : la suite repart des seuls presents.
+    """
+    salon = salons[code_salon]
+    nom = salon.get("jeu")
+    if salon.get("etat") is None:
+        return
+    await signaler(code_salon, nom, "fin_jeu", details={"raison": raison})
+    arreter_minuteurs(salon)
+    salon["etat"] = None
+    salon["jeu"] = None
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    await envoyer_indices(code_salon)      # renumerote : on est en salle d attente
+
+
+async def lancer_jeu(code_salon, nom, message):
+    """
+    Regle UNIQUE de lancement, la meme pour tous les jeux :
+    - salle d attente : le jeu demarre ;
+    - le MEME jeu occupe le salon : relance seulement s il est fini (un double
+      clic ou un vieil onglet ne remet pas tout a zero) ;
+    - un AUTRE jeu occupe le salon : il est remplace. Avant, selon le jeu,
+      c etait permis, refuse sans un mot, ou permis seulement si l ancien
+      etait fini : avec le meme code toute la soiree, on restait bloque.
+    Le nombre de joueurs est verifie AVANT de remplacer : un lancement refuse
+    ne doit pas detruire la partie en cours.
+    """
+    salon = salons[code_salon]
+    jeu = JEUX[nom]
+    etat = salon.get("etat")
+    if etat is not None:
+        if salon.get("jeu") == nom:
+            if not jeu.peut_relancer(etat):
+                return
+        else:
+            presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
+            if not (jeu.min_joueurs <= presents <= jeu.max_joueurs):
+                borne = (f"de {jeu.min_joueurs} a {jeu.max_joueurs} joueurs"
+                         if jeu.max_joueurs < 99 else f"a partir de {jeu.min_joueurs} joueurs")
+                await diffuser(code_salon, {"type": "erreur",
+                                            "message": f"{jeu.titre} se joue {borne} ({presents} presents)."})
+                return
+            await terminer_jeu(code_salon, "remplace")
+    avant = salon.get("etat")
+    await jeu.demarrer(code_salon, message)
+    if salon.get("etat") is not None and salon.get("etat") is not avant and salon.get("jeu") == nom:
+        # Les pages des AUTRES jeux ne comprennent pas le message de debut de
+        # ce jeu : celui-ci leur dit lequel tourne et ou le rejoindre.
+        await diffuser(code_salon, {"type": "salon_jeu", "jeu": nom, "titre": jeu.titre, "page": jeu.page})
+
+
+# =============================================================
+# COUCHES PARALLELES (l Enquete...) ET SAUVEGARDE
+# Voir couches.py. Les couches vivent a cote des salons, attachees au code :
+# un salon libere (tout le monde parti un moment) ne les efface pas.
+# =============================================================
+
+couches = {}            # code -> {prefixe: Couche}
+_minuteurs_couches = {}  # (code, prefixe) -> tache
+stock = None
+sauvegarde = None
+
+
+def _noms_presents(code_salon):
+    salon = salons.get(code_salon)
+    return [j["nom"] for j in salon["joueurs"] if not j.get("parti")] if salon else []
+
+
+async def envoyer_nom(code_salon, nom, message):
+    salon = salons.get(code_salon)
+    for j in (salon or {}).get("joueurs", []):
+        if meme_prenom(j["nom"], nom):
+            await envoyer(j, message)
+
+
+def _contexte(code_salon, couche):
+    return Contexte(
+        code_salon,
+        diffuser=lambda m: diffuser(code_salon, m),
+        envoyer_nom=lambda nom, m: envoyer_nom(code_salon, nom, m),
+        noms_presents=lambda: _noms_presents(code_salon),
+        jeu_en_cours=lambda: (salons.get(code_salon) or {}).get("jeu"),
+        sauvegarder=lambda: _sauvegarder_couche(code_salon, couche),
+        maintenant=time.time,
+    )
+
+
+def _cle_couche(code_salon, prefixe):
+    return f"couche:{code_salon}:{prefixe}"
+
+
+def _sauvegarder_couche(code_salon, couche):
+    if sauvegarde is None:
+        return
+    def produire():
+        if couche.terminee():
+            return None
+        return {"type": couche.prefixe, "donnees": couche.exporter()}
+    sauvegarde.marquer(_cle_couche(code_salon, couche.prefixe), produire)
+
+
+def _apres_couche(code_salon, couche):
+    """Apres chaque appel a une couche : sauvegarde, minuteur, nettoyage."""
+    _sauvegarder_couche(code_salon, couche)
+    cle = (code_salon, couche.prefixe)
+    ancien = _minuteurs_couches.pop(cle, None)
+    if ancien is not None and not ancien.done() and ancien is not asyncio.current_task():
+        ancien.cancel()
+    if couche.terminee():
+        par_code = couches.get(code_salon, {})
+        if par_code.get(couche.prefixe) is couche:
+            del par_code[couche.prefixe]
+        if not par_code:
+            couches.pop(code_salon, None)
+        return
+    echeance = couche.prochaine_echeance()
+    if echeance is not None:
+        _minuteurs_couches[cle] = asyncio.ensure_future(_minuteur_couche(code_salon, couche, echeance))
+
+
+async def _minuteur_couche(code_salon, couche, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if couches.get(code_salon, {}).get(couche.prefixe) is not couche:
+        return
+    salon = salons.get(code_salon)
+    if salon is not None:
+        async with verrou(salon):
+            await _appeler_couche(code_salon, couche, couche.echeance)
+    else:
+        await _appeler_couche(code_salon, couche, couche.echeance)
+
+
+async def _appeler_couche(code_salon, couche, methode, *args):
+    """Une couche ne fait jamais planter un jeu : ses erreurs sont journalisees."""
+    try:
+        await methode(_contexte(code_salon, couche), *args)
+    except Exception:
+        journal.exception("Erreur de la couche %s dans le salon %s", couche.prefixe, code_salon)
+    _apres_couche(code_salon, couche)
+
+
+async def couche_action(code_salon, joueur, message):
+    prefixe = message["type"].split("_", 1)[0]
+    couche = couches.get(code_salon, {}).get(prefixe)
+    if couche is None:
+        # Pas encore de couche de ce type dans la soiree : seule sa classe
+        # decide si ce message en cree une (ex. l hote lance l Enquete).
+        classe = TYPES_COUCHES[prefixe]
+        try:
+            couche = await classe.creer(code_salon, joueur["nom"], message)
+        except Exception:
+            journal.exception("Creation de la couche %s ratee dans %s", prefixe, code_salon)
+            couche = None
+        if couche is None:
+            return
+        couches.setdefault(code_salon, {})[prefixe] = couche
+    await _appeler_couche(code_salon, couche, couche.action, joueur["nom"], message)
+
+
+async def couches_arrivee(code_salon, joueur):
+    for couche in list(couches.get(code_salon, {}).values()):
+        await _appeler_couche(code_salon, couche, couche.arrivee, joueur["nom"])
+
+
+async def signaler(code_salon, jeu, type_evt, gagnants=(), perdants=(), details=None):
+    """
+    Point d entree UNIQUE par lequel les jeux annoncent leurs resultats aux
+    couches (fin de manche, victoire, fin de jeu). Les jeux ne savent pas
+    qui ecoute ; sans couche active, ca ne fait rien.
+    """
+    if not couches.get(code_salon):
+        return
+    evenement = {
+        "jeu": jeu, "type": type_evt,
+        "joueurs": _noms_presents(code_salon),
+        "gagnants": list(gagnants), "perdants": list(perdants),
+        "details": details or {},
+    }
+    for couche in list(couches.get(code_salon, {}).values()):
+        await _appeler_couche(code_salon, couche, couche.evenement_jeu, evenement)
+
+
+async def demarrage(stockage=None):
+    """Au lancement du serveur : ouvre le stockage et recharge les couches en cours."""
+    global stock, sauvegarde
+    stock = stockage if stockage is not None else await creer_stockage()
+    sauvegarde = Sauvegarde(stock)
+    try:
+        lignes = await stock.lister("couche:")
+    except Exception:
+        journal.exception("Lecture des couches sauvegardees impossible")
+        lignes = []
+    for cle, valeur in lignes:
+        try:
+            _, code, prefixe = cle.split(":", 2)
+            classe = TYPES_COUCHES.get(prefixe)
+            if classe is None:
+                continue
+            couche = classe.importer(code, valeur["donnees"])
+            couches.setdefault(code, {})[prefixe] = couche
+            _apres_couche(code, couche)
+        except Exception:
+            journal.exception("Couche sauvegardee illisible : %s", cle)
+
+
+async def arret():
+    """A l arret (redeploiement) : la derniere sauvegarde part avant de couper."""
+    if sauvegarde is not None:
+        await sauvegarde.vider()
+    if stock is not None:
+        await stock.fermer()
+
+
+# =============================================================
 # ENDPOINT HTTP : creer un salon
 # Les joueurs font une requete HTTP pour obtenir un code de salon.
 # =============================================================
@@ -2521,24 +2907,32 @@ async def cs_traiter(code_salon, joueur, message):
 async def creer_salon():
     """Cree un nouveau salon vide et retourne son code."""
     code = generer_code()
-    salons[code] = {"joueurs": [], "etat": None, "jeu": None}
+    salons[code] = nouveau_salon()
     return {"code": code}
 
 
 @app.get("/salon/{code}")
 async def info_salon(code: str):
     """Retourne les infos d un salon (pour verifier qu il existe)."""
-    if code not in salons:
+    if code not in salons and code not in couches:
         return {"existe": False}
-    salon = salons[code]
+    salon = salons.get(code) or nouveau_salon()
+    jeu = JEUX.get(salon["jeu"])
     return {
         "existe": True,
         "joueurs": [j["nom"] for j in salon["joueurs"]],
         "jeu": salon["jeu"],
+        "page": jeu.page if jeu else None,
+        "couches": sorted(couches.get(code, {})),
     }
 
 
 @app.get("/")
 async def racine():
     """Page d accueil du serveur (pour verifier qu il tourne)."""
-    return {"status": "Le serveur tourne", "salons_actifs": len(salons), "version": VERSION}
+    return {
+        "status": "Le serveur tourne",
+        "salons_actifs": len(salons),
+        "version": VERSION,
+        "stockage": "postgres" if getattr(stock, "durable", False) else "memoire",
+    }

@@ -1,0 +1,269 @@
+"""
+Essais des fondations du serveur (sans reseau, sans navigateur) :
+- regle unique de lancement et de changement de jeu, dans un meme salon ;
+- retour en salle d attente ;
+- couches paralleles : creation, routage des messages, signaux des jeux,
+  minuteur, survie a la liberation du salon ;
+- sauvegarde et rechargement apres redemarrage (memoire, et Postgres si
+  TEST_DATABASE_URL est defini).
+
+Usage : python tests/fondations_essai.py
+        TEST_DATABASE_URL=postgresql://... python tests/fondations_essai.py
+"""
+import asyncio
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+import serveur
+from couches import Couche, enregistrer
+from stockage import StockageMemoire, StockagePostgres, Sauvegarde
+
+serveur.DELAI_SALON_VIDE = 0.2
+Sauvegarde.INTERVALLE = 0.05
+
+
+class FauxWS:
+    def __init__(self, jeton=None):
+        self.query_params = {"jeton": jeton} if jeton else {}
+        self.recus = []
+
+    async def send_text(self, t):
+        import json
+        self.recus.append(json.loads(t))
+
+    async def close(self, code=1000):
+        pass
+
+    def types(self):
+        return [m.get("type") for m in self.recus]
+
+
+@enregistrer
+class CoucheEssai(Couche):
+    prefixe = "tst"
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.evenements = []
+        self.actions = []
+        self.reveils = 0
+        self.echeance_a = None
+        self.fini = False
+
+    @classmethod
+    async def creer(cls, code, nom, message):
+        return cls(code) if message["type"] == "tst_lancer" else None
+
+    def terminee(self):
+        return self.fini
+
+    def exporter(self):
+        return {"evenements": self.evenements, "actions": self.actions}
+
+    @classmethod
+    def importer(cls, code, d):
+        c = cls(code)
+        c.evenements, c.actions = d["evenements"], d["actions"]
+        return c
+
+    def prochaine_echeance(self):
+        return self.echeance_a
+
+    async def echeance(self, ctx):
+        self.reveils += 1
+        self.echeance_a = None
+        await ctx.diffuser({"type": "tst_reveil"})
+
+    async def action(self, ctx, nom, message):
+        self.actions.append([nom, message["type"]])
+        if message["type"] == "tst_minuteur":
+            self.echeance_a = ctx.maintenant() + 0.1
+        if message["type"] == "tst_finir":
+            self.fini = True
+        await ctx.envoyer_nom(nom, {"type": "tst_ok"})
+
+    async def arrivee(self, ctx, nom):
+        await ctx.envoyer_nom(nom, {"type": "tst_etat", "n": len(self.actions)})
+
+    async def evenement_jeu(self, ctx, ev):
+        self.evenements.append([ev["jeu"], ev["type"]])
+
+
+ECHECS = []
+
+
+def verifier(cond, quoi):
+    print(("  ok  " if cond else "  ECHEC ") + quoi)
+    if not cond:
+        ECHECS.append(quoi)
+
+
+async def entrer(code, nom):
+    if code not in serveur.salons:
+        serveur.salons[code] = serveur.nouveau_salon()
+    salon = serveur.salons[code]
+    ws = FauxWS()
+    async with serveur.verrou(salon):
+        j = await serveur.arrivee(code, salon, ws, nom)
+    return j, ws
+
+
+async def envoyer(code, joueur, message):
+    salon = serveur.salons[code]
+    async with serveur.verrou(salon):
+        await serveur.traiter_message(code, joueur, message)
+
+
+async def partir(code, joueur):
+    salon = serveur.salons[code]
+    async with serveur.verrou(salon):
+        await serveur.depart(code, joueur, joueur["ws"])
+
+
+async def essai_changement_de_jeu():
+    print("Changement de jeu dans un meme salon")
+    await serveur.demarrage(StockageMemoire())
+    code = "ABCD"
+    joueurs = [await entrer(code, n) for n in ("Lea", "Max", "Zoe")]
+    a, wa = joueurs[0]
+    salon = serveur.salons[code]
+
+    await envoyer(code, a, {"type": "demarrer"})
+    verifier(salon["jeu"] == "kinito", "Kinito demarre depuis la salle d attente")
+    etat = salon["etat"]
+    await envoyer(code, a, {"type": "demarrer"})
+    verifier(salon["etat"] is etat, "un second « demarrer » ne remet pas Kinito a zero")
+
+    ordre = ["casino", "kinito", "buckshot", "menteur", "beerbattle", "picolopoly", "casino"]
+    for nom in ordre:
+        wa.recus.clear()
+        await envoyer(code, a, {"type": serveur.JEUX[nom].demarrage})
+        verifier(salon["jeu"] == nom and salon["etat"] is not None, f"on passe a {nom}")
+        verifier({"type": "salon_jeu", "jeu": nom, "titre": serveur.JEUX[nom].titre,
+                  "page": serveur.JEUX[nom].page} in wa.recus, f"  annonce salon_jeu pour {nom}")
+        verifier(not [k for j in serveur.JEUX.values() for k in j.minuteurs
+                      if k != f"{serveur.JEUX[nom].minuteurs[0] if serveur.JEUX[nom].minuteurs else ''}"
+                      and salon.get(k) is not None and not salon[k].done()],
+                 "  aucun minuteur de l ancien jeu ne tourne encore")
+
+    # Une action d un autre jeu est ignoree.
+    etat = salon["etat"]
+    await envoyer(code, a, {"type": "lancer"})
+    verifier(salon["etat"] is etat and salon["jeu"] == "casino", "une action Kinito pendant le Casino est ignoree")
+
+    # Trop de monde pour BeerBattle : la partie en cours n est pas detruite.
+    for n in ("Ana", "Bob", "Cyd"):
+        await entrer(code, n)
+    wa.recus.clear()
+    await envoyer(code, a, {"type": "bb_demarrer"})
+    verifier(salon["jeu"] == "casino" and salon["etat"] is etat, "BeerBattle a 6 refuse sans casser le Casino")
+    verifier("erreur" in wa.types(), "  avec un message d erreur")
+
+    # Un absent ne recoit pas de place dans le jeu suivant.
+    _, wz = joueurs[2]
+    await partir(code, joueurs[2][0])
+    await envoyer(code, a, {"type": "mt_demarrer"})
+    verifier(salon["jeu"] == "menteur" and salon["etat"]["nb_joueurs"] == 5,
+             "Menteur repart des 5 presents (l absente est retiree)")
+    verifier([j["index"] for j in salon["joueurs"]] == list(range(5)), "  index renumerotes")
+
+    wa.recus.clear()
+    await envoyer(code, a, {"type": "retour_salon"})
+    verifier(salon["etat"] is None and salon["jeu"] is None, "retour en salle d attente")
+    verifier("salon_retour" in wa.types(), "  annonce salon_retour")
+    serveur.salons.clear()
+
+
+async def essai_couches():
+    print("Couches paralleles")
+    memoire = StockageMemoire()
+    await serveur.demarrage(memoire)
+    code = "EFGH"
+    (a, wa), (b, wb), (c, wc) = [await entrer(code, n) for n in ("Lea", "Max", "Zoe")]
+
+    await envoyer(code, a, {"type": "tst_action"})
+    verifier(code not in serveur.couches, "un message ordinaire ne cree pas la couche")
+    await envoyer(code, a, {"type": "tst_lancer"})
+    couche = serveur.couches[code]["tst"]
+    verifier(couche.actions == [["Lea", "tst_lancer"]], "le message de lancement cree la couche")
+    verifier("tst_ok" in wa.types() and "tst_ok" not in wb.types(), "  la couche repond au seul joueur vise")
+
+    await envoyer(code, a, {"type": "demarrer"})
+    await envoyer(code, b, {"type": "tst_action"})
+    verifier(couche.actions[-1] == ["Max", "tst_action"], "la couche recoit ses messages pendant un jeu")
+    await envoyer(code, a, {"type": "cs_demarrer"})
+    verifier(["kinito", "fin_jeu"] in couche.evenements, "le remplacement du jeu est signale (fin_jeu)")
+    await serveur.signaler(code, "casino", "victoire", gagnants=["Max"])
+    verifier(["casino", "victoire"] in couche.evenements, "signaler relaie les victoires")
+
+    await envoyer(code, a, {"type": "tst_minuteur"})
+    await asyncio.sleep(0.3)
+    verifier(couche.reveils == 1 and "tst_reveil" in wc.types(), "le minuteur de la couche reveille la couche")
+
+    # Tout le monde part : le salon est libere, la couche reste.
+    for j in (a, b, c):
+        await partir(code, j)
+    await asyncio.sleep(0.4)
+    verifier(code not in serveur.salons and code in serveur.couches, "salon libere, couche conservee")
+    verifier(serveur.generer_code() != code, "le code n est pas redonne")
+    info = await serveur.info_salon(code)
+    verifier(info["existe"] and info["couches"] == ["tst"], "/salon/<code> le donne toujours comme existant")
+
+    (a2, wa2) = await entrer(code, "Lea")
+    verifier({"type": "tst_etat", "n": len(couche.actions)} in wa2.recus, "au retour, la couche renvoie son etat")
+
+    # Sauvegarde puis redemarrage du serveur.
+    await serveur.sauvegarde.vider()
+    sauvee = await memoire.lire(f"couche:{code}:tst")
+    verifier(sauvee and sauvee["donnees"]["actions"] == couche.actions, "la couche est sauvegardee")
+    serveur.couches.clear()
+    serveur.salons.clear()
+    await serveur.demarrage(memoire)
+    rechargee = serveur.couches.get(code, {}).get("tst")
+    verifier(rechargee is not None and rechargee.actions == couche.actions, "rechargee apres redemarrage")
+
+    (a3, _) = await entrer(code, "Lea")
+    await envoyer(code, a3, {"type": "tst_finir"})
+    await serveur.sauvegarde.vider()
+    verifier(code not in serveur.couches, "une couche terminee est oubliee")
+    verifier(await memoire.lire(f"couche:{code}:tst") is None, "  et effacee de la base")
+    serveur.salons.clear()
+
+
+async def essai_postgres(url):
+    print("Stockage Postgres")
+    s = StockagePostgres(url)
+    await s.ouvrir()
+    await s.supprimer("essai:a")
+    await s.supprimer("essai:b_x")
+    await s.ecrire("essai:a", {"n": 1, "liste": [1, 2], "texte": "é"})
+    verifier(await s.lire("essai:a") == {"n": 1, "liste": [1, 2], "texte": "é"}, "ecriture et relecture JSON")
+    await s.ecrire("essai:a", {"n": 2})
+    verifier(await s.lire("essai:a") == {"n": 2}, "mise a jour d une cle")
+    await s.ecrire("essai:b_x", {"n": 3})
+    verifier([c for c, _ in await s.lister("essai:")] == ["essai:a", "essai:b_x"], "liste par prefixe")
+    verifier([c for c, _ in await s.lister("essai:b_")] == ["essai:b_x"], "  le _ du prefixe n est pas un joker")
+    await s._cnx.close()        # Neon coupe les connexions inactives
+    verifier(await s.lire("essai:a") == {"n": 2}, "reconnexion automatique apres coupure")
+    await s.supprimer("essai:a")
+    await s.supprimer("essai:b_x")
+    verifier(await s.lire("essai:a") is None, "suppression")
+    await s.fermer()
+
+
+async def principal():
+    await essai_changement_de_jeu()
+    await essai_couches()
+    url = os.environ.get("TEST_DATABASE_URL")
+    if url:
+        await essai_postgres(url)
+    else:
+        print("(Postgres non teste : TEST_DATABASE_URL absent)")
+    await serveur.arret()
+
+
+asyncio.run(principal())
+print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
+sys.exit(1 if ECHECS else 0)
