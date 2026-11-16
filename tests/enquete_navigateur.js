@@ -87,6 +87,20 @@ async function sansDefilement(page) {
   await appuyer(pages.Lea, 'Ouvrir une enquête');
   verifier(!!await attendreQue(() => pages.Max.evaluate(() => document.querySelectorAll('.portrait').length === 12), 15000),
     'Léa ouvre une enquête : tout le monde voit les 12 portraits (onglet Personnage)');
+  // Changement d'univers par l'hôte : portraits, police et couleurs suivent chez tout le monde
+  await onglet(pages.Lea, 'reglages');
+  await appuyer(pages.Lea, 'Station Aurora-7');
+  const station = await attendreQue(() => pages.Max.evaluate(() => {
+    const t = document.body.innerText;
+    return /la médecin/.test(t) && /Exo 2/.test(getComputedStyle(document.documentElement).getPropertyValue('--titre')) && t.slice(0, 200);
+  }), 15000);
+  verifier(!!station, 'univers : Léa choisit la Station Aurora-7, Max voit ses portraits et sa police');
+  if (CAPTURES) await pages.Max.screenshot({ path: CAPTURES + '/enquete-station-salle.png' });
+  await appuyer(pages.Lea, 'Le Velvet Room');
+  verifier(!!await attendreQue(() => pages.Max.evaluate(() => /le croupier/.test(document.body.innerText)), 15000), '  puis le Velvet Room');
+  await appuyer(pages.Lea, 'Le Manoir de Valmont');
+  verifier(!!await attendreQue(() => pages.Max.evaluate(() => document.querySelectorAll('.portrait').length === 12 && /la comtesse/.test(document.body.innerText)), 15000), '  et retour au Manoir');
+  await onglet(pages.Lea, 'perso');
   for (let i = 0; i < 4; i++) {
     await pages[noms[i]].evaluate(k => document.querySelectorAll('.portrait')[k].click(), i);
     await attendre(400);

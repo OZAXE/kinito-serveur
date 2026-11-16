@@ -65,6 +65,9 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
 - Pénalités visibles par tous (`gorgees_publiques`, activé par défaut) : chaque gorgée imposée apparaît
   dans l'état public (`penalites`) jusqu'à ce que le joueur confirme (`enq_bu`). Contrepartie : on sait
   qui a raté une accusation (jamais son contenu). Un sabotage ne fait jamais boire le tueur.
+- Trois univers (`enquetes/manoir.json`, `station.json`, `velvet.json`) : 8 lieux, 8 armes, 12 portraits,
+  plan (avec `decor` pour le thème 3D du site), textes du narrateur. Validés au chargement (textes complets,
+  modèles qui se remplissent) ; contractions « de le » -> « du » après insertion d'un nom.
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
   mêmes clés pour tous (`tests/enquete_essai.py`).
 
