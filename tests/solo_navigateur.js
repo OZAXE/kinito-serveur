@@ -1,4 +1,4 @@
-// Mode solo : un seul vrai joueur et des joueurs fictifs (tranche 9).
+// Mode solo : un seul vrai joueur, la vitesse Démo et des joueurs fictifs.
 // Prérequis : serveur d'essai (tests/serveur_essai.py) et site sur le port 8765.
 // Usage : node tests/solo_navigateur.js [dossier_captures]
 const { chromium } = require('playwright');
@@ -31,6 +31,11 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
   await clic(p, 'Ouvrir une enquête');
   await attendreQue(() => p.evaluate(() => document.querySelectorAll('.portrait').length === 12), 15000);
   await p.evaluate(() => document.querySelector('.portrait').click());
+  await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="reglages"]').click());
+  await clic(p, 'Démo');
+  const demo = await attendreQue(() => p.evaluate(() => { const r = document.querySelector('.resume-vitesse'); return r && /Mode démo/.test(r.innerText) && r.innerText.split('\n')[0]; }), 10000);
+  verifier(!!demo, 'vitesse Démo (10 min) : « ' + (demo || '') + ' »');
+  if (CAPTURES) await p.screenshot({ path: CAPTURES + '/solo-demo.png' });
   await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="joueurs"]').click());
   for (let i = 0; i < 3; i++) { await clic(p, 'Ajouter un joueur fictif'); await attendre(500); }
   const liste = await attendreQue(() => p.evaluate(() => { const t = document.querySelector('.joueurs').innerText; return (t.match(/🤖/g) || []).length === 3 && t; }), 10000);
@@ -38,6 +43,8 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
   if (CAPTURES) await p.screenshot({ path: CAPTURES + '/solo-salle.png' });
   verifier(!!await clic(p, 'Lancer l’enquête'), '  4 joueurs : elle peut lancer l’enquête');
   verifier(!!await attendreQue(() => p.evaluate(() => !!document.querySelector('.plan3d canvas')), 60000), 'l’enquête commence, maison 3D');
+  const pe = await attendreQue(() => p.evaluate(() => { const t = document.querySelector('.etat-jeu .pe'); const m = t && t.textContent.match(/(\d+) PE/); return m && Number(m[1]) > 0 && m[0]; }), 240000);
+  verifier(!!pe, '  Léa gagne des PE toute seule, sans jouer aux autres jeux (' + pe + ')');
   const r = await (await fetch(API + '/test/bots/' + code + '/3')).json();
   verifier(r.plis > 0, '  les joueurs fictifs jouent : ' + r.plis + ' plis reçus par eux');
   await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="fil"]').click());

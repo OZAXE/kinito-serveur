@@ -68,6 +68,8 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
 - Trois univers (`enquetes/manoir.json`, `station.json`, `velvet.json`) : 8 lieux, 8 armes, 12 portraits,
   plan (avec `decor` pour le thème 3D du site), textes du narrateur. Validés au chargement (textes complets,
   modèles qui se remplissent) ; contractions « de le » -> « du » après insertion d'un nom.
+- Vitesse Démo (10 min) pour tester seul : chronos courts, 3 événements d'1 min, PE automatiques pour tous
+  (`pe_auto_heure`), joueurs fictifs qui jouent toutes les `tic_bots` secondes.
 - Joueurs fictifs (`enq_bot_ajouter` / `enq_bot_retirer`, hôte, salle d'attente) : pour tester seul.
   Ils gagnent `bot_pe_heure` PE par heure et jouent avec `jouer_bot`, qui ne voit que ce qu'un vrai joueur
   verrait (ses plis, les découvertes, le retour de ses accusations, déduit façon Mastermind). Le même
