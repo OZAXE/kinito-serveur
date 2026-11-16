@@ -48,6 +48,12 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   tiré au sort, tueur compris, jamais deux fois de suite le même. Hors plafond horaire.
 - Contre-expertise (`enq_expertise`, paiement `pe` ou `gorgee`) : tampon permanent « authentique » ou
   « falsifié » sur un indice lu de son archive ; compte comme une consultation (même chrono).
+- Sabotages (tueur seul, `enq_charge` puis `enq_sabotage`) : fausse piste (remplacement du prochain
+  indice de la cible, ou détournement du prochain Témoin), interception (pli retenu 10 min), écoute
+  (dernier indice de la cible), fausse rumeur (une par partie, sur un innocent). 3 charges au plus,
+  délai entre deux sabotages, détection qui baisse avec le temps ; l'annonce « interférence » et la
+  fausse rumeur sortent après un délai aléatoire. Rumeurs ambiantes (`rumeurs_toutes`) en bruit de fond.
+  La console (`console` dans la vue privée) vaut `None` pour tous les autres.
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
   mêmes clés pour tous (`tests/enquete_essai.py`).
 

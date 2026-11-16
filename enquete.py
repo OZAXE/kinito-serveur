@@ -22,6 +22,13 @@ temps en temps a un joueur tire au sort, tueur compris) et contre-expertise
 (un indice de l archive recoit un tampon permanent Authentique ou Falsifie,
 payee en PE a la place d un indice ou en gorgees ; elle compte comme une
 consultation).
+Tranche 5 : le tueur achete des charges avec ses PE et sabote (fausse piste
+en remplacement ou en detournement d un Temoin, interception, ecoute,
+fausse rumeur publique). Chaque sabotage a une chance d etre detecte, qui
+baisse avec le temps ; l annonce « interference » arrive avec un retard
+aleatoire. De vraies rumeurs ambiantes noient la fausse dans le bruit.
+Aucune penalite visible n est liee au role : tout passe par les charges,
+les delais et la detection.
 
 SECURITE : le tueur ne doit jamais etre deductible techniquement.
 - vue_publique ne contient JAMAIS la solution ni le tueur avant la fin ;
@@ -164,6 +171,13 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "prochain_bonus_a": None,   # SECRET (heure exacte) : prochain Temoin anonyme
         "dernier_bonus": None,      # SECRET : cle du dernier joueur servi
         "bonus": [],                # SECRET jusqu a la fin : [{t, nom}]
+        # --- tranche 5 ---
+        "sabotages": [],            # SECRET jusqu a la fin : [{t, type, cible, categorie, element, mode, detecte}]
+        "differes": [],             # SECRET : [{t, genre: "annonce"|"rumeur", ...}] a publier plus tard
+        "rumeurs": [],              # public : [{t, texte, lieu}] (vraies et fausses, meme format)
+        "prochaine_rumeur_a": None, # SECRET
+        "detournement": None,       # SECRET : {cible, categorie, element}
+        "faux_emis": [],            # SECRET : [[categorie, element]] (deux faux identiques interdits)
     }
 
 
@@ -194,6 +208,8 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
         "enq_consulter": _consulter,
         "enq_accuser": _accuser,
         "enq_expertise": _expertiser,
+        "enq_charge": _acheter_charge,
+        "enq_sabotage": _saboter,
     }.get(t)
     if f is None:
         return []
@@ -297,6 +313,7 @@ def _lancer(etat, nom, message, maintenant, rng, config):
     etat["ouverture_fin_a"] = maintenant + config["duree_ouverture"]
     etat["fin_a"] = maintenant + config["duree_ouverture"] + etat["duree"]
     etat["prochain_bonus_a"] = etat["ouverture_fin_a"] + _intervalle_bonus(etat, config, rng)
+    etat["prochaine_rumeur_a"] = etat["ouverture_fin_a"] + _intervalle(etat, config, rng, "rumeurs_toutes")
     etat["version"] += 1
     return []
 
@@ -319,7 +336,10 @@ def prochaine_echeance(etat):
     if etat["phase"] == "enquete":
         # Reveil regulier pour compter le temps passe aux jeux longs (paliers).
         tic = (etat["dernier_tic"] or etat["ouverture_fin_a"]) + TIC_PALIERS
-        return min(x for x in (etat["fin_a"], tic, etat.get("prochain_bonus_a")) if x is not None)
+        candidats = [etat["fin_a"], tic, etat.get("prochain_bonus_a"), etat.get("prochaine_rumeur_a")]
+        candidats += [d["t"] for d in etat.get("differes", [])]
+        candidats += [e["visible_a"] for p in etat["perso"].values() for e in p["archive"] if e.get("retenu")]
+        return min(x for x in candidats if x is not None)
     return None
 
 
@@ -333,6 +353,11 @@ def expirer(etat, maintenant, config=None, rng=random):
         _terminer(etat, "tueur", "heure", None)
     if etat["phase"] == "enquete" and etat.get("prochain_bonus_a") is not None and maintenant >= etat["prochain_bonus_a"]:
         ev += temoin_anonyme(etat, maintenant, rng, config)
+    if etat["phase"] == "enquete":
+        ev += _liberer_retenus(etat, maintenant)
+        ev += _publier_differes(etat, maintenant)
+        if etat.get("prochaine_rumeur_a") is not None and maintenant >= etat["prochaine_rumeur_a"]:
+            ev += rumeur_ambiante(etat, maintenant, rng, config)
     return ev
 
 
@@ -383,6 +408,7 @@ def vue_publique(etat, maintenant):
                                         * CONFIG["vitesses"][etat["vitesse"]]["mult_gorgees"] + 0.5)),
         "bonus_toutes": CONFIG["vitesses"][etat["vitesse"]]["bonus_toutes"],
         "echecs": etat.get("echecs", 0),
+        "rumeurs": etat.get("rumeurs", [])[-20:],
         "seuil_patience": seuil_patience(etat) if lancee else None,
         "delai_accusation": CONFIG["vitesses"][etat["vitesse"]]["delai_accusation"],
         "fin": None,
@@ -424,6 +450,8 @@ def vue_privee(etat, nom, maintenant=0.0):
         "solution": solution,
     }
     v.update(vue_privee_t2(etat, nom if lancee else "\0", maintenant))
+    # Console du tueur : la cle existe pour tout le monde (None sauf pour lui).
+    v["console"] = console(etat, moi["nom"], maintenant) if role == "tueur" and etat["phase"] == "enquete" else None
     return v
 
 
@@ -464,6 +492,12 @@ def perso_vide():
         "gorgees": [],              # [horodatage, nombre, raison]
         "manches_kinito": 0,
         "expertises": 0,
+        # Sabotage : la meme structure pour tout le monde, seul le tueur s en sert.
+        "charges": 0,
+        "prochain_sabotage_a": None,
+        "rumeur_utilisee": False,
+        "faux_en_attente": None,    # SECRET : fausse piste qui remplacera le prochain indice
+        "interception": False,      # SECRET : le prochain indice sera retenu
         "temps_palier": {},         # jeu -> secondes accumulees
         "derniere_source": None,
         "accusations": [],          # les siennes : [{t, suspect, arme, lieu, justes}]
@@ -531,13 +565,19 @@ def _tirer(etat, nom):
     return None
 
 
-def donner_indice(etat, nom, source, maintenant, rng, config):
+def donner_indice(etat, nom, source, maintenant, rng, config, faux=None):
     """
     Ajoute un indice a l archive du joueur. Renvoie les evenements, ou None
     si le stock est vide pour lui. Le texte n est montre qu a l ouverture.
+
+    Sabotages : une fausse piste en attente (remplacement) prend la place de
+    l indice vrai, qui reste dans le stock ; une interception retient le pli
+    (invisible pour le joueur) jusqu a visible_a.
     """
     p = _perso(etat, nom)
-    indice = _tirer(etat, nom)
+    if faux is None and p is not None and p.get("faux_en_attente"):
+        faux, p["faux_en_attente"] = p["faux_en_attente"], None
+    indice = faux or _tirer(etat, nom)
     if p is None or indice is None:
         if not etat["dossier_epuise"] and not etat["pool"]:
             etat["dossier_epuise"] = True
@@ -548,7 +588,7 @@ def donner_indice(etat, nom, source, maintenant, rng, config):
         "texte": texte_indice(etat, indice, rng),
         "categorie": indice["categorie"],
         "element": indice["element"],
-        "vrai": True,               # SECRET (les faux viendront avec les sabotages)
+        "vrai": faux is None,       # SECRET : un faux a exactement le meme format
         "source": source,
         "recu_a": maintenant,
         "lu": False,
@@ -556,6 +596,12 @@ def donner_indice(etat, nom, source, maintenant, rng, config):
     }
     etat["prochain_id"] += 1
     p["archive"].append(entree)
+    if p.get("interception"):
+        p["interception"] = False
+        entree["retenu"] = True
+        entree["visible_a"] = maintenant + config["sabotage"]["interception"]
+        entree["recu_a"] = entree["visible_a"]
+        return []
     _annoncer(etat, maintenant, PACKS[etat["univers"]]["textes"]["annonces"]["indice"])
     return [_a(nom, {"type": "enq_nouvel_indice", "id": entree["id"], "source": source})]
 
@@ -618,7 +664,7 @@ def _entree(etat, nom, message):
     if p is None:
         return None
     for e in p["archive"]:
-        if e["id"] == message.get("id"):
+        if e["id"] == message.get("id") and not e.get("retenu"):
             return e
     return None
 
@@ -761,7 +807,7 @@ def vue_privee_t2(etat, nom, maintenant, config=None):
         # Sans le texte : il ne s affiche qu a la lecture (gratuite une fois,
         # puis consultation payante).
         "archive": [{"id": e["id"], "source": e["source"], "recu_a": e["recu_a"], "lu": e["lu"],
-                     "tampon": e["tampon"]} for e in p["archive"]],
+                     "tampon": e["tampon"]} for e in p["archive"] if not e.get("retenu")],
         "consultation_possible_a": (p["derniere_consultation"] + timer) if p["derniere_consultation"] else None,
         "accusations": p.get("accusations", []),
         "prochaine_accusation_a": p.get("prochaine_accusation_a"),
@@ -834,11 +880,15 @@ def _accuser(etat, nom, message, maintenant, rng, config):
 # TRANCHE 4 : TEMOIN ANONYME ET CONTRE-EXPERTISE
 # =============================================================
 
-def _intervalle_bonus(etat, config, rng):
+def _intervalle(etat, config, rng, cle):
     """Toutes les X minutes selon la vitesse, a +/- bonus_alea pres (pas d horloge previsible)."""
-    base = _vitesse(etat, config)["bonus_toutes"]
+    base = _vitesse(etat, config)[cle]
     alea = config.get("bonus_alea", 0.25)
     return base * (1 + rng.uniform(-alea, alea))
+
+
+def _intervalle_bonus(etat, config, rng):
+    return _intervalle(etat, config, rng, "bonus_toutes")
 
 
 def _peut_recevoir(etat, nom):
@@ -854,6 +904,18 @@ def temoin_anonyme(etat, maintenant, rng=random, config=None):
     horaire. Plus de stock pour personne : les bonus s arretent.
     """
     config = config or CONFIG
+    d = etat.get("detournement")
+    if d is not None:
+        # Le bonus prevu pour un autre est redirige vers la cible, et il est
+        # faux : aucun indice de plus n est cree.
+        etat["detournement"] = None
+        ev = donner_indice(etat, d["cible"], "Témoin anonyme", maintenant, rng, config,
+                           faux={"categorie": d["categorie"], "element": d["element"]}) or []
+        etat["dernier_bonus"] = cle_nom(d["cible"])
+        etat.setdefault("bonus", []).append({"t": maintenant, "nom": d["cible"]})
+        etat["prochain_bonus_a"] = maintenant + _intervalle_bonus(etat, config, rng)
+        etat["version"] += 1
+        return ev
     candidats = [j["nom"] for j in etat["joueurs"] if _peut_recevoir(etat, j["nom"])]
     if not candidats:
         etat["prochain_bonus_a"] = None
@@ -909,6 +971,262 @@ def _expertiser(etat, nom, message, maintenant, rng, config):
     return ev
 
 
+# =============================================================
+# TRANCHE 5 : SABOTAGES, DETECTION, RUMEURS
+# =============================================================
+
+SABOTAGES = ("fausse_piste", "interception", "ecoute", "rumeur")
+
+
+def _est_tueur(etat, nom):
+    return etat.get("tueur") is not None and cle_nom(nom) == cle_nom(etat["tueur"])
+
+
+def detection_actuelle(etat, maintenant, config=None):
+    """Chance qu un sabotage soit remarque : baisse lineairement du debut a la fin de l enquete."""
+    config = config or CONFIG
+    d0, d1 = _vitesse(etat, config)["detection"]
+    debut, fin = etat["ouverture_fin_a"], etat["fin_a"]
+    f = min(1.0, max(0.0, (maintenant - debut) / max(1.0, fin - debut)))
+    d = d0 + (d1 - d0) * f
+    if etat.get("coupure_jusqua") and maintenant < etat["coupure_jusqua"]:
+        d /= 2                       # tranche 6 : pendant une coupure de courant
+    return d
+
+
+def _candidats(etat, categorie, pour=None):
+    """Les elements d une categorie ; pour un suspect, sans le joueur lui-meme (il se sait innocent)."""
+    if categorie == "lieu":
+        return list(etat["lieux"])
+    if categorie == "arme":
+        return list(etat["armes"])
+    return [j["nom"] for j in etat["joueurs"] if pour is None or cle_nom(j["nom"]) != cle_nom(pour)]
+
+
+def _element_solution(etat, categorie):
+    return etat["solution"]["tueur" if categorie == "suspect" else categorie]
+
+
+def _fausse_piste(etat, cible, categorie, config):
+    """
+    (element, risque) si une fausse piste est possible pour cette cible dans
+    cette categorie, sinon (None, raison). Le faux elimine l element de la
+    solution. Interdit s il a deja ete emis, ou s il ne laisserait plus aucun
+    candidat a la cible (contradiction directe avec son archive).
+    Risque selon les eliminations deja distribuees dans la categorie.
+    """
+    element = _element_solution(etat, categorie)
+    if [categorie, element] in etat["faux_emis"]:
+        return None, "Ce faux a déjà servi : deux faux identiques se repéreraient."
+    p = _perso(etat, cible)
+    elim = {e["element"] for e in p["archive"] if e["categorie"] == categorie}
+    reste = [x for x in _candidats(etat, categorie, cible) if x not in elim and x != element]
+    if not reste:
+        return None, "Ce faux contredirait directement son archive."
+    tous = _candidats(etat, categorie)
+    distribues = {e["element"] for q in etat["perso"].values() for e in q["archive"] if e["categorie"] == categorie}
+    marge = config["plafond_suspects_marge"] if categorie == "suspect" else config["plafond_autres_marge"]
+    plafond = max(1, len(tous) - marge)
+    ratio = len(distribues) / plafond
+    if len(reste) == 1 or ratio >= 0.67:
+        risque = "eleve"
+    elif ratio >= 0.34:
+        risque = "moyen"
+    else:
+        risque = "faible"
+    return element, risque
+
+
+def console(etat, nom, maintenant, config=None):
+    """Ce que voit le tueur dans sa console (jamais envoye a un autre joueur)."""
+    config = config or CONFIG
+    p = _perso(etat, nom)
+    cibles = [j["nom"] for j in etat["joueurs"] if cle_nom(j["nom"]) != cle_nom(nom)]
+    risques = {}
+    for c in cibles:
+        risques[c] = {}
+        for cat in ("suspect", "lieu", "arme"):
+            el, r = _fausse_piste(etat, c, cat, config)
+            risques[c][cat] = r if el is not None else None
+    pack = PACKS[etat["univers"]]
+    return {
+        "charges": p["charges"],
+        "charges_max": config["sabotage"]["charges_max"],
+        "cout_charge": _vitesse(etat, config)["pe_par_indice"],
+        "prochain_sabotage_a": p["prochain_sabotage_a"],
+        "detection": round(detection_actuelle(etat, maintenant, config), 3),
+        "rumeur_utilisee": p["rumeur_utilisee"],
+        "detournement_possible": etat.get("detournement") is None and etat.get("prochain_bonus_a") is not None,
+        "interception_minutes": round(config["sabotage"]["interception"] / 60),
+        "cibles": cibles,
+        "risques": risques,
+        # Rumeur : uniquement des innocents
+        "innocents": {
+            "suspect": [c for c in cibles],
+            "lieu": [x for x in etat["lieux"] if x != etat["solution"]["lieu"]],
+            "arme": [x for x in etat["armes"] if x != etat["solution"]["arme"]],
+        },
+        "faux_en_attente": [c for c in cibles if _perso(etat, c).get("faux_en_attente")],
+        "interceptions": [c for c in cibles if _perso(etat, c).get("interception")],
+        "historique": [{"t": x["t"], "type": x["type"], "cible": x["cible"],
+                        "element": _nom_element(pack, "lieux", x["element"]) if x.get("categorie") == "lieu"
+                        else _nom_element(pack, "armes", x["element"]) if x.get("categorie") == "arme" else x.get("element")}
+                       for x in etat["sabotages"]],
+    }
+
+
+def _acheter_charge(etat, nom, message, maintenant, rng, config):
+    if etat["phase"] != "enquete" or not _est_tueur(etat, nom):
+        return _erreur(nom, "Action impossible.")
+    p = _perso(etat, nom)
+    cout = _vitesse(etat, config)["pe_par_indice"]
+    if p["charges"] >= config["sabotage"]["charges_max"]:
+        return _erreur(nom, f"{config['sabotage']['charges_max']} charges au plus en réserve.")
+    if p["pe"] < cout:
+        return _erreur(nom, f"Il faut {cout} PE pour une charge (tu en as {p['pe']}).")
+    p["pe"] -= cout
+    p["charges"] += 1
+    etat["version"] += 1
+    return []
+
+
+def _saboter(etat, nom, message, maintenant, rng, config):
+    if etat["phase"] != "enquete" or not _est_tueur(etat, nom):
+        return _erreur(nom, "Action impossible.")
+    p = _perso(etat, nom)
+    genre = message.get("sabotage")
+    if genre not in SABOTAGES:
+        return _erreur(nom, "Sabotage inconnu.")
+    if p["charges"] < 1:
+        return _erreur(nom, "Plus de charge : achète-en une avec tes PE.")
+    if p["prochain_sabotage_a"] is not None and maintenant < p["prochain_sabotage_a"]:
+        reste = int(p["prochain_sabotage_a"] - maintenant + 0.999)
+        return _erreur(nom, f"Prochain sabotage possible dans {reste} s.")
+    pack = PACKS[etat["univers"]]
+    trace = {"t": maintenant, "type": genre, "cible": None, "categorie": None, "element": None, "mode": None}
+    ev = []
+    if genre == "rumeur":
+        if p["rumeur_utilisee"]:
+            return _erreur(nom, "Une seule fausse rumeur par partie.")
+        cat, elem = message.get("categorie"), message.get("element")
+        if cat not in ("suspect", "lieu", "arme") or elem not in _candidats(etat, cat) or elem == _element_solution(etat, cat) \
+                or (cat == "suspect" and cle_nom(elem) == cle_nom(nom)):
+            return _erreur(nom, "La rumeur doit viser un innocent.")
+        p["rumeur_utilisee"] = True
+        trace.update(categorie=cat, element=elem)
+        # Publiee apres un petit delai aleatoire, comme une rumeur ambiante.
+        a, b = config["sabotage"]["delai_publication"]
+        etat["differes"].append({"t": maintenant + rng.uniform(a, b), "genre": "rumeur",
+                                 "texte": _texte_rumeur(etat, cat, elem, rng), "lieu": elem if cat == "lieu" else None})
+    else:
+        cible = message.get("cible")
+        cj = _joueur(etat, cible or "")
+        if cj is None or cle_nom(cj["nom"]) == cle_nom(nom):
+            return _erreur(nom, "Choisis une cible.")
+        cible = cj["nom"]
+        q = _perso(etat, cible)
+        trace["cible"] = cible
+        if genre == "ecoute":
+            visibles = [e for e in q["archive"] if not e.get("retenu")]
+            if not visibles:
+                return _erreur(nom, f"{cible} n'a encore reçu aucun indice.")
+            e = visibles[-1]
+            ev.append(_a(nom, {"type": "enq_ecoute", "cible": cible, "texte": e["texte"], "source": e["source"],
+                               "recu_a": e["recu_a"], "categorie": e["categorie"], "element": e["element"]}))
+        elif genre == "interception":
+            if q["interception"]:
+                return _erreur(nom, f"Le prochain pli de {cible} est déjà guetté.")
+            q["interception"] = True
+        else:
+            cat, mode = message.get("categorie"), message.get("mode")
+            if cat not in ("suspect", "lieu", "arme") or mode not in ("remplacement", "detournement"):
+                return _erreur(nom, "Choisis une catégorie et un mode.")
+            element, risque = _fausse_piste(etat, cible, cat, config)
+            if element is None:
+                return _erreur(nom, risque)
+            if mode == "remplacement":
+                if q["faux_en_attente"]:
+                    return _erreur(nom, f"Un faux attend déjà {cible}.")
+                q["faux_en_attente"] = {"categorie": cat, "element": element}
+            else:
+                if etat.get("detournement") is not None or etat.get("prochain_bonus_a") is None:
+                    return _erreur(nom, "Aucun témoin à détourner pour l'instant.")
+                etat["detournement"] = {"cible": cible, "categorie": cat, "element": element}
+            etat["faux_emis"].append([cat, element])
+            trace.update(categorie=cat, element=element, mode=mode)
+    detecte = rng.random() < detection_actuelle(etat, maintenant, config)
+    trace["detecte"] = detecte
+    if detecte:
+        a, b = config["sabotage"]["delai_annonce"]
+        etat["differes"].append({"t": maintenant + rng.uniform(a, b), "genre": "annonce",
+                                 "texte": pack["textes"]["annonces"]["interference"]})
+    p["charges"] -= 1
+    p["prochain_sabotage_a"] = maintenant + _vitesse(etat, config)["delai_sabotage"]
+    etat["sabotages"].append(trace)
+    etat["version"] += 1
+    return ev
+
+
+def _texte_rumeur(etat, categorie, element, rng):
+    pack = PACKS[etat["univers"]]
+    modele = rng.choice(pack["textes"]["rumeurs"][categorie])
+    if categorie == "suspect":
+        return modele.format(nom=element)
+    if categorie == "lieu":
+        return modele.format(lieu=_nom_element(pack, "lieux", element))
+    return modele.format(arme=_nom_element(pack, "armes", element))
+
+
+def _ajouter_rumeur(etat, maintenant, texte, lieu):
+    etat["rumeurs"].append({"t": maintenant, "texte": texte, "lieu": lieu})
+    del etat["rumeurs"][:-JOURNAL_MAX]
+    return [_tous({"type": "enq_rumeur", "texte": texte, "lieu": lieu})]
+
+
+def rumeur_ambiante(etat, maintenant, rng=random, config=None):
+    """
+    Bruit de fond : une rumeur sur un element tire au hasard, solution
+    comprise ou non, sans aucune valeur de preuve. Meme format que la
+    fausse rumeur du tueur.
+    """
+    config = config or CONFIG
+    cat = rng.choice(("suspect", "lieu", "arme"))
+    elem = rng.choice(_candidats(etat, cat))
+    etat["prochaine_rumeur_a"] = maintenant + _intervalle(etat, config, rng, "rumeurs_toutes")
+    etat["version"] += 1
+    return _ajouter_rumeur(etat, maintenant, _texte_rumeur(etat, cat, elem, rng), elem if cat == "lieu" else None)
+
+
+def _publier_differes(etat, maintenant):
+    ev = []
+    restants = []
+    for d in sorted(etat.get("differes", []), key=lambda x: x["t"]):
+        if d["t"] > maintenant:
+            restants.append(d)
+        elif d["genre"] == "annonce":
+            _annoncer(etat, maintenant, d["texte"])
+            etat["version"] += 1
+        else:
+            ev += _ajouter_rumeur(etat, maintenant, d["texte"], d["lieu"])
+            etat["version"] += 1
+    etat["differes"] = restants
+    return ev
+
+
+def _liberer_retenus(etat, maintenant):
+    """Plis interceptes : ils arrivent enfin, comme s ils venaient d etre remis."""
+    ev = []
+    for k, p in etat["perso"].items():
+        for e in p["archive"]:
+            if e.get("retenu") and e["visible_a"] <= maintenant:
+                e["retenu"] = False
+                nom = next((j["nom"] for j in etat["joueurs"] if cle_nom(j["nom"]) == k), k)
+                _annoncer(etat, maintenant, PACKS[etat["univers"]]["textes"]["annonces"]["indice"])
+                ev.append(_a(nom, {"type": "enq_nouvel_indice", "id": e["id"], "source": e["source"]}))
+                etat["version"] += 1
+    return ev
+
+
 def recapitulatif(etat):
     """Ecran de fin : tout est revele (accusations, indices recus, solution)."""
     return {
@@ -921,6 +1239,7 @@ def recapitulatif(etat):
                      "expertises": etat["perso"].get(cle_nom(j["nom"]), {}).get("expertises", 0)}
                     for j in etat["joueurs"]],
         "gorgees": gorgees_de_fin(etat),
+        "sabotages": [{"type": x["type"], "cible": x["cible"], "detecte": x["detecte"]} for x in etat.get("sabotages", [])],
     }
 
 
