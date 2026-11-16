@@ -1,6 +1,7 @@
 {
   "_note": "Toutes les valeurs chiffrees de l Enquete. Valeurs de depart, a regler en test. Les durees sont en secondes.",
   "joueurs_min": 4,
+  "univers_defaut": "manoir",
   "joueurs_max": 12,
   "duree_ouverture": 25,
   "plafond_suspects_marge": 3,

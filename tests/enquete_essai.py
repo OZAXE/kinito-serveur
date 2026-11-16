@@ -791,6 +791,73 @@ def essai_penalites_publiques():
     verifier(m.vue_publique(e2, 2000.0)["penalites"] == [], "l'hôte peut garder les pénalités privées")
 
 
+def essai_univers():
+    print("Univers")
+    verifier(set(m.PACKS) >= {"manoir", "station", "velvet"} and m.nouvelle_partie("X", "Lea", 0)["univers"] == "manoir",
+             "trois univers chargés, le Manoir par défaut")
+    verifier(m.contracter("la porte de le Fumoir, à le Bureau") == "la porte du Fumoir, au Bureau", "contractions : « de le » -> « du », « à le » -> « au »")
+    for u, pack in m.PACKS.items():
+        plan = pack["plan"]
+        zones = dict(plan["zones"], **plan.get("couloirs", {}))
+        # Chaque porte sur un mur commun d'au moins 30 unités
+        def commun(a, b):
+            ax, ay, aw, ah = zones[a]; bx, by, bw, bh = zones[b]
+            if ax + aw == bx or bx + bw == ax:
+                return min(ay + ah, by + bh) - max(ay, by)
+            if ay + ah == by or by + bh == ay:
+                return min(ax + aw, bx + bw) - max(ax, bx)
+            return 0
+        verifier(all(commun(a, b) >= 30 for a, b in plan["portes"]), u + " : chaque porte est posée sur un mur commun")
+        # Toutes les pièces reliées
+        vus, file = {plan["entree"]}, [plan["entree"]]
+        while file:
+            z = file.pop()
+            for a, b in plan["portes"]:
+                for x, y in ((a, b), (b, a)):
+                    if x == z and y not in vus:
+                        vus.add(y); file.append(y)
+        verifier(vus == set(zones), "  toutes les pièces sont accessibles depuis l'entrée")
+        # Entrée sur une façade (un côté qui ne touche aucune autre surface)
+        ex, ey, ew, eh = zones[plan["entree"]]
+        def touche(cote):
+            for z, (x, y, w, h) in zones.items():
+                if z == plan["entree"]:
+                    continue
+                if cote == "bas" and y == ey + eh and x < ex + ew and x + w > ex: return True
+                if cote == "haut" and y + h == ey and x < ex + ew and x + w > ex: return True
+                if cote == "gauche" and x + w == ex and y < ey + eh and y + h > ey: return True
+                if cote == "droite" and x == ex + ew and y < ey + eh and y + h > ey: return True
+            return False
+        verifier(any(not touche(c) for c in ("bas", "haut", "gauche", "droite")), "  l'entrée donne sur l'extérieur")
+        # Une partie complète, 4 et 12 joueurs, toutes vitesses
+        ok = True
+        for n in (4, 12):
+            for vitesse in ("flash", "soiree"):
+                e = m.nouvelle_partie("ABCD", "Lea", 1000.0)
+                m.action(e, "Lea", {"type": "enq_config", "univers": u, "vitesse": vitesse}, 1000.0)
+                ids = [x["id"] for x in pack["portraits"]]
+                for i in range(n):
+                    m.action(e, NOMS[i], {"type": "enq_portrait", "portrait": ids[i]}, 1000.0)
+                m.action(e, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(n))
+                t = 1000.0 + m.CONFIG["duree_ouverture"]
+                m.expirer(e, t)
+                ok &= e["phase"] == "enquete" and e["univers"] == u
+                for k in range(6):
+                    nom = NOMS[k % n]
+                    m._perso(e, nom)["pe"] = 10
+                    m.action(e, nom, {"type": "enq_indice"}, t + k)
+                ok &= all("{" not in x["texte"] for p_ in e["perso"].values() for x in p_["archive"])
+                for x in list(e["programme"]):
+                    m.expirer(e, x["t"], rng=random.Random(2))
+                    m.expirer(e, x["t"] + m.CONFIG["vitesses"][vitesse]["duree_evenement"], rng=random.Random(2))
+                m.expirer(e, e["fin_a"])
+                rec = m.recit_de_fin(e)
+                ok &= e["phase"] == "fin" and "{" not in rec and " de le " not in rec
+        verifier(ok, "  parties complètes à 4 et 12 joueurs, en Flash et en Soirée, textes bien remplis")
+        pub = m.pack_public(pack)
+        verifier(pub["plan"].get("decor", "manoir") in ("manoir", "station", "velvet") and len(pub["evenements"]) == 6, "  pack public : décor 3D et événements")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -805,6 +872,7 @@ essai_detection_et_rumeurs()
 essai_evenements()
 essai_gorgees_et_plafonds()
 essai_penalites_publiques()
+essai_univers()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)

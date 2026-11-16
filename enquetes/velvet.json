@@ -1,0 +1,195 @@
+{
+  "id": "velvet",
+  "nom": "Le Velvet Room",
+  "epoque": "Chicago, 1931",
+  "ambiance": "Fumée, néons rouges, tapis vert.",
+  "palette": {
+    "fond": "#0b0607",
+    "surface": "#1c0c0f",
+    "accent": "#d9a441",
+    "texte": "#f4e6d6",
+    "alerte": "#e0283a"
+  },
+  "police": "Limelight",
+  "victime": "Sal « le Corbeau » Moretti",
+  "narrateur": {
+    "nom": "Eddie",
+    "role": "le barman",
+    "icone": "🍸"
+  },
+  "vocabulaire": {
+    "tueur": "le Tueur",
+    "detective": "le Fin limier",
+    "enqueteurs": "les clients",
+    "enqueteur": "client",
+    "rumeurs": "les on-dit"
+  },
+  "lieux": [
+    {"id": "salle_de_jeu", "nom": "Salle de jeu", "le": "la Salle de jeu", "icone": "🎰"},
+    {"id": "arriere_salle", "nom": "Arrière-salle", "le": "l'Arrière-salle", "icone": "🃏"},
+    {"id": "bureau_patron", "nom": "Bureau du patron", "le": "le Bureau du patron", "icone": "💼"},
+    {"id": "cave_alcool", "nom": "Cave à alcool", "le": "la Cave à alcool", "icone": "🛢️"},
+    {"id": "cuisine", "nom": "Cuisine", "le": "la Cuisine", "icone": "🍳"},
+    {"id": "scene", "nom": "Scène", "le": "la Scène", "icone": "🎷"},
+    {"id": "vestiaire", "nom": "Vestiaire", "le": "le Vestiaire", "icone": "🧥"},
+    {"id": "ruelle", "nom": "Ruelle", "le": "la Ruelle", "icone": "🌧️"}
+  ],
+  "plan": {
+    "decor": "velvet",
+    "vue": "0 0 390 400",
+    "zones": {
+      "scene": [130, 20, 150, 100],
+      "ruelle": [280, 0, 110, 120],
+      "arriere_salle": [0, 110, 130, 110],
+      "salle_de_jeu": [240, 120, 140, 150],
+      "bureau_patron": [0, 220, 130, 100],
+      "cuisine": [240, 270, 120, 110],
+      "vestiaire": [130, 310, 110, 70],
+      "cave_alcool": [0, 320, 130, 80]
+    },
+    "couloirs": {
+      "comptoir": [130, 120, 110, 190]
+    },
+    "portes": [
+      ["comptoir", "scene"],
+      ["comptoir", "salle_de_jeu"],
+      ["comptoir", "arriere_salle"],
+      ["comptoir", "bureau_patron"],
+      ["comptoir", "vestiaire"],
+      ["salle_de_jeu", "cuisine"],
+      ["cuisine", "vestiaire"],
+      ["bureau_patron", "cave_alcool"],
+      ["salle_de_jeu", "ruelle"],
+      ["scene", "ruelle"],
+      ["scene", "salle_de_jeu"]
+    ],
+    "entree": "vestiaire",
+    "vitrees": [],
+    "murs": {
+      "scene": "#3a0d14",
+      "ruelle": "#3a2a24",
+      "arriere_salle": "#1f2a22",
+      "salle_de_jeu": "#4a1218",
+      "bureau_patron": "#2a1c14",
+      "cuisine": "#cfc6b4",
+      "vestiaire": "#3d2a1a",
+      "cave_alcool": "#3a3028",
+      "comptoir": "#2a1410"
+    },
+    "niveaux": {
+      "cave_alcool": -0.16,
+      "scene": 0.07,
+      "ruelle": -0.06
+    },
+    "cheminees": [[60, 110]]
+  },
+  "armes": [
+    {"id": "revolver", "nom": "Revolver", "le": "le Revolver", "icone": "🔫"},
+    {"id": "bouteille", "nom": "Bouteille cassée", "le": "la Bouteille cassée", "icone": "🍾"},
+    {"id": "garrot", "nom": "Garrot", "le": "le Garrot", "icone": "🪢"},
+    {"id": "batte", "nom": "Batte de baseball", "le": "la Batte de baseball", "icone": "🏏"},
+    {"id": "verre", "nom": "Verre empoisonné", "le": "le Verre empoisonné", "icone": "🍷"},
+    {"id": "couteau", "nom": "Couteau à huîtres", "le": "le Couteau à huîtres", "icone": "🦪"},
+    {"id": "pic", "nom": "Pic à glace", "le": "le Pic à glace", "icone": "🧊"},
+    {"id": "telephone", "nom": "Câble de téléphone", "le": "le Câble de téléphone", "icone": "☎️"}
+  ],
+  "portraits": [
+    {"id": "chanteuse", "archetype": "la chanteuse", "icone": "🎤", "couleur": "#a0233a"},
+    {"id": "croupier", "archetype": "le croupier", "icone": "🎲", "couleur": "#1f5a3a"},
+    {"id": "inspecteur", "archetype": "l'inspecteur véreux", "icone": "🕵️", "couleur": "#4a4a5a"},
+    {"id": "danseuse", "archetype": "la danseuse", "icone": "💃", "couleur": "#c2457a"},
+    {"id": "comptable", "archetype": "le comptable", "icone": "🧮", "couleur": "#5a4a2a"},
+    {"id": "boxeur", "archetype": "le boxeur", "icone": "🥊", "couleur": "#8a2a1a"},
+    {"id": "journaliste", "archetype": "la journaliste", "icone": "📰", "couleur": "#3a5a7a"},
+    {"id": "pianiste", "archetype": "le pianiste", "icone": "🎹", "couleur": "#2a2a2a"},
+    {"id": "heritiere", "archetype": "l'héritière", "icone": "💎", "couleur": "#3b6e6a"},
+    {"id": "contrebandier", "archetype": "le contrebandier", "icone": "🚚", "couleur": "#6e5a3a"},
+    {"id": "cigarettiere", "archetype": "la vendeuse de cigarettes", "icone": "🚬", "couleur": "#9a6a2a"},
+    {"id": "chauffeur", "archetype": "le chauffeur", "icone": "🚗", "couleur": "#2a3a4a"}
+  ],
+  "textes": {
+    "ouverture": [
+      "Approchez, approchez. Moi c'est Eddie, je tiens le comptoir du Velvet depuis la Prohibition.",
+      "Cette nuit, pendant que l'orchestre jouait, Sal Moretti, dit le Corbeau, a cassé sa pipe.",
+      "Les flics bouclent le quartier. Personne n'entre, personne ne sort, même pas par la ruelle.",
+      "Le tueur est donc dans la salle, verre à la main, à sourire comme vous.",
+      "Moi, je ne raconte pas de salades : ce que je sers, c'est du vrai. Les on-dit, par contre, ça se discute."
+    ],
+    "fin": "Eddie pose son torchon. « C'est {tueur} qui a refroidi le Corbeau, dans {lieu}, avec {arme}. » {verdict}",
+    "verdict_enqueteurs": "{detective} a flairé le coup avant la fermeture. Tournée générale, c'est la maison qui offre.",
+    "verdict_tueur": "Le rideau de fer tombe sans que {tueur} soit pincé. Il disparaît dans la brume avec son chapeau.",
+    "indices": {
+      "suspect": [
+        "Eddie te le jure : {nom} n'a pas lâché le comptoir de la soirée.",
+        "J'ai servi {nom} toute la nuit, il n'a pas pu faire le coup.",
+        "Eddie se porte garant de {nom} : il l'avait à l'œil à chaque instant."
+      ],
+      "arme": [
+        "Eddie a vérifié : {arme} n'a pas bougé de sa planque.",
+        "Crois-moi, {arme} n'a servi à personne cette nuit.",
+        "Eddie a retrouvé {arme} intact, encore couvert de poussière."
+      ],
+      "lieu": [
+        "Eddie certifie que personne n'a mis les pieds dans {lieu} de la nuit.",
+        "J'avais bouclé {lieu} à double tour avant l'ouverture : personne n'y est entré.",
+        "Eddie a jeté un œil dans {lieu} : pas une trace, pas un bruit."
+      ]
+    },
+    "rumeurs": {
+      "suspect": [
+        "Paraît que {nom} devait une fortune au Corbeau.",
+        "On dit que {nom} a changé de chapeau en pleine soirée.",
+        "Quelqu'un a vu {nom} filer vers la ruelle après minuit."
+      ],
+      "arme": [
+        "On raconte que {arme} a disparu derrière le comptoir.",
+        "Une danseuse jure avoir vu quelqu'un manier {arme}.",
+        "Paraît que {arme} a été essuyé vite fait."
+      ],
+      "lieu": [
+        "On aurait entendu un coup de feu étouffé du côté de {lieu}.",
+        "Paraît que la lumière est restée allumée dans {lieu} bien après la fermeture.",
+        "On dit que la porte de {lieu} a claqué en pleine nuit."
+      ]
+    },
+    "annonces": {
+      "indice": "Eddie glisse un petit papier sous un verre.",
+      "accusation_ratee": "Une accusation a fait chou blanc. Eddie essuie un verre sans rien dire.",
+      "interference": "Eddie a repéré qu'un message a été trafiqué.",
+      "dossier_epuise": "Eddie n'a plus rien dans sa manche : il a tout balancé.",
+      "fin": "L'affaire est bouclée."
+    },
+    "evenements": {
+      "coupure": {
+        "nom": "La police coupe le courant",
+        "debut": "Les flics ont coupé le jus ! Bougies sur les tables, on ne lit plus rien.",
+        "fin": "Le courant revient. L'orchestre reprend."
+      },
+      "decouverte": {
+        "nom": "Un barman parle",
+        "debut": "Eddie se penche par-dessus le comptoir : il a quelque chose pour tout le monde.",
+        "fin": ""
+      },
+      "alerte": {
+        "nom": "Descente de police imminente",
+        "debut": "Les sirènes approchent ! Il faut un coupable avant que les flics débarquent.",
+        "fin": "Fausse alerte, les sirènes s'éloignent."
+      },
+      "brouhaha": {
+        "nom": "Tohu-bohu du bar",
+        "debut": "Le jazz monte, tout le monde parle en même temps : les on-dit volent.",
+        "fin": "L'orchestre fait une pause. Ça se calme."
+      },
+      "interrogatoire": {
+        "nom": "Le patron convoque",
+        "debut": "Le bras droit du Corbeau convoque deux clients dans l'arrière-salle.",
+        "fin": "Les deux clients reviennent, un peu pâles."
+      },
+      "maree": {
+        "nom": "Tournée générale",
+        "debut": "Tournée générale ! Chaque victoire rapporte double.",
+        "fin": "Fin de la tournée, retour aux tarifs normaux."
+      }
+    }
+  }
+}

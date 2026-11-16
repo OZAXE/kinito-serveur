@@ -1,0 +1,194 @@
+{
+  "id": "station",
+  "nom": "Station Aurora-7",
+  "epoque": "an 2187",
+  "ambiance": "Néons froids, alarmes, hublots.",
+  "palette": {
+    "fond": "#060c18",
+    "surface": "#0d1a2e",
+    "accent": "#4fd6ff",
+    "texte": "#e2f1ff",
+    "alerte": "#ff4d5e"
+  },
+  "police": "Exo 2",
+  "victime": "la commandante Ilse Varga",
+  "narrateur": {
+    "nom": "NOVA",
+    "role": "l'intelligence de bord",
+    "icone": "🤖"
+  },
+  "vocabulaire": {
+    "tueur": "le Saboteur",
+    "detective": "l'Investigateur en chef",
+    "enqueteurs": "l'équipage",
+    "enqueteur": "membre d'équipage",
+    "rumeurs": "transmissions non vérifiées"
+  },
+  "lieux": [
+    {"id": "sas", "nom": "Sas d'amarrage", "le": "le Sas d'amarrage", "icone": "🚪"},
+    {"id": "hydroponie", "nom": "Serre hydroponique", "le": "la Serre hydroponique", "icone": "🌱"},
+    {"id": "reacteur", "nom": "Salle du réacteur", "le": "la Salle du réacteur", "icone": "☢️"},
+    {"id": "infirmerie", "nom": "Infirmerie", "le": "l'Infirmerie", "icone": "🏥"},
+    {"id": "passerelle", "nom": "Passerelle", "le": "la Passerelle", "icone": "🛰️"},
+    {"id": "laboratoire", "nom": "Laboratoire", "le": "le Laboratoire", "icone": "🔬"},
+    {"id": "cantine", "nom": "Cantine", "le": "la Cantine", "icone": "🍜"},
+    {"id": "soute", "nom": "Soute", "le": "la Soute", "icone": "📦"}
+  ],
+  "plan": {
+    "decor": "station",
+    "vue": "0 0 400 380",
+    "zones": {
+      "sas": [0, 60, 90, 100],
+      "hydroponie": [90, 30, 110, 130],
+      "passerelle": [200, 20, 110, 140],
+      "laboratoire": [310, 50, 90, 110],
+      "infirmerie": [0, 230, 100, 110],
+      "cantine": [100, 230, 110, 130],
+      "reacteur": [210, 230, 110, 140],
+      "soute": [320, 230, 80, 120]
+    },
+    "couloirs": {
+      "coursive": [0, 160, 400, 70]
+    },
+    "portes": [
+      ["coursive", "sas"],
+      ["coursive", "hydroponie"],
+      ["coursive", "passerelle"],
+      ["coursive", "laboratoire"],
+      ["coursive", "infirmerie"],
+      ["coursive", "cantine"],
+      ["coursive", "reacteur"],
+      ["coursive", "soute"],
+      ["sas", "hydroponie"],
+      ["passerelle", "laboratoire"],
+      ["infirmerie", "cantine"],
+      ["reacteur", "soute"]
+    ],
+    "entree": "sas",
+    "vitrees": ["hydroponie", "passerelle"],
+    "murs": {
+      "sas": "#3a4250",
+      "hydroponie": "#2a3e34",
+      "passerelle": "#1e2a40",
+      "laboratoire": "#dfe6ee",
+      "infirmerie": "#e8eef2",
+      "cantine": "#c9cfd6",
+      "reacteur": "#2a2f38",
+      "soute": "#4a4e52",
+      "coursive": "#8a96a6"
+    },
+    "niveaux": {
+      "reacteur": -0.14,
+      "passerelle": 0.06
+    }
+  },
+  "armes": [
+    {"id": "cle", "nom": "Clé à molette", "le": "la Clé à molette", "icone": "🔧"},
+    {"id": "seringue", "nom": "Seringue", "le": "la Seringue", "icone": "💉"},
+    {"id": "cable", "nom": "Câble haute tension", "le": "le Câble haute tension", "icone": "⚡"},
+    {"id": "torche", "nom": "Torche de soudure", "le": "la Torche de soudure", "icone": "🔥"},
+    {"id": "vanne", "nom": "Vanne de dépressurisation", "le": "la Vanne de dépressurisation", "icone": "🌀"},
+    {"id": "drone", "nom": "Drone d'entretien", "le": "le Drone d'entretien", "icone": "🛸"},
+    {"id": "gaz", "nom": "Cartouche de gaz", "le": "la Cartouche de gaz", "icone": "🧯"},
+    {"id": "scalpel", "nom": "Scalpel", "le": "le Scalpel", "icone": "🔪"}
+  ],
+  "portraits": [
+    {"id": "medecin", "archetype": "la médecin", "icone": "🩺", "couleur": "#2f8f9d"},
+    {"id": "ingenieur", "archetype": "l'ingénieur", "icone": "🔩", "couleur": "#c27c2a"},
+    {"id": "pilote", "archetype": "la pilote", "icone": "🚀", "couleur": "#3a5fcd"},
+    {"id": "botaniste", "archetype": "la botaniste", "icone": "🌿", "couleur": "#3f8f4f"},
+    {"id": "chef", "archetype": "le chef d'équipe", "icone": "🎖️", "couleur": "#8a3a3a"},
+    {"id": "technicien", "archetype": "le technicien", "icone": "🛠️", "couleur": "#6a6f7a"},
+    {"id": "exobiologiste", "archetype": "l'exobiologiste", "icone": "🧬", "couleur": "#7a3fa0"},
+    {"id": "cuisinier", "archetype": "le cuisinier", "icone": "🍳", "couleur": "#b8a14a"},
+    {"id": "navigatrice", "archetype": "la navigatrice", "icone": "🧭", "couleur": "#2a7fbf"},
+    {"id": "geologue", "archetype": "le géologue", "icone": "🪨", "couleur": "#8a6a4a"},
+    {"id": "informaticienne", "archetype": "l'informaticienne", "icone": "💾", "couleur": "#1f9f8a"},
+    {"id": "android", "archetype": "l'androïde de service", "icone": "🦾", "couleur": "#9aa6b6"}
+  ],
+  "textes": {
+    "ouverture": [
+      "Bonjour. Je suis NOVA, l'intelligence de bord de la station Aurora-7.",
+      "À 02 h 14, temps station, le moniteur vital de la commandante Ilse Varga s'est arrêté.",
+      "Le module est en quarantaine. Aucun vaisseau n'a accosté, aucune capsule n'est partie.",
+      "Le saboteur est donc à bord. Il porte une combinaison réglementaire et partage votre ration.",
+      "Je ne mens jamais : c'est inscrit dans mon code. Les transmissions non vérifiées, elles, peuvent mentir."
+    ],
+    "fin": "NOVA affiche le rapport. « C'est {tueur} qui a tué la commandante Varga, dans {lieu}, avec {arme}. » {verdict}",
+    "verdict_enqueteurs": "{detective} a résolu l'affaire avant la fin du cycle. La station reprend son orbite.",
+    "verdict_tueur": "Le cycle s'achève sans que {tueur} soit démasqué. La navette de relève l'emmène avec les autres.",
+    "indices": {
+      "suspect": [
+        "NOVA confirme : le badge de {nom} n'a jamais approché la scène du crime.",
+        "Selon les capteurs biométriques, {nom} était ailleurs au moment des faits.",
+        "Les journaux de NOVA innocentent {nom} : sa position est enregistrée à chaque seconde."
+      ],
+      "arme": [
+        "NOVA a scanné {arme} : aucune trace d'usage cette nuit.",
+        "L'inventaire automatique est formel : {arme} n'a pas quitté son rangement.",
+        "Analyse terminée : {arme} est hors de cause."
+      ],
+      "lieu": [
+        "Les caméras de {lieu} n'ont enregistré personne de la nuit.",
+        "NOVA certifie que la porte de {lieu} est restée verrouillée toute la nuit.",
+        "Aucune activité détectée dans {lieu} pendant les faits."
+      ]
+    },
+    "rumeurs": {
+      "suspect": [
+        "Transmission non vérifiée : {nom} se serait disputé avec la commandante.",
+        "Un message brouillé affirme que {nom} a effacé ses journaux personnels.",
+        "On aurait vu {nom} près des conduits d'aération après l'extinction des feux."
+      ],
+      "arme": [
+        "Transmission non vérifiée : {arme} manquerait à l'inventaire depuis hier.",
+        "Un signal parasite mentionne {arme}, nettoyé à la hâte.",
+        "Quelqu'un aurait emprunté {arme} sans le signaler."
+      ],
+      "lieu": [
+        "Transmission non vérifiée : un bruit métallique dans {lieu} vers 2 h.",
+        "Un capteur aurait relevé une chute de pression dans {lieu}.",
+        "On raconte que la lumière de {lieu} a clignoté toute la nuit."
+      ]
+    },
+    "annonces": {
+      "indice": "NOVA transmet un rapport chiffré à l'un d'entre vous.",
+      "accusation_ratee": "Une accusation a échoué. NOVA enregistre l'incident.",
+      "interference": "NOVA détecte une interférence dans le réseau de bord.",
+      "dossier_epuise": "NOVA n'a plus aucune donnée à révéler : les archives sont épuisées.",
+      "fin": "Enquête close. Fin de transmission."
+    },
+    "evenements": {
+      "coupure": {
+        "nom": "Panne du réacteur",
+        "debut": "Le réacteur décroche. Éclairage de secours : les terminaux sont hors service.",
+        "fin": "Le réacteur redémarre. Les terminaux se rallument."
+      },
+      "decouverte": {
+        "nom": "Analyse des journaux de bord",
+        "debut": "NOVA a terminé l'analyse d'un journal de bord.",
+        "fin": ""
+      },
+      "alerte": {
+        "nom": "Alerte de décompression",
+        "debut": "Alerte : une brèche menace la coque. Le commandement exige un coupable.",
+        "fin": "La brèche est colmatée. Fin de l'alerte."
+      },
+      "brouhaha": {
+        "nom": "Interférences radio",
+        "debut": "Une tempête solaire brouille les communications : les transmissions fusent.",
+        "fin": "La tempête s'éloigne. Le réseau se stabilise."
+      },
+      "interrogatoire": {
+        "nom": "Briefing de sécurité",
+        "debut": "NOVA convoque deux membres d'équipage en salle de briefing.",
+        "fin": "Briefing terminé."
+      },
+      "maree": {
+        "nom": "Pic d'énergie",
+        "debut": "Pic d'énergie : chaque victoire rapporte double.",
+        "fin": "L'énergie redescend à son niveau nominal."
+      }
+    }
+  }
+}

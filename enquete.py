@@ -87,6 +87,29 @@ def valider_pack(pack, joueurs_max):
         ids = [e["id"] for e in pack[cle]]
         if len(set(ids)) != len(ids):
             raise ValueError(f"pack {pack['id']} : identifiants de {cle} en double")
+    # Textes : tout ce que le moteur va chercher en pleine partie, et des
+    # modeles qui se remplissent sans erreur.
+    t = pack["textes"]
+    essai = {"nom": "Lea", "lieu": "le Salon", "arme": "le Vase", "tueur": "Lea", "detective": "Max", "verdict": "."}
+    try:
+        for genre in ("indices", "rumeurs"):
+            for cat in ("suspect", "lieu", "arme"):
+                if len(t[genre][cat]) < 3:
+                    raise ValueError(f"pack {pack['id']} : 3 variantes de {genre}/{cat} attendues")
+                for modele in t[genre][cat]:
+                    modele.format(**essai)
+        for cle in ("indice", "accusation_ratee", "interference", "dossier_epuise", "fin"):
+            t["annonces"][cle]
+        for cle in ("coupure", "decouverte", "alerte", "brouhaha", "interrogatoire", "maree"):
+            for champ in ("nom", "debut", "fin"):
+                t["evenements"][cle][champ]
+        t["fin"].format(**essai)
+        t["verdict_enqueteurs"].format(**essai)
+        t["verdict_tueur"].format(**essai)
+        if not t["ouverture"]:
+            raise ValueError(f"pack {pack['id']} : scène d'ouverture vide")
+    except KeyError as e:
+        raise ValueError(f"pack {pack['id']} : texte manquant ou variable inconnue ({e})")
     return pack
 
 
@@ -153,7 +176,7 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "phase": "lobby",           # lobby | ouverture | enquete | fin | annulee
         "version": 0,
         "cree_a": maintenant,
-        "univers": next(iter(PACKS)),
+        "univers": config.get("univers_defaut") if config.get("univers_defaut") in PACKS else next(iter(PACKS)),
         "vitesse": vitesse,
         "jeux": list(v["jeux"]),
         "duree": v["duree"],
@@ -506,6 +529,15 @@ def vue_privee(etat, nom, maintenant=0.0):
     return v
 
 
+def contracter(texte):
+    """Contractions francaises apres insertion d un nom : « de le Fumoir » -> « du Fumoir »."""
+    import re
+    for avant, apres in ((r"\bde le ", "du "), (r"\bà le ", "au "), (r"\bde les ", "des "), (r"\bà les ", "aux "),
+                         (r"\bDe le ", "Du "), (r"\bÀ le ", "Au ")):
+        texte = re.sub(avant, apres, texte)
+    return texte
+
+
 def _nom_element(pack, cle, ident):
     for e in pack[cle]:
         if e["id"] == ident:
@@ -521,8 +553,8 @@ def recit_de_fin(etat):
         verdict = t["verdict_enqueteurs"].format(detective=etat["detective"], tueur=s["tueur"])
     else:
         verdict = t["verdict_tueur"].format(tueur=s["tueur"])
-    return t["fin"].format(tueur=s["tueur"], lieu=_nom_element(pack, "lieux", s["lieu"]),
-                           arme=_nom_element(pack, "armes", s["arme"]), verdict=verdict)
+    return contracter(t["fin"].format(tueur=s["tueur"], lieu=_nom_element(pack, "lieux", s["lieu"]),
+                                      arme=_nom_element(pack, "armes", s["arme"]), verdict=verdict))
 
 
 # =============================================================
@@ -602,8 +634,8 @@ def texte_indice(etat, indice, rng):
     if indice["categorie"] == "suspect":
         return modele.format(nom=e)
     if indice["categorie"] == "lieu":
-        return modele.format(lieu=_nom_element(pack, "lieux", e))
-    return modele.format(arme=_nom_element(pack, "armes", e))
+        return contracter(modele.format(lieu=_nom_element(pack, "lieux", e)))
+    return contracter(modele.format(arme=_nom_element(pack, "armes", e)))
 
 
 def _tirer(etat, nom):
@@ -1314,8 +1346,8 @@ def _texte_rumeur(etat, categorie, element, rng):
     if categorie == "suspect":
         return modele.format(nom=element)
     if categorie == "lieu":
-        return modele.format(lieu=_nom_element(pack, "lieux", element))
-    return modele.format(arme=_nom_element(pack, "armes", element))
+        return contracter(modele.format(lieu=_nom_element(pack, "lieux", element)))
+    return contracter(modele.format(arme=_nom_element(pack, "armes", element)))
 
 
 def _ajouter_rumeur(etat, maintenant, texte, lieu):
