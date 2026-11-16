@@ -18,7 +18,7 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
 (async () => {
   const code = (await (await fetch(API + '/creer-salon')).json()).code;
   const nav = await chromium.launch();
-  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: CAPTURES ? 2 : 1 });
+  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: CAPTURES ? 2 : 1, hasTouch: true });
   await ctx.addInitScript(([c]) => {
     localStorage.setItem('shield.nom', JSON.stringify('Lea'));
     localStorage.setItem('shield.soiree', JSON.stringify({ code: c, table: c, serveur: 'local', vu: Date.now() }));
@@ -50,6 +50,21 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
   await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="fil"]').click());
   verifier(!!await attendreQue(() => p.evaluate(() => /pli/.test(document.querySelector('.fil').innerText)), 10000), '  Léa le voit dans le fil du narrateur');
   verifier(await p.evaluate(() => document.getElementById('dossier').children.length === 0), 'aucune trace de console dans la page tant que le dossier est fermé');
+  // Appui long AU DOIGT sur « Rôle » pendant que les joueurs fictifs jouent (l'écran change sous le doigt)
+  const b = await (await p.$('.bouton-role')).boundingBox();
+  const cdp = await ctx.newCDPSession(p);
+  const point = [{ x: b.x + b.width / 2, y: b.y + b.height / 2 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point });
+  const ouvert = await attendreQue(() => p.evaluate(() => document.getElementById('role-voile').classList.contains('ouvert')), 5000);
+  await p.evaluate(() => { const v = document.querySelector('.bouton-role'); v.replaceWith(v.cloneNode(true)); });   // le bandeau est redessiné
+  await fetch(API + '/test/bots/' + code + '/2');
+  await attendre(1500);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const ferme = await attendreQue(() => p.evaluate(() => !document.getElementById('role-voile').classList.contains('ouvert')), 5000);
+  verifier(ouvert && ferme, 'le rôle se recache au doigt levé, même si les joueurs fictifs ont joué pendant l’appui');
+  await p.evaluate(() => { document.getElementById('role-voile').classList.add('ouvert'); });
+  await p.mouse.click(200, 400);
+  verifier(!!await attendreQue(() => p.evaluate(() => !document.getElementById('role-voile').classList.contains('ouvert')), 5000), '  et toucher l’écran de rôle le referme dans tous les cas');
   verifier(erreurs.length === 0, 'aucune erreur JavaScript' + (erreurs.length ? ' : ' + erreurs.join(' | ') : ''));
   await nav.close();
   console.log(echecs ? echecs + ' ECHEC(S)' : 'OK');
