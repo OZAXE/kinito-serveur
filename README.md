@@ -62,6 +62,9 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
 - Gorgées : vitesse x dosage (doux 0,5, normal 1, corsé 1,5), unité libre (mode sans alcool). Plafond
   par heure et par joueur (6, 12, 20 ou sans) : au-delà, chaque gorgée non bue devient 1 min de handicap
   (archive et accusations bloquées). Récap de fin : gorgées bues et converties par joueur.
+- Pénalités visibles par tous (`gorgees_publiques`, activé par défaut) : chaque gorgée imposée apparaît
+  dans l'état public (`penalites`) jusqu'à ce que le joueur confirme (`enq_bu`). Contrepartie : on sait
+  qui a raté une accusation (jamais son contenu). Un sabotage ne fait jamais boire le tueur.
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
   mêmes clés pour tous (`tests/enquete_essai.py`).
 
