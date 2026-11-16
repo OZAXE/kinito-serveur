@@ -153,21 +153,21 @@ async def essai_changement_de_jeu():
     await envoyer(code, a, {"type": "lancer"})
     verifier(salon["etat"] is etat and salon["jeu"] == "casino", "une action Kinito pendant le Casino est ignoree")
 
-    # Trop de monde pour BeerBattle : la partie en cours n est pas detruite.
-    for n in ("Ana", "Bob", "Cyd"):
+    # Trop de monde pour BeerBattle (8 au plus) : la partie en cours n est pas detruite.
+    for n in ("Ana", "Bob", "Cyd", "Dan", "Eve", "Fox"):
         await entrer(code, n)
     wa.recus.clear()
     await envoyer(code, a, {"type": "bb_demarrer"})
-    verifier(salon["jeu"] == "casino" and salon["etat"] is etat, "BeerBattle a 6 refuse sans casser le Casino")
+    verifier(salon["jeu"] == "casino" and salon["etat"] is etat, "BeerBattle a 9 refuse sans casser le Casino")
     verifier("erreur" in wa.types(), "  avec un message d erreur")
 
     # Un absent ne recoit pas de place dans le jeu suivant.
     _, wz = joueurs[2]
     await partir(code, joueurs[2][0])
     await envoyer(code, a, {"type": "mt_demarrer"})
-    verifier(salon["jeu"] == "menteur" and salon["etat"]["nb_joueurs"] == 5,
-             "Menteur repart des 5 presents (l absente est retiree)")
-    verifier([j["index"] for j in salon["joueurs"]] == list(range(5)), "  index renumerotes")
+    verifier(salon["jeu"] == "menteur" and salon["etat"]["nb_joueurs"] == 8,
+             "Menteur repart des 8 presents (l absente est retiree)")
+    verifier([j["index"] for j in salon["joueurs"]] == list(range(8)), "  index renumerotes")
 
     wa.recus.clear()
     await envoyer(code, a, {"type": "retour_salon"})

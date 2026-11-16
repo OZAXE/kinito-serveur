@@ -1219,8 +1219,24 @@ async def kinito_nouvelle_manche(code_salon, joueur):
 # =============================================================
 # CONSTANTES DE BEERBATTLE
 # =============================================================
-BB_TAILLE = 6           # plateau 6x6
+BB_TAILLE = 6           # plateau 6x6 jusqu a 5 joueurs...
+BB_TAILLE_GRANDE = 8    # ... 8x8 avec deux paquets de 6 a 8 joueurs
+BB_JOUEURS_MAX = 8
 BB_VERRE_MAX = 20       # gorgees pour etre elimine
+
+
+def bb_format(nb_joueurs):
+    """
+    (taille du plateau, nombre de paquets) selon la table. Un paquet de 54
+    cartes couvre un plateau 6x6 (36) et 5 mains ; au-dela on passe a un
+    plateau 8x8 (64) et deux paquets (108 cartes pour 64 + 8 mains de 4).
+    Les regles ne changent pas, seule la taille grandit.
+    """
+    return (BB_TAILLE, 1) if nb_joueurs <= 5 else (BB_TAILLE_GRANDE, 2)
+
+
+def bb_taille(etat):
+    return len(etat["plateau"])
  
  
 def bb_creer_paquet():
@@ -1247,7 +1263,10 @@ def bb_creer_paquet():
  
 def bb_initialiser(nb_joueurs):
     """Cree l etat initial d une partie BeerBattle."""
-    paquet = bb_creer_paquet()
+    taille, nb_paquets = bb_format(nb_joueurs)
+    paquet = []
+    for _ in range(nb_paquets):
+        paquet += bb_creer_paquet()
     random.shuffle(paquet)
  
     max_cartes = 3 if nb_joueurs == 5 else 4
@@ -1261,11 +1280,11 @@ def bb_initialiser(nb_joueurs):
             main.append(paquet[index]); index += 1
         mains.append(main)
  
-    # Remplissage du plateau 6x6
+    # Remplissage du plateau (6x6 ou 8x8)
     plateau = []
-    for ligne in range(BB_TAILLE):
+    for ligne in range(taille):
         rangee = []
-        for colonne in range(BB_TAILLE):
+        for colonne in range(taille):
             rangee.append(paquet[index]); index += 1
         plateau.append(rangee)
  
@@ -1365,6 +1384,7 @@ def bb_etat_public(salon):
         "joueur_en_placement": etat["joueur_en_placement"],
         "action_faite": etat["action_faite"],
         "max_cartes": etat["max_cartes"],
+        "taille": bb_taille(etat),
         "verre_max": BB_VERRE_MAX,
         "partis": [i in bb_absents(salon) for i in range(etat["nb_joueurs"])],
         "message": etat.get("message", ""),
@@ -1403,12 +1423,12 @@ async def bb_demarrer(code_salon, salons, diffuser):
     if nb < 3:
         await diffuser(code_salon, {"type": "erreur", "message": "BeerBattle nécessite au moins 3 joueurs."})
         return
-    # 54 cartes : 36 au sol plus les mains. A six, la distribution deborde du
-    # paquet et bb_initialiser leve une IndexError. On refuse proprement.
-    if nb > 5:
+    # Au-dela de 8, meme deux paquets sur un plateau 8x8 ne suffisent plus
+    # (bb_format) : on refuse proprement.
+    if nb > BB_JOUEURS_MAX:
         await diffuser(code_salon, {
             "type": "erreur",
-            "message": f"BeerBattle se joue à 5 au maximum ({nb} connectés) : il n'y a pas assez de cartes au-delà.",
+            "message": f"BeerBattle se joue à {BB_JOUEURS_MAX} au maximum ({nb} connectés).",
         })
         return
     salon["etat"] = bb_initialiser(nb)
@@ -1461,7 +1481,7 @@ async def bb_placer(code_salon, salons, diffuser, joueur, ligne, colonne):
     if bb_case_occupee(etat, ligne, colonne):
         return
  
-    if not bb_case_valide(ligne, colonne):
+    if not bb_case_valide(ligne, colonne, bb_taille(etat)):
         return
  
     etat["positions"][joueur["index"]] = {"ligne": ligne, "colonne": colonne}
@@ -1476,7 +1496,7 @@ async def bb_deplacer(code_salon, salons, diffuser, joueur, ligne, colonne, via_
     etat = salon["etat"]
     if etat["phase"] != "jeu" or joueur["index"] != etat["joueur_courant"]:
         return
-    if etat["action_faite"] or not bb_case_valide(ligne, colonne):
+    if etat["action_faite"] or not bb_case_valide(ligne, colonne, bb_taille(etat)):
         return
  
     etat["positions"][joueur["index"]] = {"ligne": ligne, "colonne": colonne}
@@ -1500,7 +1520,7 @@ async def bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, ligne, co
     idx = joueur["index"]
     if etat["phase"] != "jeu" or idx != etat["joueur_courant"] or etat["action_faite"]:
         return
-    if not bb_case_valide(ligne, colonne):
+    if not bb_case_valide(ligne, colonne, bb_taille(etat)):
         return
     if not isinstance(cible, int) or not 0 <= cible < etat["nb_joueurs"]:
         return
@@ -1710,9 +1730,9 @@ def bb_absents(salon):
     return {j["index"] for j in salon["joueurs"] if j.get("parti")}
 
 
-def bb_case_valide(ligne, colonne):
+def bb_case_valide(ligne, colonne, taille=BB_TAILLE):
     return (isinstance(ligne, int) and isinstance(colonne, int)
-            and 0 <= ligne < BB_TAILLE and 0 <= colonne < BB_TAILLE)
+            and 0 <= ligne < taille and 0 <= colonne < taille)
 
 
 def bb_avancer_placement(salon):
@@ -1724,7 +1744,8 @@ def bb_avancer_placement(salon):
     absents = bb_absents(salon)
     while etat["joueur_en_placement"] < etat["nb_joueurs"] and etat["joueur_en_placement"] in absents:
         i = etat["joueur_en_placement"]
-        libres = [(l, c) for l in range(BB_TAILLE) for c in range(BB_TAILLE)
+        t = bb_taille(etat)
+        libres = [(l, c) for l in range(t) for c in range(t)
                   if not bb_case_occupee(etat, l, c)]
         l, c = random.choice(libres)
         etat["positions"][i] = {"ligne": l, "colonne": c}
@@ -2646,7 +2667,7 @@ JEUX = {
         lambda code, m: bb_demarrer(code, salons, diffuser), _bb_traiter, _beerbattle_instantane,
         joueur_parti=bb_joueur_parti,
         peut_relancer=lambda etat: etat.get("phase") == "fini",
-        min_joueurs=3, max_joueurs=5),
+        min_joueurs=3, max_joueurs=BB_JOUEURS_MAX),
     "buckshot": Jeu(
         "buckshot", "Buckshot", "buckshot-3d-jeu.html", "bt_demarrer", _prefixe("bt_"),
         lambda code, m: bt_demarrer(code, salons, diffuser), _bt_traiter, _buckshot_instantane,

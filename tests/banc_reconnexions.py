@@ -297,7 +297,8 @@ class Robot:
                 return
             if msg["phase"] == "placement" and msg["joueur_en_placement"] == i:
                 prises = {(p["ligne"], p["colonne"]) for p in msg["positions"] if p}
-                libres = [(l, c) for l in range(6) for c in range(6) if (l, c) not in prises]
+                t = msg.get("taille", 6)
+                libres = [(l, c) for l in range(t) for c in range(t) if (l, c) not in prises]
                 l, c = self.banc.rng.choice(libres)
                 self.plus_tard({"type": "bb_placer", "ligne": l, "colonne": c})
             elif msg["phase"] == "jeu" and msg["joueur_courant"] == i:
