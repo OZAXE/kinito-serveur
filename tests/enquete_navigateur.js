@@ -74,6 +74,7 @@ async function sansDefilement(page) {
     const ctx = await nav.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: CAPTURES ? 2 : 1 });
     await ctx.addInitScript(([n, c]) => {
       localStorage.setItem('shield.nom', JSON.stringify(n));
+      localStorage.setItem('shield.regles_vues', '1');   // règles déjà vues (testées dans solo_navigateur.js)
       localStorage.setItem('shield.soiree', JSON.stringify({ code: c, table: c, serveur: 'local', vu: Date.now() }));
     }, [nom, code]);
     const p = await ctx.newPage();

@@ -30,6 +30,15 @@ const clic = (page, texte) => attendreQue(() => page.evaluate((t) => { const b =
   await p.goto(SITE + 'enquete.html');
   await clic(p, 'Ouvrir une enquête');
   await attendreQue(() => p.evaluate(() => document.querySelectorAll('.portrait').length === 12), 15000);
+  // Première fois : les règles s'ouvrent toutes seules, une seule fois
+  const auto = await attendreQue(() => p.evaluate(() => { const r = document.getElementById('regles'); return r.classList.contains('ouvert') && r.querySelector('.bienvenue') && r.querySelector('.bienvenue').textContent; }), 10000);
+  verifier(!!auto, 'première fois : les règles s’ouvrent d’elles-mêmes (« ' + (auto || '').slice(0, 40) + '… »)');
+  await p.evaluate(() => document.querySelector('[data-cest-parti]').click());
+  verifier(await p.evaluate(() => !document.getElementById('regles').classList.contains('ouvert')), '  « C’est parti » les referme');
+  await p.reload();
+  await attendreQue(() => p.evaluate(() => document.querySelectorAll('.portrait').length === 12), 15000);
+  await attendre(1500);
+  verifier(await p.evaluate(() => !document.getElementById('regles').classList.contains('ouvert')), '  et elles ne se rouvrent pas la fois suivante');
   await p.evaluate(() => document.querySelector('.portrait').click());
   await p.evaluate(() => document.querySelector('nav.onglets button[data-onglet="reglages"]').click());
   await clic(p, 'Démo');
