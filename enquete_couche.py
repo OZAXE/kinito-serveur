@@ -50,13 +50,13 @@ class Enquete(Couche):
                 await ctx.envoyer_nom(e["a"], e["msg"])
         await ctx.diffuser(moteur.vue_publique(self.etat, ctx.maintenant()))
         for nom in ctx.abonnes():
-            await ctx.envoyer_nom(nom, moteur.vue_privee(self.etat, nom))
+            await ctx.envoyer_nom(nom, moteur.vue_privee(self.etat, nom, ctx.maintenant()))
         ctx.sauvegarder()
 
     async def _envoyer_tout(self, ctx, nom):
         await ctx.envoyer_nom(nom, moteur.pack_public(moteur.PACKS[self.etat["univers"]]))
         await ctx.envoyer_nom(nom, moteur.vue_publique(self.etat, ctx.maintenant()))
-        await ctx.envoyer_nom(nom, moteur.vue_privee(self.etat, nom))
+        await ctx.envoyer_nom(nom, moteur.vue_privee(self.etat, nom, ctx.maintenant()))
 
     async def action(self, ctx, nom, message):
         if message.get("type") in ("enq_creer", "enq_etat"):
@@ -77,15 +77,21 @@ class Enquete(Couche):
     async def echeance(self, ctx):
         version = self.etat["version"]
         evenements = moteur.expirer(self.etat, ctx.maintenant())
+        evenements += moteur.tic_paliers(self.etat, ctx.tables(), ctx.maintenant())
         if self.etat["version"] != version:
             await self._publier(ctx, evenements)
+        else:
+            ctx.sauvegarder()       # le compteur de temps des paliers a avance
 
     async def arrivee(self, ctx, nom):
         await self._envoyer_tout(ctx, nom)
 
     async def evenement_jeu(self, ctx, evenement):
-        # Tranche 2 : points d enquete gagnes aux jeux.
-        pass
+        """Une victoire, une fin de manche... a une table : points d enquete."""
+        version = self.etat["version"]
+        evenements = moteur.evenement_jeu(self.etat, evenement, ctx.maintenant())
+        if self.etat["version"] != version:
+            await self._publier(ctx, evenements)
 
 
 def _tous_pack(etat):
