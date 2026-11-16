@@ -32,9 +32,9 @@
     "refus_interrogatoire": 2,
     "accusation_ratee": [2, 4, 6],
     "victoire_distribuee": 6,
-    "plafond_par_heure": 12,
-    "_plafond": "Gorgees max par heure et par joueur ; au-dela, chaque gorgee non bue devient handicap_par_gorgee secondes d attente (archive et accusations). 0 : sans plafond.",
-    "plafonds": [6, 12, 20, 0],
+    "plafond_par_heure": 0,
+    "_plafond": "Gorgees max par heure et par joueur ; au-dela, chaque gorgee non bue devient handicap_par_gorgee secondes d attente (archive et accusations). 0 : sans plafond (par defaut).",
+    "plafonds": [0, 6, 12, 20],
     "handicap_par_gorgee": 60,
     "dosages": {"doux": 0.5, "normal": 1.0, "corse": 1.5}
   },
