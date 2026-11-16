@@ -76,7 +76,7 @@ class Enquete(Couche):
 
     async def echeance(self, ctx):
         version = self.etat["version"]
-        evenements = moteur.expirer(self.etat, ctx.maintenant())
+        evenements = moteur.expirer(self.etat, ctx.maintenant())   # fin d ouverture, heure butoir, Temoin anonyme
         evenements += moteur.tic_paliers(self.etat, ctx.tables(), ctx.maintenant())
         if self.etat["version"] != version:
             await self._publier(ctx, evenements)

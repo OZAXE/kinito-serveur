@@ -44,6 +44,10 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   `enquetes/*.json` : un pack par univers (ajouter un univers ne touche pas au moteur).
 - Connexion dédiée `/ws-soiree/{code}/{prénom}` : les couches parlent aux joueurs par ici, à côté de
   leur place à une table (la page de l'Enquête s'ouvre par-dessus un jeu sans lui voler sa connexion).
+- Témoin anonyme : toutes les `bonus_toutes` secondes (± `bonus_alea`), un indice offert à un joueur
+  tiré au sort, tueur compris, jamais deux fois de suite le même. Hors plafond horaire.
+- Contre-expertise (`enq_expertise`, paiement `pe` ou `gorgee`) : tampon permanent « authentique » ou
+  « falsifié » sur un indice lu de son archive ; compte comme une consultation (même chrono).
 - Non-fuite : l'état public n'a jamais la solution ni le tueur avant la fin ; la vue privée a les
   mêmes clés pour tous (`tests/enquete_essai.py`).
 

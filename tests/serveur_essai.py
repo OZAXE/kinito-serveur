@@ -92,6 +92,20 @@ async def crediter(code: str, nom: str, n: int):
     return {"ok": True}
 
 
+@serveur.app.get("/test/temoin/{code}")
+async def temoin(code: str):
+    """Reserve aux tests : declenche tout de suite un Temoin anonyme. Renvoie le joueur servi."""
+    soiree = serveur.soiree_de(code)
+    couche = serveur.couches.get(soiree, {}).get("enq")
+    if couche is None:
+        return {"nom": None}
+    async with serveur.verrou_soiree(soiree):
+        import time as _t
+        ev = enquete.temoin_anonyme(couche.etat, _t.time())
+        await couche._publier(serveur._contexte(soiree, couche), ev)
+    return {"nom": ev[0]["a"] if ev else None}
+
+
 @serveur.app.get("/test/solution/{code}")
 async def solution(code: str):
     """Reserve aux tests : la solution secrete de l enquete."""

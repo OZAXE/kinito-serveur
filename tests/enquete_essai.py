@@ -340,6 +340,102 @@ async def essai_couche():
     await serveur.arret()
 
 
+def essai_temoin_anonyme():
+    print("Témoin anonyme")
+    e, t = en_cours(6, 3)
+    v = m.CONFIG["vitesses"][e["vitesse"]]["bonus_toutes"]
+    alea = m.CONFIG["bonus_alea"]
+    b = e["prochain_bonus_a"]
+    verifier(t + v * (1 - alea) - 1e-6 <= b <= t + v * (1 + alea) + 1e-6, "premier bonus programmé après l'ouverture, à ± l'aléa près")
+    verifier(m.prochaine_echeance(e) <= b, "  le serveur se réveille à temps pour le bonus")
+    verifier("prochain_bonus_a" not in json.dumps(m.vue_publique(e, t)) and str(b) not in json.dumps(m.vue_publique(e, t)),
+             "  l'heure exacte du bonus reste secrète")
+    rng = random.Random(7)
+    servis = []
+    avant = sum(len(p["archive"]) for p in e["perso"].values())
+    ev = m.expirer(e, b, rng=rng)
+    servis.append(ev[0]["a"] if ev else None)
+    nom = servis[0]
+    p = m._perso(e, nom)
+    verifier(len(ev) == 1 and ev[0]["msg"]["source"] == "Témoin anonyme"
+             and sum(len(x["archive"]) for x in e["perso"].values()) == avant + 1,
+             "à l'heure dite, un seul joueur reçoit un pli « Témoin anonyme »")
+    verifier(p["obtenus"] == [], "  hors plafond horaire (ce n'est pas une demande)")
+    verifier(e["journal"][-1]["texte"] == m.PACKS[e["univers"]]["textes"]["annonces"]["indice"],
+             "  annonce publique identique à celle d'un indice gagné")
+    # Sur beaucoup de tirages : jamais deux fois de suite le même, tueur compris.
+    tirages = []
+    for g in range(60):
+        e, t = en_cours(6, g)
+        r = random.Random(g)
+        noms = []
+        for _ in range(3):
+            ev = m.expirer(e, e["prochain_bonus_a"], rng=r)
+            if ev:
+                noms.append(m.cle_nom(ev[0]["a"]))
+        tirages.append((noms, m.cle_nom(e["tueur"])))
+    verifier(all(a != b for noms, _ in tirages for a, b in zip(noms, noms[1:])), "  jamais deux fois de suite le même joueur")
+    verifier(any(k in noms for noms, k in tirages), "  le tueur peut être tiré (indice de couverture)")
+    # Stock vidé : les bonus s'arrêtent, dossier épuisé annoncé.
+    e, t = en_cours(4, 2)
+    r = random.Random(1)
+    for _ in range(40):
+        if e["prochain_bonus_a"] is None:
+            break
+        m.expirer(e, e["prochain_bonus_a"], rng=r)
+    verifier(e["prochain_bonus_a"] is None and e["dossier_epuise"] and not e["pool"],
+             "stock vide : plus de bonus, « dossier épuisé » annoncé")
+    verifier(all(x["vrai"] for p in e["perso"].values() for x in p["archive"]), "  tous les indices du témoin sont vrais")
+
+
+def essai_contre_expertise():
+    print("Contre-expertise")
+    e, t = en_cours(5, 4)
+    nom = "Max"
+    p = m._perso(e, nom)
+    p["pe"] = 10
+    m.action(e, nom, {"type": "enq_indice"}, t)
+    i = p["archive"][0]["id"]
+    ev = m.action(e, nom, {"type": "enq_expertise", "id": i, "paiement": "pe"}, t)
+    verifier(ev and ev[0]["msg"]["type"] == "enq_erreur", "pas d'expertise sur un pli pas encore ouvert")
+    m.action(e, nom, {"type": "enq_lire", "id": i}, t)
+    pe = p["pe"]
+    ev = m.action(e, nom, {"type": "enq_expertise", "id": i, "paiement": "pe"}, t + 1)
+    msg = ev[0]["msg"]
+    verifier(msg["type"] == "enq_texte" and msg["tampon"] == "authentique" and msg["expertise"] and len(ev) == 1,
+             "payée en PE : tampon « authentique » renvoyé avec le texte, sans gorgée")
+    verifier(p["pe"] == pe - m.CONFIG["vitesses"][e["vitesse"]]["pe_par_indice"], "  coûte le prix d'un indice en PE")
+    verifier(m.vue_privee(e, nom, t + 1)["archive"][0]["tampon"] == "authentique", "  tampon permanent dans l'archive")
+    verifier(p["derniere_consultation"] == t + 1, "  compte comme une consultation (relance le chrono)")
+    ev = m.action(e, nom, {"type": "enq_expertise", "id": i, "paiement": "gorgee"}, t + 10000)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "  pas deux tampons sur le même indice")
+    m.action(e, nom, {"type": "enq_acheter"}, t + 2)
+    j = p["archive"][1]["id"]
+    m.action(e, nom, {"type": "enq_lire", "id": j}, t + 2)
+    ev = m.action(e, nom, {"type": "enq_expertise", "id": j, "paiement": "gorgee"}, t + 3)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and "verrouill" in ev[0]["msg"]["message"], "  même chrono que la consultation")
+    timer = m.CONFIG["vitesses"][e["vitesse"]]["timer_consultation"]
+    ev = m.action(e, nom, {"type": "enq_expertise", "id": j, "paiement": "gorgee"}, t + 1 + timer)
+    verifier(len(ev) == 2 and ev[1]["msg"]["type"] == "enq_gorgee" and ev[1]["msg"]["raison"] == "Contre-expertise",
+             "achetée : une gorgée")
+    # Un faux (prépare la tranche 5) sort « falsifié ».
+    p["archive"][1]["vrai"] = False
+    p["archive"][1]["tampon"] = None
+    ev = m.action(e, nom, {"type": "enq_expertise", "id": j, "paiement": "gorgee"}, t + 1 + 3 * timer)
+    verifier(ev[0]["msg"]["tampon"] == "falsifie", "un faux indice sort « falsifié »")
+    verifier(not any("expertis" in x["texte"].lower() for x in e["journal"]), "  aucune annonce publique")
+    q = m._perso(e, "Zoe")
+    q["pe"] = 0
+    m.action(e, "Zoe", {"type": "enq_acheter"}, t)
+    m.action(e, "Zoe", {"type": "enq_lire", "id": q["archive"][0]["id"]}, t)
+    ev = m.action(e, "Zoe", {"type": "enq_expertise", "id": q["archive"][0]["id"], "paiement": "pe"}, t)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur" and q["archive"][0]["tampon"] is None, "sans assez de PE : refusée")
+    ev = m.action(e, "Zoe", {"type": "enq_expertise", "id": p["archive"][0]["id"], "paiement": "gorgee"}, t + 99999)
+    verifier(ev[0]["msg"]["type"] == "enq_erreur", "impossible d'expertiser l'archive d'un autre")
+    formes = {tuple(sorted(m.vue_privee(e, n, t)["archive"][0].keys())) for n in ("Max", "Zoe") }
+    verifier(len(formes) == 1, "  archives de même forme pour tous")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -347,6 +443,8 @@ essai_non_fuite()
 essai_stock_indices()
 essai_points_et_indices()
 essai_accusations()
+essai_temoin_anonyme()
+essai_contre_expertise()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)
