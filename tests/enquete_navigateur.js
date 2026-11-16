@@ -104,11 +104,24 @@ async function sansDefilement(page) {
   verifier(noms.every(n => !roles[n + '_apres']), '  le rôle se recache dès qu\'on lâche');
 
   const max = pages.Max;
-  verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('.chrono') && !!document.querySelector('svg.plan')), 30000),
-    'l\'enquête commence : bandeau (chrono) et plan du manoir');
+  verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('.chrono') && !!document.querySelector('.plan3d canvas')), 30000),
+    'l\'enquête commence : bandeau (chrono) et maison 3D');
+  await attendre(2500);
+  verifier(await sansDefilement(max), '  écran unique avec la 3D : la page ne défile pas');
+  if (CAPTURES) await max.screenshot({ path: CAPTURES + '/enquete-3d.png' });
+  // On fait tourner la maison d'un glissé : la scène suit.
+  const avant = await max.screenshot({ clip: await (await max.$('.plan3d')).boundingBox() });
+  const bb = await (await max.$('.plan3d')).boundingBox();
+  await max.mouse.move(bb.x + bb.width * 0.3, bb.y + bb.height * 0.5);
+  await max.mouse.down(); await max.mouse.move(bb.x + bb.width * 0.75, bb.y + bb.height * 0.45, { steps: 8 }); await max.mouse.up();
+  await attendre(800);
+  const apres = await max.screenshot({ clip: bb });
+  verifier(!avant.equals(apres), '  la maison tourne au doigt');
+  if (CAPTURES) await max.screenshot({ path: CAPTURES + '/enquete-3d-tournee.png' });
+  await appuyer(max, 'Vue 2D');
+  verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('svg.plan') && !document.querySelector('.plan3d')), 5000), '  bouton « Vue 2D » : le plan 2D remplace la 3D');
   const zones = await max.evaluate(() => [document.querySelectorAll('.plan .zone').length, document.querySelectorAll('.plan .zone.fermee').length]);
   verifier(zones[0] === 8 && zones[1] === 0, '  8 pièces sur le plan (vitesse Soirée : aucune fermée)');
-  verifier(await sansDefilement(max), '  écran unique : la page ne défile pas');
   if (CAPTURES) await max.screenshot({ path: CAPTURES + '/enquete-plan.png' });
 
   // Points, pli, archive
@@ -139,7 +152,9 @@ async function sansDefilement(page) {
     const b = [...document.querySelectorAll('.jetons button')].find(x => x.textContent.includes('Zoe'));
     return b && b.className === 'suspect' && document.querySelector('.plan .zone.elimine');
   }), 15000);
-  verifier(!!marque, 'carnet : Zoé suspecte et une pièce éliminée, toujours là après rechargement');
+  verifier(!!marque, 'carnet : Zoé suspecte et une pièce éliminée, toujours là après rechargement (vue 2D gardée)');
+  await appuyer(max, 'Vue 3D');
+  verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('.plan3d canvas')), 10000), '  bouton « Vue 3D » : retour à la maison 3D');
   verifier(ENVOIS_MAX.length > 0 && !ENVOIS_MAX.some(t => /suspect:|Zoe|carnet|notes/.test(t)),
     '  le carnet n\'est jamais envoyé au serveur (' + ENVOIS_MAX.length + ' messages, aucun ne le contient)');
 

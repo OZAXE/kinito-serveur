@@ -51,9 +51,14 @@ def valider_pack(pack, joueurs_max):
             raise ValueError(f"pack {pack['id']} : {NOMBRE_ELEMENTS_PACK} {cle} attendus")
     if len(pack["portraits"]) < joueurs_max:
         raise ValueError(f"pack {pack['id']} : au moins {joueurs_max} portraits attendus")
-    zones = pack.get("plan", {}).get("zones", {})
+    plan = pack.get("plan", {})
+    zones = plan.get("zones", {})
     if set(zones) != {l["id"] for l in pack["lieux"]}:
         raise ValueError(f"pack {pack['id']} : le plan doit avoir une zone par lieu")
+    connues = set(zones) | set(plan.get("couloirs", {}))
+    for a, b in plan.get("portes", []):
+        if a not in connues or b not in connues:
+            raise ValueError(f"pack {pack['id']} : porte vers une piece inconnue ({a}, {b})")
     for cle in ("lieux", "armes", "portraits"):
         ids = [e["id"] for e in pack[cle]]
         if len(set(ids)) != len(ids):
