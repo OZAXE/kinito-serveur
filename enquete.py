@@ -221,6 +221,7 @@ def nouvelle_partie(code, hote, maintenant, config=None):
         "prochaine_rumeur_a": None, # SECRET
         "detournement": None,       # SECRET : {cible, categorie, element}
         "faux_emis": [],            # SECRET : [[categorie, element]] (deux faux identiques interdits)
+        "prochain_tic_bots": None,  # joueurs fictifs et PE automatiques (vitesse Demo)
         # --- tranche 6 ---
         "programme": [],            # SECRET : [{t, type}] evenements a venir
         "evenement": None,          # public : {type, debut, fin, interroges}
@@ -379,6 +380,7 @@ def _lancer(etat, nom, message, maintenant, rng, config):
     etat["prochain_bonus_a"] = etat["ouverture_fin_a"] + _intervalle_bonus(etat, config, rng)
     etat["prochaine_rumeur_a"] = etat["ouverture_fin_a"] + _intervalle(etat, config, rng, "rumeurs_toutes")
     etat["programme"] = programmer_evenements(etat, config, rng)
+    etat["prochain_tic_bots"] = etat["ouverture_fin_a"]
     etat["version"] += 1
     return []
 
@@ -404,6 +406,8 @@ def prochaine_echeance(etat):
         candidats = [etat["fin_a"], tic, etat.get("prochain_bonus_a"), etat.get("prochaine_rumeur_a")]
         candidats += [d["t"] for d in etat.get("differes", [])]
         candidats += [x["t"] for x in etat.get("programme", [])[:1]]
+        if any(j.get("bot") for j in etat["joueurs"]) or CONFIG["vitesses"][etat["vitesse"]].get("pe_auto_heure"):
+            candidats.append(etat.get("prochain_tic_bots"))
         if etat.get("evenement"):
             candidats.append(etat["evenement"]["fin"])
         candidats += [e["visible_a"] for p in etat["perso"].values() for e in p["archive"] if e.get("retenu")]
@@ -458,7 +462,7 @@ def vue_publique(etat, maintenant):
                          "bonus_toutes": x["bonus_toutes"], "delai_accusation": x["delai_accusation"],
                          "echecs_par_joueur": x["echecs_par_joueur"], "mult_gorgees": x["mult_gorgees"],
                          "evenements": x["evenements"], "duree_evenement": x["duree_evenement"],
-                         "lieux_armes": x["lieux_armes"]}
+                         "lieux_armes": x["lieux_armes"], "pe_auto_heure": x.get("pe_auto_heure", 0)}
                      for k, x in CONFIG["vitesses"].items()},
         "dosage": etat.get("dosage", "normal"),
         "dosages": CONFIG["gorgees"]["dosages"],
@@ -1721,16 +1725,28 @@ def jouer_bot(etat, nom, maintenant, rng=random, config=None, partage=(), audace
 
 
 def tic_bots(etat, maintenant, rng=random, config=None):
-    """Appele chaque minute : les joueurs fictifs gagnent des PE comme s ils jouaient, puis jouent leur tour."""
+    """
+    A intervalle regulier (tic_bots secondes selon la vitesse, 60 par defaut) :
+    - vitesse Demo : tout le monde, vrais joueurs compris, gagne des PE
+      automatiquement (pe_auto_heure), pour tester seul sans jouer aux jeux ;
+    - les joueurs fictifs gagnent des PE comme s ils jouaient, puis jouent leur tour.
+    """
     config = config or CONFIG
     if etat["phase"] != "enquete":
         return []
+    prochain = etat.get("prochain_tic_bots")
+    if prochain is not None and maintenant < prochain:
+        return []
+    v = _vitesse(etat, config)
+    pas = v.get("tic_bots", 60)
+    etat["prochain_tic_bots"] = maintenant + pas
     ev = []
-    taux = config.get("bot_pe_heure", 4) / 60
-    for j in [x for x in etat["joueurs"] if x.get("bot")]:
-        if rng.random() < taux:
-            ev += crediter_pe(etat, j["nom"], 1, "menteur", "victoire", config)
-        if rng.random() < 0.5:
+    auto = v.get("pe_auto_heure", 0) * pas / 3600
+    taux_bot = max(auto, config.get("bot_pe_heure", 4) * pas / 3600)
+    for j in etat["joueurs"]:
+        if rng.random() < (taux_bot if j.get("bot") else auto):
+            ev += crediter_pe(etat, j["nom"], 1, "menteur", "entraînement" if not j.get("bot") else "victoire", config)
+        if j.get("bot") and rng.random() < 0.5:
             ev += jouer_bot(etat, j["nom"], maintenant, rng, config)
     return ev
 

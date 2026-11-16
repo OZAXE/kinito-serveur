@@ -901,6 +901,35 @@ def essai_joueurs_fictifs():
              "  les joueurs fictifs cochent leurs gorgées tout seuls")
 
 
+def essai_demo():
+    print("Vitesse Démo (tester seul)")
+    e = m.nouvelle_partie("ABCD", "Lea", 1000.0)
+    m.action(e, "Lea", {"type": "enq_config", "vitesse": "demo"}, 1000.0)
+    m.action(e, "Lea", {"type": "enq_portrait", "portrait": "comtesse"}, 1000.0)
+    for _ in range(3):
+        m.action(e, "Lea", {"type": "enq_bot_ajouter"}, 1000.0, rng=random.Random(1))
+    m.action(e, "Lea", {"type": "enq_lancer"}, 1000.0, rng=random.Random(2))
+    verifier(e["duree"] == 600 and len(e["programme"]) == 3, "10 minutes, 3 événements programmés")
+    t = 1000.0 + m.CONFIG["duree_ouverture"]
+    m.expirer(e, t)
+    r = random.Random(4)
+    reveils, pe_lea, evts = 0, 0, set()
+    while e["phase"] == "enquete" and reveils < 400:
+        t = m.prochaine_echeance(e)
+        m.expirer(e, t, rng=r)
+        m.tic_paliers(e, [], t)          # comme la couche a chaque reveil
+        avant = m._perso(e, "Lea")["pe"]
+        m.tic_bots(e, t, r)
+        pe_lea += max(0, m._perso(e, "Lea")["pe"] - avant)
+        if e.get("evenement"):
+            evts.add(e["evenement"]["type"])
+        reveils += 1
+    verifier(e["phase"] == "fin" and t <= e["fin_a"] + 1, f"la partie se termine en 10 minutes ({e['raison_fin']})")
+    verifier(pe_lea >= 3, f"  Léa gagne des PE toute seule ({pe_lea} en 10 min) : elle peut demander des indices")
+    verifier(len(evts) >= 2, f"  plusieurs événements vus ({', '.join(sorted(evts))})")
+    verifier(sum(len(m._perso(e, j['nom'])["archive"]) for j in e["joueurs"] if j.get("bot")) >= 3, "  les joueurs fictifs jouent toutes les 15 s")
+
+
 essai_salle_attente()
 essai_tirage()
 essai_temps()
@@ -917,6 +946,7 @@ essai_gorgees_et_plafonds()
 essai_penalites_publiques()
 essai_univers()
 essai_joueurs_fictifs()
+essai_demo()
 asyncio.run(essai_couche())
 print("OK" if not ECHECS else f"{len(ECHECS)} ECHEC(S)")
 sys.exit(1 if ECHECS else 0)
