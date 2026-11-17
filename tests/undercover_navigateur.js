@@ -47,7 +47,7 @@ async function attendreQue(test, delai, quoi) {
   const nouvelle = async (hd) => {
     const navigateur = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
     navigateurs.push(navigateur);
-    const ctx = await navigateur.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: hd ? 2 : 1 });
+    const ctx = await navigateur.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     // Sans carte graphique, cinq scènes 3D à 60 images/s s'étouffent : 10 suffisent au test.
     await ctx.addInitScript(() => { window.requestAnimationFrame = cb => setTimeout(() => cb(performance.now()), 100); });
     const p = await ctx.newPage();
@@ -109,8 +109,7 @@ async function attendreQue(test, delai, quoi) {
     verifier(vu.trim() === attendu, `${noms[k]} (${role}) voit « ${vu.trim()} »`);
     if (k === 0) await capture(p, '2-mot');
     // La lecture dure 30 s : sur une machine lente, elle a pu se finir d'elle-même.
-    const lu = p.locator('button', { hasText: /j.ai lu/ });
-    if (await lu.count() && await lu.isEnabled()) await lu.click();
+    await cliquer(p.locator('button', { hasText: /j.ai lu/ }));
   }
   await attendreQue(async () => (await etat(code)).phase === 'indices', 15000, 'phase indices');
 
@@ -163,7 +162,11 @@ async function attendreQue(test, delai, quoi) {
   verifier(tours >= 4, 'la parole a circulé (' + tours + ' indices)');
   verifier(vus.has('vote'), 'un vote a eu lieu');
   // Une page lente rejoue d'abord ses animations en file : on attend son bilan.
-  await A.waitForSelector('.bilan', { timeout: 180000 });
+  for (let w = 0; w < 60 && !(await A.locator('.bilan').count()); w++) {
+    if (process.env.BAVARD && w % 5 === 0) console.log('  A :', await A.evaluate(() => document.getElementById('message').innerText));
+    await attendre(3000);
+  }
+  await A.waitForSelector('.bilan', { timeout: 5000 });
   await attendre(3000);
   const bilan = await A.evaluate(() => document.getElementById('panneau').innerText);
   await capture(A, '5-fin');

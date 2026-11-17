@@ -895,7 +895,7 @@ def crediter_pe(etat, nom, n, jeu, raison, config=None):
     if (etat.get("evenement") or {}).get("type") == "maree":
         n *= 2                       # les victoires rapportent le double
     p["pe"] += n
-    titre = {"kinito": "Kinito", "buckshot": "Buckshot", "menteur": "Menteur", "beerbattle": "BeerBattle",
+    titre = {"kinito": "Kinito", "buckshot": "Buckshot", "menteur": "Cal 12", "beerbattle": "BeerBattle",
              "picolopoly": "Picopoly", "casino": "Casino", "undercover": "Undercover"}.get(jeu, jeu)
     p["derniere_source"] = f"Victoire ({titre})"
     etat["version"] += 1

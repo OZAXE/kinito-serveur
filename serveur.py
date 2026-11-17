@@ -2437,10 +2437,10 @@ async def mt_demarrer(code_salon, mode=None):
     salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
     nb = len(salon["joueurs"])
     if nb < MT_JOUEURS_MIN:
-        await diffuser(code_salon, {"type": "erreur", "message": "Menteur demande au moins 2 joueurs."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Cal 12 demande au moins 2 joueurs."})
         return
     if nb > MT_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Menteur se joue à 8 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Cal 12 se joue à 8 joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
@@ -2902,7 +2902,7 @@ JEUX = {
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("pp_minuteur",),
         min_joueurs=PP_JOUEURS_MIN, max_joueurs=PP_JOUEURS_MAX),
     "menteur": Jeu(
-        "menteur", "Menteur", "menteur-3d-jeu.html", "mt_demarrer", _prefixe("mt_"),
+        "menteur", "Cal 12", "menteur-3d-jeu.html", "mt_demarrer", _prefixe("mt_"),
         lambda code, m: mt_demarrer(code, m.get("mode")), mt_traiter, _menteur_instantane,
         joueur_parti=_mt_parti, joueur_revenu=_mt_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("mt_minuteur",),
