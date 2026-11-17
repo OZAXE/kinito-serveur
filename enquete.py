@@ -896,7 +896,7 @@ def crediter_pe(etat, nom, n, jeu, raison, config=None):
         n *= 2                       # les victoires rapportent le double
     p["pe"] += n
     titre = {"kinito": "Kinito", "buckshot": "Buckshot", "menteur": "Menteur", "beerbattle": "BeerBattle",
-             "picolopoly": "Picopoly", "casino": "Casino"}.get(jeu, jeu)
+             "picolopoly": "Picopoly", "casino": "Casino", "undercover": "Undercover"}.get(jeu, jeu)
     p["derniere_source"] = f"Victoire ({titre})"
     etat["version"] += 1
     return [_a(nom, {"type": "enq_pe", "gain": n, "total": p["pe"], "raison": raison})]

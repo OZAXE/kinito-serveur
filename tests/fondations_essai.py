@@ -136,7 +136,7 @@ async def essai_changement_de_jeu():
     await envoyer(code, a, {"type": "demarrer"})
     verifier(salon["etat"] is etat, "un second « demarrer » ne remet pas Kinito a zero")
 
-    ordre = ["casino", "kinito", "buckshot", "menteur", "beerbattle", "picolopoly", "casino"]
+    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "beerbattle", "picolopoly", "casino"]
     for nom in ordre:
         wa.recus.clear()
         await envoyer(code, a, {"type": serveur.JEUX[nom].demarrage})

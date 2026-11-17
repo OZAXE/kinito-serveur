@@ -58,6 +58,9 @@ async def etat(code: str):
                      "battement": bool(j.get("battement"))} for j in salon["joueurs"]],
         "phase": e.get("phase"),
         "resync": RESYNC["n"],
+        # Undercover : roles et mots, pour verifier ce que montrent les pages.
+        "uc": {"roles": e.get("roles"), "mots": e.get("mots"), "vivants": e.get("vivants")}
+              if salon.get("jeu") == "undercover" else None,
     }
 
 

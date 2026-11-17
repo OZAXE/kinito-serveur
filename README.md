@@ -7,7 +7,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
 - `serveur.py` : réseau, salons, et **registre des jeux** (`JEUX`). Chaque jeu y est déclaré une fois
   (message de démarrage, actions, reprise après coupure, départ, retour, arrivée en cours de partie,
   minuteurs, nombre de joueurs). Ajouter un jeu = ajouter une entrée.
-- Moteurs de règles purs, testables hors ligne : `picolopoly.py`, `menteur.py`, `casino.py`.
+- Moteurs de règles purs, testables hors ligne : `picolopoly.py`, `menteur.py`, `casino.py`, `undercover.py`
+  (mots dans `undercover_mots.py` : familles « classique » et « trash »).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -89,6 +90,21 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   mêmes clés pour tous ; solution et console factices, de même forme, pour les enquêteurs
   (`tests/enquete_essai.py`, `tests/non_fuite_essai.py`).
 
+## Undercover
+
+- 3 à 15 joueurs. Civils (même mot), Undercover (mot proche, sans le savoir), Mr White (aucun mot).
+  Les indices se donnent **à l'oral** : la page gère la lecture du mot, l'ordre de parole, le vote, le mot
+  de Mr White, les gorgées et les points.
+- `uc_demarrer` : `famille` (`classique`, `trash`, `melange`), `undercover` et `white` (nombre de chaque).
+  Réglage conseillé par `uc_repartition(n)` ; un réglage invalide (aucun infiltré, ou pas plus de Civils
+  que d'infiltrés) est remplacé par le conseillé.
+- Actions : `uc_pret`, `uc_fini` (l'orateur a parlé), `uc_voter` (`cible`, modifiable jusqu'au dernier
+  vote), `uc_deviner` (`mot`, Mr White éliminé). Égalité : les ex aequo redonnent un indice, revote, puis
+  le sort. Le mot de Mr White tolère accents, articles, pluriel et une ou deux fautes, mais pas le mot
+  de l'Undercover.
+- Secret : `uc_etat` n'a jamais les mots ni les rôles des vivants avant la fin ; chacun reçoit son mot
+  par `uc_mot`. Les points (2 / 6 / 10) et les paires déjà jouées suivent d'une partie à l'autre du salon.
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -99,6 +115,7 @@ tout tourne en mémoire. `GET /` indique `"stockage": "postgres"` ou `"memoire"`
 
 ```
 python tests/menteur_essai.py
+python tests/undercover_essai.py             # règles, mot de Mr White (tolérance), égalités, non-fuite des mots
 python tests/casino_essai.py
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
@@ -109,7 +126,7 @@ node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôle
 node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 node tests/menteur_annonces_navigateur.js   # Menteur : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
-python tests/banc_reconnexions.py --jeu tous --duree 20   # les six jeux, coupures et retours au hasard
+python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
 node tests/navigateur.js                    # les six jeux ; serveur_essai.py + site sur localhost:8765
 # Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :

@@ -45,6 +45,8 @@ TYPES = [
     "pp_faillite", "pp_roulette",
     # Menteur
     "mt_demarrer", "mt_poser", "mt_menteur", "mt_cible",
+    # Undercover
+    "uc_demarrer", "uc_pret", "uc_fini", "uc_voter", "uc_deviner",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -60,7 +62,8 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "gorgees_publiques", "id", "index_carte", "index_echange", "jeu", "jeux", "lieu", "ligne",
           "mise", "mode", "montant", "nom", "numero", "paiement", "pari", "plafond", "portrait",
           "recoit", "reel", "sabotage", "score", "score_cite", "suspect", "tapis", "total",
-          "type_attaque", "unite", "univers", "valeur", "via_carte", "vitesse", "page"]
+          "type_attaque", "unite", "univers", "valeur", "via_carte", "vitesse", "page",
+          "famille", "undercover", "white", "mot"]
 
 
 def valeur_bizarre(rnd):
@@ -99,6 +102,7 @@ DEMARRER = {
     "picolopoly": {"type": "pp_demarrer"},
     "menteur": {"type": "mt_demarrer", "mode": "chaos"},
     "casino": {"type": "cs_demarrer"},
+    "undercover": {"type": "uc_demarrer", "famille": "melange"},
 }
 
 
