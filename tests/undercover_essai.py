@@ -138,6 +138,16 @@ def tests_cibles():
     assert (e["repartition"]["undercover"], e["repartition"]["white"]) == U.uc_repartition(4)
     e = U.uc_initialiser(["A", "B", "C", "D", "E", "F"], 0, "classique", 0, 2)
     assert e["repartition"] == {"undercover": 0, "white": 2, "civil": 4}
+    assert not e["message"].startswith("Réglage ajusté")
+
+    # « Rejouer » apres des departs : le reglage du createur (2 + 1 pour 7)
+    # n est plus valide a 4 presents. Repli sur le conseille, annonce a la table.
+    e = U.uc_initialiser(["A", "B", "C", "D"], 0, "classique", 2, 1)
+    nb_u, nb_w = U.uc_repartition(4)
+    assert e["message"].startswith(f"Réglage ajusté pour 4 joueurs : {nb_u} Undercover, {nb_w} Mr White."), e["message"]
+    # Sans reglage envoye (conseille) : pas d annonce.
+    e = U.uc_initialiser(["A", "B", "C", "D"], 0, "classique")
+    assert e["message"] == "Découvrez votre mot en secret.", e["message"]
 
     # Mots : chaque paire a deux mots differents, pas de doublon dans une famille.
     for fam in MOTS:
