@@ -13,12 +13,16 @@ import math
 import asyncio
 import json
 import logging
+import os
 import random
+import re
 import secrets
 import string
 import time
+import unicodedata
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 # Le moteur de Picolopoly vit dans son propre fichier : c est un Monopoly
 # complet, et il est pur (ni reseau ni asyncio), donc testable hors ligne.
@@ -50,6 +54,7 @@ from casino import (
 # paralleles d une soiree (l Enquete).
 from stockage import creer_stockage, Sauvegarde
 from couches import Contexte, TYPES_COUCHES
+from protection import Debit, Fenetre, Connexions, ip_client
 import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete)
 
 # =============================================================
@@ -60,18 +65,99 @@ import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete
 @asynccontextmanager
 async def cycle_de_vie(_app):
     await demarrage()
+    demarrer_veilleur()     # nettoie aussi les salons crees mais jamais rejoints
     yield
     await arret()
 
 
 app = FastAPI(lifespan=cycle_de_vie)
 
-# CORS : autorise les pages HTML a se connecter au serveur
-# meme si elles viennent d un autre domaine (important pour GitHub Pages).
+# =============================================================
+# LIMITES PAR ADRESSE IP
+# Une soiree, c est souvent 10 a 20 telephones sur le meme wifi (donc la meme
+# adresse) : chacun a une connexion de table, parfois une connexion soiree,
+# se reconnecte apres une coupure et l accueil interroge le serveur toutes
+# les 8 s. Les limites laissent cette marge, mais bloquent un script qui
+# ouvre des milliers de connexions ou essaie les codes un par un.
+# =============================================================
+CONNEXIONS_PAR_IP = 40          # WebSockets ouvertes en meme temps
+OUVERTURES_PAR_IP = 120         # nouvelles WebSockets par minute
+REQUETES_PAR_IP = 600           # requetes HTTP par minute
+CREATIONS_PAR_IP = 30           # soirees / tables creees ou rouvertes par minute
+RATES_PAR_IP = 30               # codes inexistants essayes par minute
+
+connexions_ip = Connexions(CONNEXIONS_PAR_IP)
+ouvertures_ip = Fenetre(OUVERTURES_PAR_IP)
+requetes_ip = Fenetre(REQUETES_PAR_IP)
+creations_ip = Fenetre(CREATIONS_PAR_IP)
+rates_ip = Fenetre(RATES_PAR_IP)
+
+
+def _ip_requete(request):
+    return ip_client(request.headers, request.client) if request is not None else None
+
+
+@app.middleware("http")
+async def limiter_requetes(request: Request, call_next):
+    if not requetes_ip.autoriser(_ip_requete(request)):
+        return JSONResponse({"detail": "Trop de requêtes, réessaie dans une minute."}, status_code=429)
+    return await call_next(request)
+
+
+def deviner_bloque(ip, code):
+    """
+    Anti-devinette : chaque essai d un code de soiree inexistant compte. Au-dela
+    de RATES_PAR_IP par minute, cette adresse ne recoit plus que « n existe pas »
+    (y compris pour un code qui existe) : parcourir les 456 976 codes a 4 lettres
+    prendrait des semaines au lieu de quelques heures.
+    """
+    if rates_ip.plein(ip):
+        return True
+    if not soiree_existe(soiree_de(code)):
+        rates_ip.autoriser(ip)
+    return False
+
+
+def admettre_connexion(ws, code):
+    """Controle a l ouverture d une WebSocket. Rend (admise, ip)."""
+    ip = ip_client(ws.headers, ws.client)
+    if not origine_autorisee(ws.headers.get("origin")):
+        journal.warning("WebSocket refusee : origine %r", ws.headers.get("origin"))
+        return False, ip
+    if not ouvertures_ip.autoriser(ip) or deviner_bloque(ip, code):
+        return False, ip
+    if not connexions_ip.entrer(ip):
+        return False, ip
+    return True, ip
+
+# =============================================================
+# ORIGINES AUTORISEES
+# Seules les pages du site (GitHub Pages) et un poste de dev (localhost,
+# fichier ouvert en local : origine "null") peuvent appeler le serveur depuis
+# un navigateur. Sans ca, n importe quel site pouvait faire ouvrir des
+# connexions a ses visiteurs. Un client hors navigateur n envoie pas d Origin
+# (ou en invente une) : ce controle ne remplace pas les limites ci-dessus.
+# Autre domaine : variable d environnement ORIGINES_AUTORISEES (separees par
+# des virgules) sur Render.
+# =============================================================
+ORIGINES_AUTORISEES = [o.strip().rstrip("/") for o in os.environ.get(
+    "ORIGINES_AUTORISEES", "https://ozaxe.github.io,null").split(",") if o.strip()]
+ORIGINES_LOCALES = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+
+
+def origine_autorisee(origine):
+    """Une connexion sans en-tete Origin (client hors navigateur) est acceptee."""
+    if origine is None:
+        return True
+    origine = origine.rstrip("/")
+    return origine in ORIGINES_AUTORISEES or re.fullmatch(ORIGINES_LOCALES, origine) is not None
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ORIGINES_AUTORISEES,
+    allow_origin_regex=ORIGINES_LOCALES,
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
 
@@ -98,8 +184,27 @@ DELAI_SILENCE = 25
 # Un salon dont tout le monde est parti est garde un moment : un groupe dont
 # tous les telephones se verrouillent en meme temps retrouve sa partie.
 DELAI_SALON_VIDE = 900
+# Un salon cree (/creer-salon, /rouvrir, /nouvelle-table) ou personne ne s est
+# jamais assis n avait aucune liberation programmee : il restait en memoire
+# jusqu au redemarrage. Le veilleur le retire apres ce delai, sauf si la
+# soiree est encore ouverte quelque part (accueil, Enquete).
+DELAI_SALON_ABANDONNE = 900
+NETTOYAGE_TOUTES_LES = 60       # secondes entre deux passages du nettoyage
+# Plafond global : le serveur gratuit de Render a peu de memoire. Au-dela,
+# plus aucun salon n est cree (les tables existantes continuent).
+SALONS_MAX = 2000
 # Un envoi vers une connexion bloquee ne doit pas figer tout le salon.
 DELAI_ENVOI = 5
+# Taille maximale d un message recu (en caracteres). Les clients n envoient
+# que de petites actions (quelques centaines d octets au plus) : au-dela,
+# c est un client fou ou malveillant, sa connexion est fermee (code 1009).
+# Uvicorn coupe deja au niveau du protocole avec --ws-max-size (render.yaml).
+TAILLE_MAX_MESSAGE = 16 * 1024
+# Debit maximal par connexion : au-dela, les messages sont ignores ; une
+# inondation continue (REFUS_AVANT_COUPURE refus d affilee) ferme la connexion.
+DEBIT_MESSAGES = 20         # par seconde, en continu
+RAFALE_MESSAGES = 40
+REFUS_AVANT_COUPURE = 200
 
 _veilleur = None
 
@@ -121,6 +226,29 @@ VERSION = "2026-11-16 enquete-3d"
 # Un prenom n est qu a une table a la fois.
 # =============================================================
 TABLES_MAX = 9
+# Places au plus a une table (joueurs et spectateurs, places gardees comprises).
+# Chaque jeu verifie en plus son propre maximum au lancement ; ce plafond
+# empeche d entasser des connexions sans fin dans une salle d attente.
+PLACES_MAX = 20
+
+
+# Forme d un code de table : 4 lettres majuscules, suivies de -2 a -9 pour
+# les tables supplementaires. Tout le reste est refuse a l entree : avant,
+# n importe quelle chaine (longue, minuscules...) creait un salon en memoire.
+CODE_TABLE = re.compile(r"[A-Z]{4}(-[2-9])?")
+
+
+def normaliser_code(code):
+    """Le code en majuscules s il a la bonne forme, sinon None."""
+    code = (code or "").strip().upper()
+    return code if CODE_TABLE.fullmatch(code) else None
+
+
+def nettoyer_prenom(nom):
+    """Prenom affichable : sans caracteres de controle, espaces reduits, 24 caracteres."""
+    nom = "".join(c if unicodedata.category(c) != "Cc" else (" " if c.isspace() else "")
+                  for c in (nom or ""))
+    return " ".join(nom.split())[:24]
 
 
 def soiree_de(code):
@@ -146,9 +274,14 @@ def soiree_existe(soiree):
 
 
 def generer_code():
-    """Genere un code de soiree unique a 4 lettres."""
+    """
+    Genere un code de soiree unique a 4 lettres. Tirage cryptographique
+    (secrets) : random (Mersenne Twister) se predit apres assez de tirages
+    observes, on aurait pu deviner les codes des autres soirees en
+    appelant /creer-salon a la chaine.
+    """
     while True:
-        code = "".join(random.choices(string.ascii_uppercase, k=4))
+        code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(4))
         # Un code dont la soiree vit encore (une table, ou une couche en cours
         # comme l Enquete, meme si tous ses salons ont ete liberes) n est pas libre.
         if not soiree_existe(code):
@@ -156,7 +289,16 @@ def generer_code():
 
 
 def nouveau_salon():
-    return {"joueurs": [], "etat": None, "jeu": None}
+    return {"joueurs": [], "etat": None, "jeu": None, "cree": time.time()}
+
+
+def salons_pleins():
+    return len(salons) >= SALONS_MAX
+
+
+def refus_plein():
+    journal.warning("Plafond de %d salons atteint", SALONS_MAX)
+    return JSONResponse({"detail": "Serveur complet, réessaie plus tard."}, status_code=503)
 
 
 def verrou(salon):
@@ -191,6 +333,19 @@ async def envoyer(joueur, message):
         return True
     except Exception:
         return False
+
+
+def lire_message(brut):
+    """
+    Decode un message recu : un objet JSON, sinon None (ignore). Un JSON trop
+    imbrique ([[[[...]]]]) leve RecursionError et non ValueError : il coupait
+    la connexion au lieu d etre simplement ignore.
+    """
+    try:
+        message = json.loads(brut)
+    except (ValueError, RecursionError):
+        return None
+    return message if isinstance(message, dict) else None
 
 
 async def fermer(ws, code=1000):
@@ -391,9 +546,28 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
     code_salon : le code a 4 lettres du salon
     nom_joueur : le prenom du joueur
     """
+    code_salon = normaliser_code(code_salon)
+    if code_salon is None:
+        await ws.close(4004)        # refus avant l ouverture (HTTP 403)
+        return
+    admise, ip = admettre_connexion(ws, code_salon)
+    if not admise:
+        await ws.close(1013)
+        return
+    try:
+        await connexion_table(ws, code_salon, nom_joueur)
+    finally:
+        connexions_ip.sortir(ip)
+
+
+async def connexion_table(ws, code_salon, nom_joueur):
+    if code_salon not in salons and salons_pleins():
+        refus_plein()
+        await ws.close(1013)
+        return
     await ws.accept()
     demarrer_veilleur()
-    nom_joueur = " ".join(nom_joueur.split())[:24] or "Joueur"
+    nom_joueur = nettoyer_prenom(nom_joueur) or "Joueur"
 
     # On recupere ou cree le salon
     if code_salon not in salons:
@@ -405,15 +579,26 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
         if salons.get(code_salon) is not salon:
             salons[code_salon] = salon
         joueur = await arrivee(code_salon, salon, ws, nom_joueur)
+    if joueur is None:
+        await fermer(ws, 4005)
+        return
 
     try:
         # Boucle principale : on ecoute les messages de ce joueur
+        debit = Debit(DEBIT_MESSAGES, RAFALE_MESSAGES)
         async for message_brut in ws.iter_text():
-            try:
-                message = json.loads(message_brut)
-            except ValueError:
+            if len(message_brut) > TAILLE_MAX_MESSAGE:
+                journal.warning("Message trop gros (%d) dans le salon %s", len(message_brut), code_salon)
+                await fermer(ws, 1009)
+                break
+            if not debit.accepter():
+                if debit.refus_de_suite >= REFUS_AVANT_COUPURE:
+                    journal.warning("Inondation de messages dans le salon %s", code_salon)
+                    await fermer(ws, 1008)
+                    break
                 continue
-            if not isinstance(message, dict):
+            message = lire_message(message_brut)
+            if message is None:
                 continue
             joueur["vu"] = time.time()
             type_msg = message.get("type")
@@ -528,6 +713,16 @@ async def arrivee(code_salon, salon, ws, nom_joueur):
         joueur["battement"] = bat
         retour = True
     else:
+        if len(salon["joueurs"]) >= PLACES_MAX:
+            # Table pleine : refus annonce avec le message d erreur habituel.
+            try:
+                await asyncio.wait_for(ws.send_text(json.dumps({
+                    "type": "erreur",
+                    "message": f"Table complète ({PLACES_MAX} places). Ouvre une autre table.",
+                })), 1)
+            except Exception:
+                pass
+            return None
         joueur = {
             "nom": nom_joueur,
             "ws": ws,
@@ -911,8 +1106,15 @@ def demarrer_veilleur():
 
 async def veilleur():
     """Repere les joueurs muets (telephone en veille) et les traite comme partis."""
+    dernier_nettoyage = time.time()
     while True:
         await asyncio.sleep(1)
+        if time.time() - dernier_nettoyage >= NETTOYAGE_TOUTES_LES:
+            dernier_nettoyage = time.time()
+            try:
+                nettoyer()
+            except Exception:
+                journal.exception("Erreur du nettoyage")
         try:
             maintenant = time.time()
             for code, salon in list(salons.items()):
@@ -926,6 +1128,42 @@ async def veilleur():
                             asyncio.ensure_future(fermer(ws, 4001))
         except Exception:
             journal.exception("Erreur du veilleur")
+
+
+def soiree_ouverte_ailleurs(soiree, maintenant):
+    """Quelqu un a la soiree ouverte sans etre assis : Enquete, ou accueil recent."""
+    if abonnes_soirees.get(soiree):
+        return True
+    return any(maintenant - v["vu"] <= 2 * PRESENCE_ACCUEIL
+               for v in presences_accueil.get(soiree, {}).values())
+
+
+def nettoyer(maintenant=None):
+    """
+    Passage periodique (veilleur) : retire ce qui ne se liberait jamais.
+    - salons crees mais jamais rejoints (aucune liberation programmee) ;
+    - verrous de soiree et presences de l accueil des soirees disparues ;
+    - compteurs des limites par adresse devenus inutiles.
+    """
+    maintenant = time.time() if maintenant is None else maintenant
+    for code, salon in list(salons.items()):
+        liberation = salon.get("liberation")
+        if (not salon["joueurs"] and (liberation is None or liberation.done())
+                and maintenant - salon.get("cree", maintenant) > DELAI_SALON_ABANDONNE
+                and not soiree_ouverte_ailleurs(soiree_de(code), maintenant)
+                and not verrou(salon).locked()):
+            arreter_minuteurs(salon)
+            salons.pop(code, None)
+    for soiree, vus in list(presences_accueil.items()):
+        for k in [k for k, v in vus.items() if maintenant - v["vu"] > 4 * PRESENCE_ACCUEIL]:
+            del vus[k]
+        if not vus:
+            del presences_accueil[soiree]
+    for soiree, v in list(_verrous_soirees.items()):
+        if not v.locked() and not soiree_existe(soiree) and not abonnes_soirees.get(soiree):
+            del _verrous_soirees[soiree]
+    for limite in (ouvertures_ip, requetes_ip, creations_ip, rates_ip):
+        limite.purger()
 
 
 # =============================================================
@@ -3289,17 +3527,40 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
     a cote de sa place a une table. Messages "<prefixe>_..." et battements de
     coeur ; rien d autre.
     """
+    code = normaliser_code(code)
+    if code is None:
+        await ws.close(4004)
+        return
+    admise, ip = admettre_connexion(ws, code)
+    if not admise:
+        await ws.close(1013)
+        return
+    try:
+        await connexion_soiree(ws, code, nom_joueur)
+    finally:
+        connexions_ip.sortir(ip)
+
+
+async def connexion_soiree(ws, code, nom_joueur):
     await ws.accept()
-    soiree = soiree_de(code.upper())
-    nom = " ".join(nom_joueur.split())[:24] or "Joueur"
+    soiree = soiree_de(code)
+    nom = nettoyer_prenom(nom_joueur) or "Joueur"
     entree = await abonner(soiree, nom, ws)
     try:
+        debit = Debit(DEBIT_MESSAGES, RAFALE_MESSAGES)
         async for brut in ws.iter_text():
-            try:
-                message = json.loads(brut)
-            except ValueError:
+            if len(brut) > TAILLE_MAX_MESSAGE:
+                journal.warning("Message trop gros (%d) dans la soiree %s", len(brut), soiree)
+                await fermer(ws, 1009)
+                break
+            if not debit.accepter():
+                if debit.refus_de_suite >= REFUS_AVANT_COUPURE:
+                    journal.warning("Inondation de messages dans la soiree %s", soiree)
+                    await fermer(ws, 1008)
+                    break
                 continue
-            if not isinstance(message, dict) or not isinstance(message.get("type"), str):
+            message = lire_message(brut)
+            if message is None or not isinstance(message.get("type"), str):
                 continue
             if message["type"] == "ping":
                 try:
@@ -3328,17 +3589,23 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
 # =============================================================
 
 @app.get("/creer-salon")
-async def creer_salon():
+async def creer_salon(request: Request = None):
     """Cree un nouveau salon vide et retourne son code."""
+    if not creations_ip.autoriser(_ip_requete(request)):
+        return JSONResponse({"detail": "Trop de soirées créées, réessaie dans une minute."}, status_code=429)
+    if salons_pleins():
+        return refus_plein()
     code = generer_code()
     salons[code] = nouveau_salon()
     return {"code": code}
 
 
 @app.get("/salon/{code}")
-async def info_salon(code: str):
+async def info_salon(code: str, request: Request = None):
     """Retourne les infos d une table (pour verifier qu elle existe)."""
     code = code.upper()
+    if deviner_bloque(_ip_requete(request), code):
+        return {"existe": False}
     if code not in salons and not (code == soiree_de(code) and soiree_existe(code)):
         return {"existe": False}
     salon = salons.get(code) or nouveau_salon()
@@ -3383,12 +3650,12 @@ def presents_soiree(soiree, tables):
 
 
 @app.get("/soiree/{code}")
-async def info_soiree(code: str, nom: str = "", table: str = ""):
+async def info_soiree(code: str, nom: str = "", table: str = "", request: Request = None):
     """La soiree : ses tables (jeu, joueurs presents), ses couches et qui est la."""
     code = soiree_de(code.upper())
-    if not soiree_existe(code):
+    if deviner_bloque(_ip_requete(request), code) or not soiree_existe(code):
         return {"existe": False}
-    nom = " ".join(nom.split())[:24]
+    nom = nettoyer_prenom(nom)
     if nom:
         vus = presences_accueil.setdefault(code, {})
         k = cle_prenom(nom)
@@ -3405,7 +3672,7 @@ async def info_soiree(code: str, nom: str = "", table: str = ""):
 
 
 @app.get("/soiree/{code}/rouvrir")
-async def rouvrir_soiree(code: str):
+async def rouvrir_soiree(code: str, request: Request = None):
     """
     Une soiree que le serveur ne connait plus (il a redemarre : les salons
     vivent en memoire) est rouverte sous le meme code, tables vides. Le code
@@ -3415,19 +3682,27 @@ async def rouvrir_soiree(code: str):
     if not (len(code) == 4 and code.isalpha() and code.isupper()):
         return {"existe": False}
     if not soiree_existe(code):
+        if not creations_ip.autoriser(_ip_requete(request)):
+            return JSONResponse({"detail": "Trop de soirées rouvertes, réessaie dans une minute."}, status_code=429)
+        if salons_pleins():
+            return refus_plein()
         salons[code] = nouveau_salon()
         return {"existe": True, "rouverte": True}
     return {"existe": True, "rouverte": False}
 
 
 @app.get("/soiree/{code}/nouvelle-table")
-async def nouvelle_table(code: str):
+async def nouvelle_table(code: str, request: Request = None):
     """Ouvre la prochaine table libre de la soiree (ABCD-2, ABCD-3...)."""
     # Meme controle que rouvrir : un code de travers (minuscules, trop long)
     # ne doit pas creer de table fantome a cote de la vraie soiree.
     code = soiree_de(code.upper())
     if not (len(code) == 4 and code.isalpha()):
         return {"existe": False}
+    if not creations_ip.autoriser(_ip_requete(request)):
+        return JSONResponse({"detail": "Trop de tables ouvertes, réessaie dans une minute."}, status_code=429)
+    if salons_pleins():
+        return refus_plein()
     if not soiree_existe(code):
         await rouvrir_soiree(code)
     if code not in salons:

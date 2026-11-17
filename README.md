@@ -129,6 +129,7 @@ node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, V
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
+python tests/securite_essai.py              # attaques : taille, debit, codes, places, origines, limites par IP
 node tests/navigateur.js                    # les six jeux ; serveur_essai.py + site sur localhost:8765
 # Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :
 #   DELAI_SILENCE=30 ENQ_RAPIDE=1 python tests/serveur_essai.py
