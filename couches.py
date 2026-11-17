@@ -30,7 +30,7 @@ class Contexte:
     """Ce que le serveur met a disposition d une couche (reseau, horloge, sauvegarde)."""
 
     def __init__(self, code, diffuser, envoyer_nom, noms_presents, abonnes, tables,
-                 sauvegarder, maintenant):
+                 sauvegarder, maintenant, couche=None, gorgees_ailleurs=None):
         self.code = code                    # code de la SOIREE (toutes tables)
         # Les couches parlent aux joueurs par leur connexion « soiree »
         # (/ws-soiree), pas par leur place a une table.
@@ -41,6 +41,9 @@ class Contexte:
         self.tables = tables                # () -> [{"code", "numero", "jeu", "joueurs"}]
         self.sauvegarder = sauvegarder      # () -> marque la couche a sauvegarder
         self.maintenant = maintenant        # () -> horodatage (secondes)
+        # Ce que les couches partagent entre elles (Enquete, Bingo...) :
+        self.couche = couche                # (prefixe) -> autre couche de la soiree, ou None
+        self.gorgees_ailleurs = gorgees_ailleurs  # (nom, maintenant) -> gorgees bues dans l heure dans les AUTRES couches
 
 
 class Couche:
@@ -74,6 +77,10 @@ class Couche:
     def prochaine_echeance(self):
         """Horodatage du prochain reveil voulu (minuteur), ou None."""
         return None
+
+    def gorgees_heure(self, nom, maintenant):
+        """Gorgees bues par ce joueur dans l heure a cause de cette couche (plafond commun)."""
+        return 0
 
     # --- evenements ----------------------------------------------------
     async def echeance(self, ctx):

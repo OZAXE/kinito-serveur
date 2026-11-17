@@ -53,6 +53,7 @@ Les actions renvoient une liste d evenements {"a": None | nom, "msg": {...}} :
 a None = a tous, sinon au seul joueur nomme. Un refus ne change pas l etat
 (la version ne bouge pas) et n envoie qu une erreur privee.
 """
+import contextvars
 import json
 import os
 import random
@@ -733,6 +734,17 @@ def _gorgees(etat, config, base):
     return max(1, int(base * _vitesse(etat, config)["mult_gorgees"] * dosage + 0.5))
 
 
+# Gorgees bues dans l heure dans les AUTRES jeux paralleles de la soiree (le
+# Bingo) : le plafond est commun. La couche le renseigne autour de chaque
+# appel au moteur ; hors serveur (essais), personne : 0.
+GORGEES_AILLEURS = contextvars.ContextVar("gorgees_ailleurs", default=None)
+
+
+def _gorgees_ailleurs(nom, maintenant):
+    f = GORGEES_AILLEURS.get()
+    return f(nom, maintenant) if f else 0
+
+
 def gorgees_heure(p, maintenant):
     return sum(n for t, n, _ in p["gorgees"] if maintenant - t < 3600)
 
@@ -749,7 +761,7 @@ def _imposer(etat, nom, nombre, raison, maintenant, config=None):
     plafond = etat.get("plafond") or 0
     bu, exces = nombre, 0
     if plafond:
-        bu = max(0, min(nombre, plafond - gorgees_heure(p, maintenant)))
+        bu = max(0, min(nombre, plafond - gorgees_heure(p, maintenant) - _gorgees_ailleurs(nom, maintenant)))
         exces = nombre - bu
     if bu:
         p["gorgees"].append([maintenant, bu, raison])

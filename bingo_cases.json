@@ -1,0 +1,355 @@
+{
+ "_note": "Banque de depart du Bingo de soiree. Cases bienveillantes : rien qui pousse a boire plus, a se mettre en danger ou a viser une personne. condition : la case n apparait que si l un de ces jeux est actif (enq = Enquete).",
+ "categories": {
+  "paroles": "Paroles",
+  "gestes": "Gestes",
+  "incidents": "Incidents",
+  "boire_manger": "Boissons et nourriture",
+  "ambiance": "Ambiance et jeux"
+ },
+ "cases": [
+  {
+   "id": "c01",
+   "texte": "Quelqu'un dit \"bref\"",
+   "categorie": "paroles",
+   "rarete": "courant"
+  },
+  {
+   "id": "c02",
+   "texte": "Quelqu'un dit \"en vrai\"",
+   "categorie": "paroles",
+   "rarete": "courant"
+  },
+  {
+   "id": "c03",
+   "texte": "Quelqu'un dit \"c'était mieux avant\"",
+   "categorie": "paroles",
+   "rarete": "rare"
+  },
+  {
+   "id": "c04",
+   "texte": "Quelqu'un dit \"je suis nul à ce jeu\"",
+   "categorie": "paroles",
+   "rarete": "courant"
+  },
+  {
+   "id": "c05",
+   "texte": "Quelqu'un dit \"sérieux ?!\"",
+   "categorie": "paroles",
+   "rarete": "courant"
+  },
+  {
+   "id": "c06",
+   "texte": "Quelqu'un dit \"c'est pas faux\"",
+   "categorie": "paroles",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c07",
+   "texte": "Quelqu'un dit \"je t'avais prévenu\"",
+   "categorie": "paroles",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c08",
+   "texte": "Quelqu'un dit \"on fait quoi après ?\"",
+   "categorie": "paroles",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c09",
+   "texte": "Quelqu'un cite une série ou un film",
+   "categorie": "paroles",
+   "rarete": "courant"
+  },
+  {
+   "id": "c10",
+   "texte": "Quelqu'un raconte un \"truc de fou\" qui lui est arrivé",
+   "categorie": "paroles",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c11",
+   "texte": "Quelqu'un fait une blague que personne ne relève",
+   "categorie": "paroles",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c12",
+   "texte": "Quelqu'un imite quelqu'un d'autre",
+   "categorie": "paroles",
+   "rarete": "rare"
+  },
+  {
+   "id": "c13",
+   "texte": "Quelqu'un pose une question et se répond tout seul",
+   "categorie": "paroles",
+   "rarete": "rare"
+  },
+  {
+   "id": "c14",
+   "texte": "Quelqu'un dit \"attends, je regarde sur mon téléphone\"",
+   "categorie": "paroles",
+   "rarete": "courant"
+  },
+  {
+   "id": "c15",
+   "texte": "Quelqu'un applaudit",
+   "categorie": "gestes",
+   "rarete": "courant"
+  },
+  {
+   "id": "c16",
+   "texte": "Quelqu'un lève les bras en signe de victoire",
+   "categorie": "gestes",
+   "rarete": "courant"
+  },
+  {
+   "id": "c17",
+   "texte": "Deux personnes se tapent dans la main",
+   "categorie": "gestes",
+   "rarete": "courant"
+  },
+  {
+   "id": "c18",
+   "texte": "Quelqu'un se lève sans raison apparente",
+   "categorie": "gestes",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c19",
+   "texte": "Quelqu'un danse quelques secondes",
+   "categorie": "gestes",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c20",
+   "texte": "Quelqu'un fait une grimace",
+   "categorie": "gestes",
+   "rarete": "courant"
+  },
+  {
+   "id": "c21",
+   "texte": "Quelqu'un s'étire bruyamment",
+   "categorie": "gestes",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c22",
+   "texte": "Quelqu'un s'assoit par terre",
+   "categorie": "gestes",
+   "rarete": "rare"
+  },
+  {
+   "id": "c23",
+   "texte": "Quelqu'un se prend la tête dans les mains",
+   "categorie": "gestes",
+   "rarete": "courant"
+  },
+  {
+   "id": "c24",
+   "texte": "Deux personnes disent la même chose en même temps",
+   "categorie": "gestes",
+   "rarete": "rare"
+  },
+  {
+   "id": "c25",
+   "texte": "Un verre se renverse (un peu)",
+   "categorie": "incidents",
+   "rarete": "rare"
+  },
+  {
+   "id": "c26",
+   "texte": "Un objet tombe par terre",
+   "categorie": "incidents",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c27",
+   "texte": "Quelqu'un cherche son téléphone ou ses clés",
+   "categorie": "incidents",
+   "rarete": "courant"
+  },
+  {
+   "id": "c28",
+   "texte": "Une chaise grince bruyamment",
+   "categorie": "incidents",
+   "rarete": "courant"
+  },
+  {
+   "id": "c29",
+   "texte": "Un téléphone sonne",
+   "categorie": "incidents",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c30",
+   "texte": "Des miettes ou des chips se renversent",
+   "categorie": "incidents",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c31",
+   "texte": "Quelqu'un dit qu'il a faim",
+   "categorie": "incidents",
+   "rarete": "courant"
+  },
+  {
+   "id": "c32",
+   "texte": "L'appli ou le wifi plante un instant",
+   "categorie": "incidents",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c33",
+   "texte": "Quelqu'un se trompe de verre",
+   "categorie": "incidents",
+   "rarete": "rare"
+  },
+  {
+   "id": "c34",
+   "texte": "Quelqu'un propose de commander à manger",
+   "categorie": "boire_manger",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c35",
+   "texte": "Quelqu'un lève son verre pour un toast",
+   "categorie": "boire_manger",
+   "rarete": "courant"
+  },
+  {
+   "id": "c36",
+   "texte": "Quelqu'un ouvre une bouteille",
+   "categorie": "boire_manger",
+   "rarete": "courant"
+  },
+  {
+   "id": "c37",
+   "texte": "Quelqu'un sert tout le monde",
+   "categorie": "boire_manger",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c38",
+   "texte": "Quelqu'un goûte le plat ou le verre d'un autre (avec son accord)",
+   "categorie": "boire_manger",
+   "rarete": "rare"
+  },
+  {
+   "id": "c39",
+   "texte": "Quelqu'un dit \"c'est qui qui a pris ça ?\"",
+   "categorie": "boire_manger",
+   "rarete": "rare"
+  },
+  {
+   "id": "c40",
+   "texte": "Quelqu'un grignote en silence",
+   "categorie": "boire_manger",
+   "rarete": "courant"
+  },
+  {
+   "id": "c41",
+   "texte": "Quelqu'un propose un verre d'eau",
+   "categorie": "boire_manger",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c42",
+   "texte": "Un fou rire à plusieurs",
+   "categorie": "ambiance",
+   "rarete": "courant"
+  },
+  {
+   "id": "c43",
+   "texte": "Un silence gênant",
+   "categorie": "ambiance",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c44",
+   "texte": "Quelqu'un change la musique",
+   "categorie": "ambiance",
+   "rarete": "courant"
+  },
+  {
+   "id": "c45",
+   "texte": "Quelqu'un lance une nouvelle partie sans demander",
+   "categorie": "ambiance",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c46",
+   "texte": "Quelqu'un conteste une règle",
+   "categorie": "ambiance",
+   "rarete": "courant"
+  },
+  {
+   "id": "c47",
+   "texte": "Quelqu'un félicite son adversaire",
+   "categorie": "ambiance",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c48",
+   "texte": "Quelqu'un remercie l'hôte",
+   "categorie": "ambiance",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c49",
+   "texte": "Tout le monde se tait en même temps",
+   "categorie": "ambiance",
+   "rarete": "rare"
+  },
+  {
+   "id": "c50",
+   "texte": "Quelqu'un gagne par pure chance",
+   "categorie": "ambiance",
+   "rarete": "courant"
+  },
+  {
+   "id": "c51",
+   "texte": "Quelqu'un perd avec un score ridicule",
+   "categorie": "ambiance",
+   "rarete": "moyen"
+  },
+  {
+   "id": "c52",
+   "texte": "Quelqu'un crie \"Menteur !\"",
+   "categorie": "ambiance",
+   "rarete": "courant",
+   "condition": [
+    "menteur",
+    "kinito"
+   ]
+  },
+  {
+   "id": "c53",
+   "texte": "Quelqu'un accuse un autre sans preuve",
+   "categorie": "ambiance",
+   "rarete": "courant",
+   "condition": [
+    "enq"
+   ]
+  },
+  {
+   "id": "c54",
+   "texte": "Quelqu'un dit \"c'est lui le tueur\"",
+   "categorie": "ambiance",
+   "rarete": "moyen",
+   "condition": [
+    "enq"
+   ]
+  },
+  {
+   "id": "c55",
+   "texte": "Quelqu'un montre son téléphone à un autre pour prouver un indice",
+   "categorie": "ambiance",
+   "rarete": "rare",
+   "condition": [
+    "enq"
+   ]
+  }
+ ]
+}

@@ -56,6 +56,7 @@ from stockage import creer_stockage, Sauvegarde
 from couches import Contexte, TYPES_COUCHES
 from protection import Debit, Fenetre, Connexions, ip_client
 import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete)
+import bingo_couche  # noqa: F401  (enregistre la couche « bng » : le Bingo de soiree)
 
 # =============================================================
 # CREATION DE L APPLICATION FASTAPI
@@ -210,7 +211,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-16 enquete-3d"
+VERSION = "2026-11-17 bingo"
 
 
 # =============================================================
@@ -3257,7 +3258,10 @@ def _tables(soiree):
 # un jeu sans lui prendre sa connexion. Un prenom = une connexion soiree
 # (la plus recente gagne, l ancienne est prevenue comme pour un onglet en
 # double). Les couches parlent aux joueurs par ici.
-abonnes_soirees = {}    # soiree -> {cle du prenom: {"nom", "ws"}}
+# Une connexion par prenom ET par page (?page=bingo) : l Enquete et le Bingo
+# ouverts en meme temps ne s ejectent pas ; le meme prenom deux fois sur la
+# meme page, si (onglet en double).
+abonnes_soirees = {}    # soiree -> {cle du prenom + "|" + page: {"nom", "cle", "page", "ws"}}
 _verrous_soirees = {}
 
 
@@ -3274,7 +3278,11 @@ def verrou_soiree(soiree):
 
 
 def _abonnes(soiree):
-    return [a["nom"] for a in abonnes_soirees.get(soiree, {}).values()]
+    """Les prenoms ayant au moins une connexion soiree ouverte (une fois chacun)."""
+    vus = {}
+    for a in abonnes_soirees.get(soiree, {}).values():
+        vus.setdefault(a["cle"], a["nom"])
+    return list(vus.values())
 
 
 async def diffuser_soiree(soiree, message):
@@ -3283,8 +3291,9 @@ async def diffuser_soiree(soiree, message):
 
 
 async def envoyer_nom(soiree, nom, message):
-    a = abonnes_soirees.get(soiree, {}).get(cle_prenom(nom))
-    if a is not None:
+    """A toutes les connexions soiree de ce prenom (une par page ouverte)."""
+    k = cle_prenom(nom)
+    for a in [a for a in abonnes_soirees.get(soiree, {}).values() if a["cle"] == k]:
         await envoyer(a, message)
 
 
@@ -3298,7 +3307,21 @@ def _contexte(soiree, couche):
         tables=lambda: _tables(soiree),
         sauvegarder=lambda: _sauvegarder_couche(soiree, couche),
         maintenant=time.time,
+        couche=lambda prefixe: couches.get(soiree, {}).get(prefixe),
+        gorgees_ailleurs=lambda nom, t: _gorgees_ailleurs(soiree, couche, nom, t),
     )
+
+
+def _gorgees_ailleurs(soiree, couche, nom, maintenant):
+    """Plafond commun : gorgees bues dans l heure dans les autres couches de la soiree."""
+    total = 0
+    for autre in list(couches.get(soiree, {}).values()):
+        if autre is not couche:
+            try:
+                total += autre.gorgees_heure(nom, maintenant) or 0
+            except Exception:
+                journal.exception("Compteur de gorgees de la couche %s", autre.prefixe)
+    return total
 
 
 def _cle_couche(code_salon, prefixe):
@@ -3495,10 +3518,10 @@ async def arret():
         await stock.fermer()
 
 
-async def abonner(soiree, nom, ws):
-    """Ouvre la connexion soiree d un joueur (la plus recente remplace l ancienne)."""
-    k = cle_prenom(nom)
-    entree = {"nom": nom, "ws": ws, "parti": False}
+async def abonner(soiree, nom, ws, page=""):
+    """Ouvre la connexion soiree d un joueur (sur la meme page, la plus recente remplace l ancienne)."""
+    k = cle_prenom(nom) + "|" + page
+    entree = {"nom": nom, "cle": cle_prenom(nom), "page": page, "k": k, "ws": ws, "parti": False}
     ancien = abonnes_soirees.setdefault(soiree, {}).get(k)
     abonnes_soirees[soiree][k] = entree
     if ancien is not None and ancien["ws"] is not ws:
@@ -3513,7 +3536,7 @@ async def abonner(soiree, nom, ws):
 
 def desabonner(soiree, entree):
     par_nom = abonnes_soirees.get(soiree, {})
-    k = cle_prenom(entree["nom"])
+    k = entree["k"]
     if par_nom.get(k) is entree:
         del par_nom[k]
     if not par_nom:
@@ -3521,7 +3544,7 @@ def desabonner(soiree, entree):
 
 
 @app.websocket("/ws-soiree/{code}/{nom_joueur}")
-async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
+async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str, page: str = ""):
     """
     Connexion « soiree » d un joueur : celle des couches paralleles (l Enquete),
     a cote de sa place a une table. Messages "<prefixe>_..." et battements de
@@ -3536,16 +3559,19 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
         await ws.close(1013)
         return
     try:
-        await connexion_soiree(ws, code, nom_joueur)
+        await connexion_soiree(ws, code, nom_joueur, page if PAGE_SOIREE.fullmatch(page or "") else "")
     finally:
         connexions_ip.sortir(ip)
 
 
-async def connexion_soiree(ws, code, nom_joueur):
+PAGE_SOIREE = re.compile(r"[a-z]{0,12}")
+
+
+async def connexion_soiree(ws, code, nom_joueur, page=""):
     await ws.accept()
     soiree = soiree_de(code)
     nom = nettoyer_prenom(nom_joueur) or "Joueur"
-    entree = await abonner(soiree, nom, ws)
+    entree = await abonner(soiree, nom, ws, page)
     try:
         debit = Debit(DEBIT_MESSAGES, RAFALE_MESSAGES)
         async for brut in ws.iter_text():
@@ -3568,7 +3594,7 @@ async def connexion_soiree(ws, code, nom_joueur):
                 except Exception:
                     pass
                 continue
-            if abonnes_soirees.get(soiree, {}).get(cle_prenom(nom)) is not entree:
+            if abonnes_soirees.get(soiree, {}).get(entree["k"]) is not entree:
                 continue        # remplacee par une connexion plus recente
             if message["type"].split("_", 1)[0] in TYPES_COUCHES:
                 try:
@@ -3640,7 +3666,8 @@ def presents_soiree(soiree, tables):
             out.setdefault(cle_prenom(nom), {"nom": nom, "ou": "Table " + str(t["numero"]) + (" · " + t["titre"] if t.get("titre") else ""),
                                              "table": t["code"]})
     for a in abonnes_soirees.get(soiree, {}).values():
-        out.setdefault(cle_prenom(a["nom"]), {"nom": a["nom"], "ou": "Enquête", "table": None})
+        out.setdefault(cle_prenom(a["nom"]), {"nom": a["nom"], "ou": "Bingo" if a.get("page") == "bingo" else "Enquête",
+                                              "table": None})
     for k, v in vus.items():
         if maintenant - v["vu"] <= PRESENCE_ACCUEIL:
             # Sur l accueil : sa table (en salle d attente) si elle existe encore
