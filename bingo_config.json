@@ -1,0 +1,30 @@
+{
+  "_note": "Toutes les valeurs chiffrees du Bingo de soiree. Valeurs de depart, a regler en test. Durees en secondes.",
+  "joueurs_min": 2,
+  "vitesse_defaut": "soiree",
+  "vitesses": {
+    "flash":    {"titre": "Flash",    "duree": 1800,  "taille": 3, "delai_cochage": 5,  "part_rares": 0.20, "duree_vote": 15, "delai_refus": 120, "mult_gorgees": 1.5},
+    "express":  {"titre": "Express",  "duree": 5400,  "taille": 4, "delai_cochage": 10, "part_rares": 0.30, "duree_vote": 20, "delai_refus": 180, "mult_gorgees": 1.5},
+    "soiree":   {"titre": "Soirée",   "duree": 10800, "taille": 4, "delai_cochage": 15, "part_rares": 0.40, "duree_vote": 20, "delai_refus": 300, "mult_gorgees": 1.0},
+    "marathon": {"titre": "Marathon", "duree": 18000, "taille": 5, "delai_cochage": 15, "part_rares": 0.40, "duree_vote": 30, "delai_refus": 300, "mult_gorgees": 0.75},
+    "demo":     {"titre": "Démo",     "duree": 600,   "taille": 3, "delai_cochage": 2,  "part_rares": 0.40, "duree_vote": 15, "delai_refus": 30,  "mult_gorgees": 1.0}
+  },
+  "durees": [1800, 3600, 5400, 7200, 10800, 14400, 18000],
+  "annulation": 10,
+  "min_par_categorie": 2,
+  "perso": {"max": 10, "longueur": 40, "par_grille": 3},
+  "jury": {"tous_jusqua": 4, "taille": 3},
+  "points": {"ligne": 1, "grille": 5},
+  "gorgees": {
+    "unite_defaut": "gorgée",
+    "ligne_distribue": 2,
+    "grille_distribue": 5,
+    "refus_boit": 2,
+    "vainqueur_distribue": 5,
+    "plafond_par_heure": 0,
+    "_plafond": "Plafond commun a toute la soiree : si l Enquete tourne, c est le sien qui compte, et les gorgees des deux jeux s additionnent. Au-dela, chaque gorgee non bue ajoute handicap_par_gorgee secondes avant le prochain BINGO.",
+    "plafonds": [0, 6, 12, 20],
+    "handicap_par_gorgee": 60
+  },
+  "journal_max": 30
+}

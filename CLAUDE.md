@@ -11,5 +11,9 @@ publié sur Render.
 
 ## Le projet
 Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`). Les moteurs de règles purs
-sont à part (`picolopoly.py`, `menteur.py`), testables hors ligne :
-`python tests/menteur_essai.py`.
+sont à part (`picolopoly.py`, `menteur.py`, `bingo.py`...), testables hors ligne :
+`python tests/menteur_essai.py`, `python tests/bingo_essai.py`.
+
+Jeux parallèles de la soirée = couches (`couches.py`) : Enquête (`enq`) et Bingo de soirée (`bng`).
+Leurs pages ouvrent `/ws-soiree/{code}/{nom}?page=...` : une connexion par prénom et par page.
+Le plafond de gorgées est commun aux couches (`Couche.gorgees_heure`).

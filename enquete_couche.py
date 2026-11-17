@@ -42,6 +42,14 @@ class Enquete(Couche):
     def prochaine_echeance(self):
         return moteur.prochaine_echeance(self.etat)
 
+    def gorgees_heure(self, nom, maintenant):
+        p = self.etat.get("perso", {}).get(moteur.cle_nom(nom))
+        return moteur.gorgees_heure(p, maintenant) if p and "gorgees" in p else 0
+
+    def _partager(self, ctx):
+        """Plafond commun : le moteur compte aussi les gorgees du Bingo."""
+        return moteur.GORGEES_AILLEURS.set(ctx.gorgees_ailleurs if getattr(ctx, "gorgees_ailleurs", None) else None)
+
     async def _publier(self, ctx, evenements):
         for e in evenements:
             if e["a"] is None:
@@ -67,7 +75,11 @@ class Enquete(Couche):
                 await self._envoyer_tout(ctx, nom)
             return
         version = self.etat["version"]
-        evenements = moteur.action(self.etat, nom, message, ctx.maintenant())
+        jeton = self._partager(ctx)
+        try:
+            evenements = moteur.action(self.etat, nom, message, ctx.maintenant())
+        finally:
+            moteur.GORGEES_AILLEURS.reset(jeton)
         if self.etat["version"] != version:
             await self._publier(ctx, evenements)
         else:
@@ -76,7 +88,11 @@ class Enquete(Couche):
 
     async def echeance(self, ctx):
         version = self.etat["version"]
-        evenements = moteur.expirer(self.etat, ctx.maintenant())   # fin d ouverture, heure butoir, Temoin anonyme
+        jeton = self._partager(ctx)
+        try:
+            evenements = moteur.expirer(self.etat, ctx.maintenant())   # fin d ouverture, heure butoir, Temoin anonyme
+        finally:
+            moteur.GORGEES_AILLEURS.reset(jeton)
         evenements += moteur.tic_paliers(self.etat, ctx.tables(), ctx.maintenant())
         evenements += moteur.tic_bots(self.etat, ctx.maintenant())    # joueurs fictifs (mode test)
         if self.etat["version"] != version:
@@ -90,7 +106,11 @@ class Enquete(Couche):
     async def evenement_jeu(self, ctx, evenement):
         """Une victoire, une fin de manche... a une table : points d enquete."""
         version = self.etat["version"]
-        evenements = moteur.evenement_jeu(self.etat, evenement, ctx.maintenant())
+        jeton = self._partager(ctx)
+        try:
+            evenements = moteur.evenement_jeu(self.etat, evenement, ctx.maintenant())
+        finally:
+            moteur.GORGEES_AILLEURS.reset(jeton)
         if self.etat["version"] != version:
             await self._publier(ctx, evenements)
 
