@@ -101,6 +101,21 @@ def partie(mode, n, graine):
     raise AssertionError("partie figee")
 
 
+def pluriel_des_cartes():
+    """« As » est invariable : « 2 As. », pas « 2 Ass. » ; les autres prennent un s."""
+    for carte, attendu in (("A", " pose 2 As."), ("R", " pose 2 Rois."), ("D", " pose 1 Dame.")):
+        etat = M.mt_initialiser(["Lea", "Tom"], 1000.0, "classique")
+        assert etat["phase"] == "jeu", etat["phase"]
+        etat["carte_table"] = carte
+        i = etat["courant"]
+        etat["mains"][i] = ["R", "D", "A", "J"]
+        nb = 2 if attendu.split()[1] == "2" else 1
+        M.mt_action(etat, i, {"type": "mt_poser", "cartes": list(range(nb))}, 1000.0)
+        assert etat["message"].endswith(attendu), etat["message"]
+
+
+pluriel_des_cartes()
+
 fins = {m: 0 for m in M.MT_MODES}
 speciaux = {}
 for graine in range(600):

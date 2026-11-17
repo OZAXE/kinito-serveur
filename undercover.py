@@ -177,8 +177,16 @@ def uc_initialiser(noms, maintenant, famille=None, nb_undercover=None, nb_white=
     if famille not in UC_FAMILLES:
         famille = UC_FAMILLE_DEFAUT
     nb_u, nb_w = _entier(nb_undercover), _entier(nb_white)
+    message = "Découvrez votre mot en secret."
     if not uc_repartition_valide(n, nb_u, nb_w):
+        # Reglage absent : le conseille, sans un mot. Reglage envoye mais
+        # impossible pour les PRESENTS (des joueurs partis avant « Rejouer ») :
+        # meme repli, mais annonce a la table.
+        demande = nb_undercover is not None or nb_white is not None
         nb_u, nb_w = uc_repartition(n)
+        if demande:
+            message = (f"Réglage ajusté pour {n} joueurs : {nb_u} Undercover, "
+                       f"{nb_w} Mr White. " + message)
 
     # Une paire pas encore jouee ce soir, si possible.
     deja = [d for d in (deja or []) if isinstance(d, str)]
@@ -224,7 +232,7 @@ def uc_initialiser(noms, maintenant, famille=None, nb_undercover=None, nb_white=
         "devinette": None,
         "resultat": None,
         "echeance": None,
-        "message": "Découvrez votre mot en secret.",
+        "message": message,
     }
     uc_armer(etat, maintenant)
     return etat
