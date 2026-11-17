@@ -71,7 +71,21 @@ async def essai_taille():
     verifier(await code_fermeture(soir) == 1009, "  idem sur la connexion soiree")
 
 
-ESSAIS = [essai_taille]
+async def essai_debit():
+    print("Debit des messages")
+    code = serveur.generer_code()
+    ws = await connecter(f"/ws/{code}/Alice")
+    await asyncio.sleep(0.2)
+    for _ in range(serveur.RAFALE_MESSAGES + 30):
+        await ws.send('{"type":"resync"}')
+    await asyncio.sleep(1.5)
+    verifier(await ping(ws), "rafale au-dela de la limite : messages ignores, la connexion vit")
+    for _ in range(serveur.REFUS_AVANT_COUPURE + serveur.RAFALE_MESSAGES + 50):
+        await ws.send('{"type":"resync"}')
+    verifier(await code_fermeture(ws) == 1008, "inondation continue : connexion fermee (1008)")
+
+
+ESSAIS = [essai_taille, essai_debit]
 
 
 async def principal():

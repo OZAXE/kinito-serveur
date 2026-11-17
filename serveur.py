@@ -50,6 +50,7 @@ from casino import (
 # paralleles d une soiree (l Enquete).
 from stockage import creer_stockage, Sauvegarde
 from couches import Contexte, TYPES_COUCHES
+from protection import Debit
 import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete)
 
 # =============================================================
@@ -105,6 +106,11 @@ DELAI_ENVOI = 5
 # c est un client fou ou malveillant, sa connexion est fermee (code 1009).
 # Uvicorn coupe deja au niveau du protocole avec --ws-max-size (render.yaml).
 TAILLE_MAX_MESSAGE = 16 * 1024
+# Debit maximal par connexion : au-dela, les messages sont ignores ; une
+# inondation continue (REFUS_AVANT_COUPURE refus d affilee) ferme la connexion.
+DEBIT_MESSAGES = 20         # par seconde, en continu
+RAFALE_MESSAGES = 40
+REFUS_AVANT_COUPURE = 200
 
 _veilleur = None
 
@@ -426,11 +432,18 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
 
     try:
         # Boucle principale : on ecoute les messages de ce joueur
+        debit = Debit(DEBIT_MESSAGES, RAFALE_MESSAGES)
         async for message_brut in ws.iter_text():
             if len(message_brut) > TAILLE_MAX_MESSAGE:
                 journal.warning("Message trop gros (%d) dans le salon %s", len(message_brut), code_salon)
                 await fermer(ws, 1009)
                 break
+            if not debit.accepter():
+                if debit.refus_de_suite >= REFUS_AVANT_COUPURE:
+                    journal.warning("Inondation de messages dans le salon %s", code_salon)
+                    await fermer(ws, 1008)
+                    break
+                continue
             message = lire_message(message_brut)
             if message is None:
                 continue
@@ -3313,11 +3326,18 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
     nom = " ".join(nom_joueur.split())[:24] or "Joueur"
     entree = await abonner(soiree, nom, ws)
     try:
+        debit = Debit(DEBIT_MESSAGES, RAFALE_MESSAGES)
         async for brut in ws.iter_text():
             if len(brut) > TAILLE_MAX_MESSAGE:
                 journal.warning("Message trop gros (%d) dans la soiree %s", len(brut), soiree)
                 await fermer(ws, 1009)
                 break
+            if not debit.accepter():
+                if debit.refus_de_suite >= REFUS_AVANT_COUPURE:
+                    journal.warning("Inondation de messages dans la soiree %s", soiree)
+                    await fermer(ws, 1008)
+                    break
+                continue
             message = lire_message(brut)
             if message is None or not isinstance(message.get("type"), str):
                 continue
