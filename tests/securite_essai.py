@@ -37,12 +37,16 @@ async def connecter(chemin, **options):
     return await websockets.connect(URL + chemin, ping_interval=None, **options)
 
 
-def http(chemin, ip=None):
+def http(chemin, ip=None, entetes=None, avec_entetes=False):
     """GET sur le serveur ; rend (statut, JSON). ip : simule X-Forwarded-For."""
-    req = urllib.request.Request(f"http://127.0.0.1:{PORT}{chemin}",
-                                 headers={"X-Forwarded-For": ip} if ip else {})
+    entetes = dict(entetes or {})
+    if ip:
+        entetes["X-Forwarded-For"] = ip
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}{chemin}", headers=entetes)
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
+            if avec_entetes:
+                return r.status, json.loads(r.read()), r.headers
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read() or b"null")
@@ -203,7 +207,27 @@ async def essai_limites_ip():
     verifier(rep[:5] == [200] * 5 and rep[5] == 429, "requetes HTTP limitees par adresse (429)")
 
 
-ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places, essai_limites_ip]
+async def essai_origines():
+    print("Origines autorisees")
+    code = serveur.generer_code()
+    for origine, attendu in (("https://site-malveillant.example", False), ("https://ozaxe.github.io", True),
+                             ("http://localhost:8765", True), ("http://127.0.0.1:8000", True),
+                             ("https://ozaxe.github.io.evil.example", False), ("http://localhost.evil.example", False)):
+        try:
+            ws = await connecter(f"/ws/{code}/Alice", origin=origine)
+            await ws.close()
+            accepte = True
+        except websockets.InvalidStatus:
+            accepte = False
+        verifier(accepte == attendu, f"WebSocket depuis {origine} : {'acceptee' if attendu else 'refusee'}")
+    _, _, h_bon = await asyncio.to_thread(http, "/", None, {"Origin": "https://ozaxe.github.io"}, True)
+    _, _, h_mal = await asyncio.to_thread(http, "/", None, {"Origin": "https://site-malveillant.example"}, True)
+    verifier(h_bon.get("access-control-allow-origin") == "https://ozaxe.github.io"
+             and h_mal.get("access-control-allow-origin") is None,
+             "CORS : seul le site est autorise a lire les reponses HTTP")
+
+
+ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places, essai_limites_ip, essai_origines]
 
 
 async def principal():

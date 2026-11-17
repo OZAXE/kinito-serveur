@@ -13,6 +13,7 @@ import math
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 import secrets
@@ -119,18 +120,43 @@ def deviner_bloque(ip, code):
 def admettre_connexion(ws, code):
     """Controle a l ouverture d une WebSocket. Rend (admise, ip)."""
     ip = ip_client(ws.headers, ws.client)
+    if not origine_autorisee(ws.headers.get("origin")):
+        journal.warning("WebSocket refusee : origine %r", ws.headers.get("origin"))
+        return False, ip
     if not ouvertures_ip.autoriser(ip) or deviner_bloque(ip, code):
         return False, ip
     if not connexions_ip.entrer(ip):
         return False, ip
     return True, ip
 
-# CORS : autorise les pages HTML a se connecter au serveur
-# meme si elles viennent d un autre domaine (important pour GitHub Pages).
+# =============================================================
+# ORIGINES AUTORISEES
+# Seules les pages du site (GitHub Pages) et un poste de dev (localhost,
+# fichier ouvert en local : origine "null") peuvent appeler le serveur depuis
+# un navigateur. Sans ca, n importe quel site pouvait faire ouvrir des
+# connexions a ses visiteurs. Un client hors navigateur n envoie pas d Origin
+# (ou en invente une) : ce controle ne remplace pas les limites ci-dessus.
+# Autre domaine : variable d environnement ORIGINES_AUTORISEES (separees par
+# des virgules) sur Render.
+# =============================================================
+ORIGINES_AUTORISEES = [o.strip().rstrip("/") for o in os.environ.get(
+    "ORIGINES_AUTORISEES", "https://ozaxe.github.io,null").split(",") if o.strip()]
+ORIGINES_LOCALES = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+
+
+def origine_autorisee(origine):
+    """Une connexion sans en-tete Origin (client hors navigateur) est acceptee."""
+    if origine is None:
+        return True
+    origine = origine.rstrip("/")
+    return origine in ORIGINES_AUTORISEES or re.fullmatch(ORIGINES_LOCALES, origine) is not None
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ORIGINES_AUTORISEES,
+    allow_origin_regex=ORIGINES_LOCALES,
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
 
