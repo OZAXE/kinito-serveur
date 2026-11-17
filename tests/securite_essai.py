@@ -227,7 +227,46 @@ async def essai_origines():
              "CORS : seul le site est autorise a lire les reponses HTTP")
 
 
-ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places, essai_limites_ip, essai_origines]
+async def essai_nettoyage():
+    print("Salons abandonnes et plafond global")
+    abandonne = (await get("/creer-salon"))[1]["code"]
+    accueil = (await get("/creer-salon"))[1]["code"]
+    await get(f"/soiree/{accueil}?nom=Lea")             # quelqu un attend sur l accueil
+    occupe = (await get("/creer-salon"))[1]["code"]
+    ws = await connecter(f"/ws/{occupe}/Alice")
+    await asyncio.sleep(0.3)
+    serveur._verrous_soirees["ZZZZ"] = asyncio.Lock()   # soiree disparue
+    plus_tard = serveur.time.time() + serveur.DELAI_SALON_ABANDONNE + 1
+    for code in (abandonne, accueil, occupe):
+        serveur.salons[code]["cree"] -= serveur.DELAI_SALON_ABANDONNE + 1
+    serveur.nettoyer()
+    verifier(abandonne not in serveur.salons, "salon cree mais jamais rejoint : libere par le nettoyage")
+    verifier(accueil in serveur.salons and occupe in serveur.salons,
+             "  garde si quelqu un est sur l accueil de la soiree ou assis a la table")
+    verifier("ZZZZ" not in serveur._verrous_soirees, "  verrou d une soiree disparue oublie")
+    serveur.nettoyer(plus_tard + 4 * serveur.PRESENCE_ACCUEIL)
+    verifier(accueil not in serveur.salons and accueil not in serveur.presences_accueil,
+             "  puis libere quand l accueil ne donne plus de nouvelles")
+
+    serveur.SALONS_MAX, avant = len(serveur.salons), serveur.SALONS_MAX
+    try:
+        statut = (await get("/creer-salon"))[0]
+        try:
+            await connecter(f"/ws/{serveur.generer_code()}/Bob")
+            nouveau_refuse = False
+        except websockets.InvalidStatus:
+            nouveau_refuse = True
+        existant = await connecter(f"/ws/{occupe}/Bob")
+        verifier(statut == 503 and nouveau_refuse and await ping(existant),
+                 "plafond global de salons : plus de creation, les tables existantes continuent")
+        await existant.close()
+    finally:
+        serveur.SALONS_MAX = avant
+    await ws.close()
+
+
+ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places, essai_limites_ip, essai_origines,
+          essai_nettoyage]
 
 
 async def principal():
@@ -239,6 +278,7 @@ async def principal():
     try:
         for essai in ESSAIS:
             serveur.salons.clear()
+            serveur.presences_accueil.clear()
             await essai()
     finally:
         srv.should_exit = True

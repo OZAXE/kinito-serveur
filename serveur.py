@@ -65,6 +65,7 @@ import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete
 @asynccontextmanager
 async def cycle_de_vie(_app):
     await demarrage()
+    demarrer_veilleur()     # nettoie aussi les salons crees mais jamais rejoints
     yield
     await arret()
 
@@ -183,6 +184,15 @@ DELAI_SILENCE = 25
 # Un salon dont tout le monde est parti est garde un moment : un groupe dont
 # tous les telephones se verrouillent en meme temps retrouve sa partie.
 DELAI_SALON_VIDE = 900
+# Un salon cree (/creer-salon, /rouvrir, /nouvelle-table) ou personne ne s est
+# jamais assis n avait aucune liberation programmee : il restait en memoire
+# jusqu au redemarrage. Le veilleur le retire apres ce delai, sauf si la
+# soiree est encore ouverte quelque part (accueil, Enquete).
+DELAI_SALON_ABANDONNE = 900
+NETTOYAGE_TOUTES_LES = 60       # secondes entre deux passages du nettoyage
+# Plafond global : le serveur gratuit de Render a peu de memoire. Au-dela,
+# plus aucun salon n est cree (les tables existantes continuent).
+SALONS_MAX = 2000
 # Un envoi vers une connexion bloquee ne doit pas figer tout le salon.
 DELAI_ENVOI = 5
 # Taille maximale d un message recu (en caracteres). Les clients n envoient
@@ -279,7 +289,16 @@ def generer_code():
 
 
 def nouveau_salon():
-    return {"joueurs": [], "etat": None, "jeu": None}
+    return {"joueurs": [], "etat": None, "jeu": None, "cree": time.time()}
+
+
+def salons_pleins():
+    return len(salons) >= SALONS_MAX
+
+
+def refus_plein():
+    journal.warning("Plafond de %d salons atteint", SALONS_MAX)
+    return JSONResponse({"detail": "Serveur complet, réessaie plus tard."}, status_code=503)
 
 
 def verrou(salon):
@@ -542,6 +561,10 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
 
 
 async def connexion_table(ws, code_salon, nom_joueur):
+    if code_salon not in salons and salons_pleins():
+        refus_plein()
+        await ws.close(1013)
+        return
     await ws.accept()
     demarrer_veilleur()
     nom_joueur = nettoyer_prenom(nom_joueur) or "Joueur"
@@ -1083,8 +1106,15 @@ def demarrer_veilleur():
 
 async def veilleur():
     """Repere les joueurs muets (telephone en veille) et les traite comme partis."""
+    dernier_nettoyage = time.time()
     while True:
         await asyncio.sleep(1)
+        if time.time() - dernier_nettoyage >= NETTOYAGE_TOUTES_LES:
+            dernier_nettoyage = time.time()
+            try:
+                nettoyer()
+            except Exception:
+                journal.exception("Erreur du nettoyage")
         try:
             maintenant = time.time()
             for code, salon in list(salons.items()):
@@ -1098,6 +1128,42 @@ async def veilleur():
                             asyncio.ensure_future(fermer(ws, 4001))
         except Exception:
             journal.exception("Erreur du veilleur")
+
+
+def soiree_ouverte_ailleurs(soiree, maintenant):
+    """Quelqu un a la soiree ouverte sans etre assis : Enquete, ou accueil recent."""
+    if abonnes_soirees.get(soiree):
+        return True
+    return any(maintenant - v["vu"] <= 2 * PRESENCE_ACCUEIL
+               for v in presences_accueil.get(soiree, {}).values())
+
+
+def nettoyer(maintenant=None):
+    """
+    Passage periodique (veilleur) : retire ce qui ne se liberait jamais.
+    - salons crees mais jamais rejoints (aucune liberation programmee) ;
+    - verrous de soiree et presences de l accueil des soirees disparues ;
+    - compteurs des limites par adresse devenus inutiles.
+    """
+    maintenant = time.time() if maintenant is None else maintenant
+    for code, salon in list(salons.items()):
+        liberation = salon.get("liberation")
+        if (not salon["joueurs"] and (liberation is None or liberation.done())
+                and maintenant - salon.get("cree", maintenant) > DELAI_SALON_ABANDONNE
+                and not soiree_ouverte_ailleurs(soiree_de(code), maintenant)
+                and not verrou(salon).locked()):
+            arreter_minuteurs(salon)
+            salons.pop(code, None)
+    for soiree, vus in list(presences_accueil.items()):
+        for k in [k for k, v in vus.items() if maintenant - v["vu"] > 4 * PRESENCE_ACCUEIL]:
+            del vus[k]
+        if not vus:
+            del presences_accueil[soiree]
+    for soiree, v in list(_verrous_soirees.items()):
+        if not v.locked() and not soiree_existe(soiree) and not abonnes_soirees.get(soiree):
+            del _verrous_soirees[soiree]
+    for limite in (ouvertures_ip, requetes_ip, creations_ip, rates_ip):
+        limite.purger()
 
 
 # =============================================================
@@ -3527,6 +3593,8 @@ async def creer_salon(request: Request = None):
     """Cree un nouveau salon vide et retourne son code."""
     if not creations_ip.autoriser(_ip_requete(request)):
         return JSONResponse({"detail": "Trop de soirées créées, réessaie dans une minute."}, status_code=429)
+    if salons_pleins():
+        return refus_plein()
     code = generer_code()
     salons[code] = nouveau_salon()
     return {"code": code}
@@ -3616,6 +3684,8 @@ async def rouvrir_soiree(code: str, request: Request = None):
     if not soiree_existe(code):
         if not creations_ip.autoriser(_ip_requete(request)):
             return JSONResponse({"detail": "Trop de soirées rouvertes, réessaie dans une minute."}, status_code=429)
+        if salons_pleins():
+            return refus_plein()
         salons[code] = nouveau_salon()
         return {"existe": True, "rouverte": True}
     return {"existe": True, "rouverte": False}
@@ -3631,6 +3701,8 @@ async def nouvelle_table(code: str, request: Request = None):
         return {"existe": False}
     if not creations_ip.autoriser(_ip_requete(request)):
         return JSONResponse({"detail": "Trop de tables ouvertes, réessaie dans une minute."}, status_code=429)
+    if salons_pleins():
+        return refus_plein()
     if not soiree_existe(code):
         await rouvrir_soiree(code)
     if code not in salons:
