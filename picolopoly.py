@@ -71,12 +71,35 @@ PP_DIFFICULTE_DEFAUT = "difficile"
 # 1 gorgee par tranche de 50 EUR.
 PP_CAGNOTTE_PAR_GORGEE = 50
 PP_MOTIFS_CAGNOTTE = ["taxe", "carte", "prison"]
-# Roulette : une mise par tour, par tranches de 50 EUR, 1 gorgee par tranche
-# misee (bue quoi qu il sorte). Une mise perdue part dans la cagnotte.
-# Gains : la mise est rendue multipliee par PP_ROULETTE_GAINS[pari].
+# Roulette (europeenne, comme au casino) : un lancer par tour, autant de
+# paris qu on veut sur le tapis, chacun par tranches de 50 EUR. 1 gorgee par
+# tranche misee en tout (bue quoi qu il sorte). Les mises perdues partent
+# dans la cagnotte. Gains nets : plein 35 pour 1, douzaine et colonne 2 pour 1,
+# chances simples 1 pour 1 (la mise gagnante est rendue en plus).
 PP_ROULETTE_MISE = 50
-PP_ROULETTE_GAINS = {"rouge": 2, "noir": 2, "pair": 2, "impair": 2, "douzaine": 3, "plein": 36}
 PP_ROULETTE_ROUGES = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
+# Paris exterieurs : (gain net pour 1, test sur le numero). Plein ("n17") : 35 pour 1.
+PP_ROULETTE_PARIS = {
+    "rouge": (1, lambda n: n in PP_ROULETTE_ROUGES),
+    "noir": (1, lambda n: n != 0 and n not in PP_ROULETTE_ROUGES),
+    "pair": (1, lambda n: n != 0 and n % 2 == 0),
+    "impair": (1, lambda n: n % 2 == 1),
+    "manque": (1, lambda n: 1 <= n <= 18),
+    "passe": (1, lambda n: 19 <= n <= 36),
+    "d1": (2, lambda n: 1 <= n <= 12),
+    "d2": (2, lambda n: 13 <= n <= 24),
+    "d3": (2, lambda n: 25 <= n <= 36),
+    "c1": (2, lambda n: n != 0 and n % 3 == 1),
+    "c2": (2, lambda n: n != 0 and n % 3 == 2),
+    "c3": (2, lambda n: n != 0 and n % 3 == 0),
+}
+PP_ROULETTE_LIBELLES = {
+    "rouge": "rouge", "noir": "noir", "pair": "pair", "impair": "impair",
+    "manque": "manque (1-18)", "passe": "passe (19-36)",
+    "d1": "la 1re douzaine", "d2": "la 2e douzaine", "d3": "la 3e douzaine",
+    "c1": "la 1re colonne", "c2": "la 2e colonne", "c3": "la 3e colonne",
+}
+PP_ROULETTE_PARIS_MAX = 20     # paris differents sur un meme lancer
 
 # Rythme
 PP_DUREE_PARTIE = 3600        # chrono dur, en secondes
@@ -1003,72 +1026,107 @@ def _lever(etat, ev, i, message):
 
 
 # --- Roulette ------------------------------------------------
+# Comme au casino : un tapis, plusieurs paris par lancer. Chaque pari est un
+# code : "n0" a "n36" (plein), "rouge", "noir", "pair", "impair",
+# "manque" (1-18), "passe" (19-36), "d1" a "d3" (douzaines), "c1" a "c3"
+# (colonnes ; c1 = 1, 4, 7... 34). Le zero fait perdre tout sauf le plein sur 0.
 
-def _libelle_pari(pari, numero):
-    if pari == "douzaine":
-        return "la " + ("1re" if numero == 1 else str(numero) + "e") + " douzaine"
-    if pari == "plein":
-        return "le " + str(numero)
-    return pari
+def _pari_valide(pari):
+    if not isinstance(pari, str):
+        return False
+    if pari in PP_ROULETTE_PARIS:
+        return True
+    if pari.startswith("n") and pari[1:].isdigit():
+        n = int(pari[1:])
+        return 0 <= n <= 36 and pari == "n" + str(n)
+    return False
 
 
-def _pari_gagne(pari, numero, tirage):
-    if pari == "plein":
-        return tirage == numero
-    if tirage == 0:
-        return False      # le zero fait perdre tous les paris simples
-    if pari == "rouge":
-        return tirage in PP_ROULETTE_ROUGES
-    if pari == "noir":
-        return tirage not in PP_ROULETTE_ROUGES
-    if pari == "pair":
-        return tirage % 2 == 0
-    if pari == "impair":
-        return tirage % 2 == 1
-    return (tirage - 1) // 12 + 1 == numero
+def _pari_gagne(pari, tirage):
+    if pari in PP_ROULETTE_PARIS:
+        return PP_ROULETTE_PARIS[pari][1](tirage)
+    return int(pari[1:]) == tirage
+
+
+def _gain_pari(pari):
+    """Gain net pour 1 EUR mise : 35 sur un plein, 2 ou 1 ailleurs."""
+    return PP_ROULETTE_PARIS[pari][0] if pari in PP_ROULETTE_PARIS else 35
+
+
+def _libelle_pari(pari):
+    if pari in PP_ROULETTE_LIBELLES:
+        return PP_ROULETTE_LIBELLES[pari]
+    return "le " + pari[1:]
+
+
+def _mises_roulette(message):
+    """
+    Les paris du message, en liste [{pari, montant}]. Accepte aussi l ancien
+    format a un seul pari ({pari, numero, mise}) des pages encore en cache.
+    Renvoie une chaine d erreur si le message ne tient pas.
+    """
+    mises = message.get("mises")
+    if mises is None and isinstance(message.get("pari"), str):
+        pari, numero = message.get("pari"), _entier(message.get("numero"))
+        if pari == "plein" and numero is not None:
+            pari = "n" + str(numero)
+        elif pari == "douzaine" and numero is not None:
+            pari = "d" + str(numero)
+        mises = [{"pari": pari, "montant": message.get("mise")}]
+    if not isinstance(mises, list) or not mises:
+        return "Aucune mise."
+    if len(mises) > PP_ROULETTE_PARIS_MAX:
+        return "Trop de paris différents (" + str(PP_ROULETTE_PARIS_MAX) + " au plus)."
+    propres = {}
+    for m in mises:
+        if not isinstance(m, dict) or not _pari_valide(m.get("pari")):
+            return "Pari invalide."
+        montant = _entier(m.get("montant"))
+        if montant is None or montant < PP_ROULETTE_MISE or montant % PP_ROULETTE_MISE != 0:
+            return "Misez par tranches de " + str(PP_ROULETTE_MISE) + " €."
+        propres[m["pari"]] = propres.get(m["pari"], 0) + montant
+    return [{"pari": k, "montant": v} for k, v in propres.items()]
 
 
 def _roulette(etat, ev, i, message):
     """
-    Une mise par tour, avant ou apres le lancer. Les gorgees sont le prix
-    d entree, choisi : volontaires, comme celles de la cagnotte.
+    Un lancer par tour, avant ou apres les des, avec autant de paris qu on
+    veut sur le tapis. Les gorgees (1 par tranche de 50 EUR misee en tout)
+    sont le prix d entree, choisi : volontaires, comme celles de la cagnotte.
     """
     if not _peut_gerer(etat, i, False):
         return "La roulette ne tourne que pendant votre tour."
     if etat["roulette_jouee"]:
         return "Une seule mise par tour."
-    pari = message.get("pari")
-    if not isinstance(pari, str) or pari not in PP_ROULETTE_GAINS:
-        return "Pari invalide."
-    numero = None
-    if pari in ("douzaine", "plein"):
-        numero = _entier(message.get("numero"))
-        haut = 3 if pari == "douzaine" else 36
-        bas = 1 if pari == "douzaine" else 0
-        if numero is None or not bas <= numero <= haut:
-            return "Numéro invalide."
-    mise = _entier(message.get("mise"))
-    if mise is None or mise < PP_ROULETTE_MISE or mise % PP_ROULETTE_MISE != 0:
-        return "Misez par tranches de " + str(PP_ROULETTE_MISE) + " €."
-    if mise > etat["argent"][i]:
+    mises = _mises_roulette(message)
+    if isinstance(mises, str):
+        return mises
+    total = sum(m["montant"] for m in mises)
+    if total > etat["argent"][i]:
         return "Pas assez d'argent pour cette mise."
 
     etat["roulette_jouee"] = True
-    etat["argent"][i] -= mise
-    _boire(etat, ev, [(i, mise // PP_ROULETTE_MISE)], "roulette", volontaire=True)
+    etat["argent"][i] -= total
+    _boire(etat, ev, [(i, total // PP_ROULETTE_MISE)], "roulette", volontaire=True)
     tirage = random.randint(0, 36)
-    gagne = _pari_gagne(pari, numero, tirage)
-    gain = mise * PP_ROULETTE_GAINS[pari] if gagne else 0
-    if gagne:
-        etat["argent"][i] += gain
+    retour = perdu = 0
+    for m in mises:
+        m["gagne"] = _pari_gagne(m["pari"], tirage)
+        if m["gagne"]:
+            retour += m["montant"] * (_gain_pari(m["pari"]) + 1)
+        else:
+            perdu += m["montant"]
+    etat["argent"][i] += retour
+    etat["cagnotte"] += perdu
+    ev.append(_tous({"type": "pp_roulette", "joueur": i, "mises": mises, "mise": total,
+                     "tirage": tirage, "gagne": retour > 0, "gain": retour}))
+    sur = _libelle_pari(mises[0]["pari"]) if len(mises) == 1 else str(len(mises)) + " paris"
+    if retour:
+        bilan = "Récupère " + str(retour) + " € !"
     else:
-        etat["cagnotte"] += mise
-    ev.append(_tous({"type": "pp_roulette", "joueur": i, "mise": mise, "pari": pari,
-                     "numero": numero, "tirage": tirage, "gagne": gagne, "gain": gain}))
-    etat["message"] = (_nom(etat, i) + " mise " + str(mise) + " € sur " + _libelle_pari(pari, numero)
-                       + " : le " + str(tirage) + " sort. "
-                       + ("Gagné, " + str(gain) + " € !" if gagne else "Perdu, la mise file dans la cagnotte."))
-    return None
+        bilan = "Tout est perdu, la mise file dans la cagnotte."
+    etat["message"] = (_nom(etat, i) + " mise " + str(total) + " € sur " + sur
+                       + " : le " + str(tirage) + " sort. " + bilan)
 
 
 # --- Dette et faillite ----------------------------------------

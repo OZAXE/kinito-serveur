@@ -108,8 +108,15 @@ def coup_au_hasard(e, rnd):
                  argent_donne=rnd.choice([0, 0, 50, 300, -5, "x"]),
                  argent_recu=rnd.choice([0, 0, 100, 5000]))
     elif t == "pp_roulette":
-        m.update(pari=rnd.choice(list(pp.PP_ROULETTE_GAINS) + ["vert"]),
-                 numero=rnd.randint(-1, 37), mise=rnd.choice([50, 100, 25, 10 ** 6, "x"]))
+        paris = list(pp.PP_ROULETTE_PARIS) + ["n0", "n17", "n36", "n37", "n07", "vert", 3]
+        if rnd.random() < 0.2:
+            # Ancien format a un seul pari (pages en cache).
+            m.update(pari=rnd.choice(["rouge", "plein", "douzaine", "vert"]),
+                     numero=rnd.randint(-1, 37), mise=rnd.choice([50, 100, 25, 10 ** 6, "x"]))
+        else:
+            m["mises"] = rnd.choice([[], "x", [{"pari": rnd.choice(paris),
+                                                "montant": rnd.choice([50, 100, 150, 25, 10 ** 6, "x"])}
+                                               for _ in range(rnd.randint(1, 4))]])
     return i, m
 
 
@@ -150,7 +157,59 @@ def une_partie(graine, nb, difficulte):
     return PAS_MAX
 
 
+def essai_roulette():
+    """Gains du tapis, comme au casino, sur un tirage force."""
+    def lancer(mises, tirage, argent=1000):
+        e = pp.pp_initialiser(["A", "B"], 1000.0, "normal")
+        i = e["courant"]
+        e["argent"][i] = argent
+        cagnotte = e["cagnotte"]
+        ancien = pp.random.randint
+        pp.random.randint = lambda a, b: tirage
+        try:
+            ev = pp.pp_action(e, i, {"type": "pp_roulette", "mises": mises}, 1000.0)
+        finally:
+            pp.random.randint = ancien
+        msg = [x["msg"] for x in ev if x["msg"].get("type") == "pp_roulette"]
+        return e, i, msg[0] if msg else None, cagnotte
+
+    # 100 sur le 17, 50 sur noir, 50 sur la 2e douzaine, 50 sur rouge : le 17 noir sort.
+    e, i, m, c0 = lancer([{"pari": "n17", "montant": 100}, {"pari": "noir", "montant": 50},
+                          {"pari": "d2", "montant": 50}, {"pari": "rouge", "montant": 50}], 17)
+    verifier(m is not None, "roulette refusee")
+    verifier(m["gain"] == 100 * 36 + 50 * 2 + 50 * 3, "gain du tapis faux : " + str(m["gain"]))
+    verifier(e["argent"][i] == 1000 - 250 + m["gain"], "argent faux apres la roulette")
+    verifier(e["cagnotte"] == c0 + 50, "la mise perdue (rouge) doit aller a la cagnotte")
+    verifier(e["roulette_jouee"], "roulette_jouee pas mis")
+    # Le zero : tout perd sauf le plein sur 0 ; colonnes et manque perdent aussi.
+    e, i, m, c0 = lancer([{"pari": "n0", "montant": 50}, {"pari": "c1", "montant": 50},
+                          {"pari": "manque", "montant": 50}, {"pari": "pair", "montant": 50}], 0)
+    verifier(m["gain"] == 50 * 36, "zero mal paye")
+    verifier(e["cagnotte"] == c0 + 150, "zero : mises perdues pas a la cagnotte")
+    # Colonnes : c1 = 1, 4... 34 ; passe = 19-36.
+    e, i, m, _ = lancer([{"pari": "c1", "montant": 50}, {"pari": "passe", "montant": 50}], 34)
+    verifier(m["gain"] == 150 + 100, "colonne ou passe mal payee")
+    # Ancien format (page en cache) : plein sur le 5.
+    e = pp.pp_initialiser(["A", "B"], 1000.0, "normal")
+    ancien = pp.random.randint
+    pp.random.randint = lambda a, b: 5
+    try:
+        ev = pp.pp_action(e, e["courant"], {"type": "pp_roulette", "pari": "plein", "numero": 5, "mise": 50}, 1000.0)
+    finally:
+        pp.random.randint = ancien
+    verifier(any(x["msg"].get("type") == "pp_roulette" and x["msg"]["gain"] == 1800 for x in ev), "ancien format refuse")
+    # Refus : trop cher, mauvaise tranche, pari inconnu, doublon fusionne.
+    for mises in ([{"pari": "rouge", "montant": 2000}], [{"pari": "rouge", "montant": 75}],
+                  [{"pari": "vert", "montant": 50}], [{"pari": "n37", "montant": 50}], []):
+        e, i, m, _ = lancer(mises, 3)
+        verifier(m is None and not e["roulette_jouee"], "mise invalide acceptee : " + json.dumps(mises))
+    e, i, m, _ = lancer([{"pari": "rouge", "montant": 50}, {"pari": "rouge", "montant": 50}], 3)
+    verifier(m["mises"] == [{"pari": "rouge", "montant": 100, "gagne": True}] and m["gain"] == 200, "doublon mal fusionne")
+    print("roulette : OK")
+
+
 def main():
+    essai_roulette()
     nb_parties = int(sys.argv[1]) if len(sys.argv) > 1 else 300
     fins = {"faillites": 0, "chrono": 0}
     for g in range(nb_parties):
