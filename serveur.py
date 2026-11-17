@@ -1852,6 +1852,31 @@ async def bb_deplacer(code_salon, salons, diffuser, joueur, ligne, colonne, via_
     await bb_envoyer_carte_case(code_salon, salons)
  
 
+def bb_carte_main(etat, idx, index_carte, types=None):
+    """
+    La carte index_carte de la main du joueur idx, si l index est valide et
+    la carte d un des types demandes (types None : n importe laquelle).
+    Sinon None : l action est refusee (avant, un index absent ou hors bornes
+    levait une exception, et n importe quelle carte passait pour une Dame).
+    """
+    main = etat["mains"][idx]
+    if isinstance(index_carte, bool) or not isinstance(index_carte, int) \
+            or not 0 <= index_carte < len(main):
+        return None
+    carte = main[index_carte]
+    return carte if types is None or carte["type"] in types else None
+
+
+def bb_arme_a_portee(etat, idx, cible):
+    """La premiere arme posee du joueur qui atteint la cible (Roi : 6, Valet : 2)."""
+    dist = bb_distance(etat["positions"][idx], etat["positions"][cible])
+    for arme in etat["armes"][idx]:
+        portee = 6 if arme["type"] == "roi" else 2
+        if dist <= portee:
+            return arme
+    return None
+
+
 async def bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, ligne, colonne, cible, index_carte):
     """
     L As : se deplacer d une case vers une cible, puis la frapper en mi-verre.
@@ -1865,6 +1890,8 @@ async def bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, ligne, co
     if not bb_case_valide(ligne, colonne, bb_taille(etat)):
         return
     if not isinstance(cible, int) or not 0 <= cible < etat["nb_joueurs"]:
+        return
+    if bb_carte_main(etat, idx, index_carte, ("as",)) is None:
         return
 
     # On verifie que la destination est bien a 1 case (deplacement As)
@@ -1923,22 +1950,20 @@ async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, 
         etat["message"] = f"{salon['joueurs'][idx]['nom']} frappe à mains nues ({degats})"
  
     elif type_attaque == "cc_gorgee":
-        carte = main[index_carte]
+        carte = bb_carte_main(etat, idx, index_carte, ("gorgee",))
+        if carte is None:
+            return
         bb_appliquer_gorgees(etat, cible, carte["valeur"])
         main.pop(index_carte)
         etat["message"] = f"{salon['joueurs'][idx]['nom']} attaque ({carte['valeur']} gorgées)"
  
     elif type_attaque == "arme":
         # index_carte = carte gorgee ; le serveur verifie la portee via l arme la plus adaptee
-        carte = main[index_carte]
+        carte = bb_carte_main(etat, idx, index_carte, ("gorgee",))
+        if carte is None:
+            return
         # On determine quelle arme peut atteindre la cible
-        dist = bb_distance(etat["positions"][idx], etat["positions"][cible])
-        arme_utilisee = None
-        for arme in etat["armes"][idx]:
-            portee = 6 if arme["type"] == "roi" else 2
-            if dist <= portee:
-                arme_utilisee = arme
-                break
+        arme_utilisee = bb_arme_a_portee(etat, idx, cible)
         if not arme_utilisee:
             return  # pas d arme a portee
         if arme_utilisee["type"] == "roi":
@@ -1950,15 +1975,25 @@ async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, 
         etat["message"] = f"{salon['joueurs'][idx]['nom']} tire ({degats} gorgées)"
  
     elif type_attaque == "as":
+        if bb_carte_main(etat, idx, index_carte, ("as",)) is None:
+            return
         bb_mi_verre(etat, cible)
         main.pop(index_carte)
         etat["message"] = f"{salon['joueurs'][idx]['nom']} frappe à l'As (mi-verre)"
  
     elif type_attaque == "joker":
+        # Le Joker se tire avec une arme posee, cible a portee (regle et page).
+        if bb_carte_main(etat, idx, index_carte, ("joker",)) is None:
+            return
+        if bb_arme_a_portee(etat, idx, cible) is None:
+            return
         bb_mi_verre(etat, cible)
         main.pop(index_carte)
         etat["message"] = f"{salon['joueurs'][idx]['nom']} tire au Joker (mi-verre)"
- 
+
+    else:
+        return      # type d attaque inconnu : rien ne se passe
+
     etat["action_faite"] = True
  
     # Verifie la victoire
@@ -1976,8 +2011,8 @@ async def bb_poser_arme(code_salon, salons, diffuser, joueur, index_carte):
     idx = joueur["index"]
     if etat["phase"] != "jeu" or idx != etat["joueur_courant"] or etat["action_faite"]:
         return
-    carte = etat["mains"][idx][index_carte]
-    if carte["type"] not in ("roi", "valet"):
+    carte = bb_carte_main(etat, idx, index_carte, ("roi", "valet"))
+    if carte is None:
         return
     etat["armes"][idx].append(carte)
     etat["mains"][idx].pop(index_carte)
@@ -1995,6 +2030,8 @@ async def bb_dame(code_salon, salons, diffuser, joueur, cible, index_carte):
     if etat["phase"] != "jeu" or idx != etat["joueur_courant"] or etat["action_faite"]:
         return
     if not isinstance(cible, int) or not 0 <= cible < etat["nb_joueurs"]:
+        return
+    if bb_carte_main(etat, idx, index_carte, ("dame",)) is None:
         return
     etat["verres"][cible] = 0
     etat["mains"][idx].pop(index_carte)
@@ -2033,7 +2070,9 @@ async def bb_ramasser(code_salon, salons, diffuser, joueur, decision, index_echa
         if len(etat["mains"][idx]) < etat["max_cartes"]:
             etat["mains"][idx].append(carte_sol)
             etat["plateau"][pos["ligne"]][pos["colonne"]] = None
-    elif decision == "echanger" and carte_sol is not None and index_echange is not None:
+    elif decision == "echanger" and carte_sol is not None:
+        if bb_carte_main(etat, idx, index_echange) is None:
+            return      # carte a echanger invalide : le tour n est pas fini
         ma_carte = etat["mains"][idx][index_echange]
         etat["plateau"][pos["ligne"]][pos["colonne"]] = ma_carte
         etat["mains"][idx][index_echange] = carte_sol
