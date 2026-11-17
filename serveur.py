@@ -100,6 +100,11 @@ DELAI_SILENCE = 25
 DELAI_SALON_VIDE = 900
 # Un envoi vers une connexion bloquee ne doit pas figer tout le salon.
 DELAI_ENVOI = 5
+# Taille maximale d un message recu (en caracteres). Les clients n envoient
+# que de petites actions (quelques centaines d octets au plus) : au-dela,
+# c est un client fou ou malveillant, sa connexion est fermee (code 1009).
+# Uvicorn coupe deja au niveau du protocole avec --ws-max-size (render.yaml).
+TAILLE_MAX_MESSAGE = 16 * 1024
 
 _veilleur = None
 
@@ -191,6 +196,19 @@ async def envoyer(joueur, message):
         return True
     except Exception:
         return False
+
+
+def lire_message(brut):
+    """
+    Decode un message recu : un objet JSON, sinon None (ignore). Un JSON trop
+    imbrique ([[[[...]]]]) leve RecursionError et non ValueError : il coupait
+    la connexion au lieu d etre simplement ignore.
+    """
+    try:
+        message = json.loads(brut)
+    except (ValueError, RecursionError):
+        return None
+    return message if isinstance(message, dict) else None
 
 
 async def fermer(ws, code=1000):
@@ -409,11 +427,12 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
     try:
         # Boucle principale : on ecoute les messages de ce joueur
         async for message_brut in ws.iter_text():
-            try:
-                message = json.loads(message_brut)
-            except ValueError:
-                continue
-            if not isinstance(message, dict):
+            if len(message_brut) > TAILLE_MAX_MESSAGE:
+                journal.warning("Message trop gros (%d) dans le salon %s", len(message_brut), code_salon)
+                await fermer(ws, 1009)
+                break
+            message = lire_message(message_brut)
+            if message is None:
                 continue
             joueur["vu"] = time.time()
             type_msg = message.get("type")
@@ -3295,11 +3314,12 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
     entree = await abonner(soiree, nom, ws)
     try:
         async for brut in ws.iter_text():
-            try:
-                message = json.loads(brut)
-            except ValueError:
-                continue
-            if not isinstance(message, dict) or not isinstance(message.get("type"), str):
+            if len(brut) > TAILLE_MAX_MESSAGE:
+                journal.warning("Message trop gros (%d) dans la soiree %s", len(brut), soiree)
+                await fermer(ws, 1009)
+                break
+            message = lire_message(brut)
+            if message is None or not isinstance(message.get("type"), str):
                 continue
             if message["type"] == "ping":
                 try:
