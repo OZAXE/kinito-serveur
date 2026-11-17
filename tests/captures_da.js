@@ -155,6 +155,7 @@ async function jouerAlice(p) {
     const bots = [];
     for (let k = 0; k < NB_BOTS; k++) { bots.push(bot(code, ['Bruno', 'Chloé', 'Dylan', 'Emma', 'Farid', 'Gaëlle', 'Hugo'][k])); await attendre(300); }
     await attendre(2500);
+    await p.screenshot({ path: `${dossier}/${jeu}-${taille}-attente.png` });
     // Lancer : bouton Démarrer de la page (Soiree.lancer peut demander confirmation).
     await p.evaluate(() => { const b = [...document.querySelectorAll('#panneau button')].find(x => /D.marrer|Ouvrir|Lancer la partie/.test(x.textContent) && !x.disabled); if (b) b.click(); });
     await attendre(1500);
