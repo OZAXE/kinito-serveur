@@ -1,5 +1,6 @@
 """
-Serveur multijoueur pour le Kinito, BeerBattle, Buckshot, Picopoly, Menteur et le Casino.
+Serveur multijoueur pour le Kinito, BeerBattle, Buckshot, Picopoly, Menteur, le Casino
+et Undercover.
 Technologie : FastAPI + WebSockets pour la communication temps reel.
 
 Architecture :
@@ -31,6 +32,12 @@ from menteur import (
     MT_JOUEURS_MIN, MT_JOUEURS_MAX,
     mt_initialiser, mt_action, mt_expirer, mt_etat_public, mt_main,
     mt_prochaine_echeance, mt_joueur_parti, mt_joueur_revenu,
+)
+# Undercover (deduction sociale, indices a l oral) : meme principe.
+from undercover import (
+    UC_JOUEURS_MIN, UC_JOUEURS_MAX,
+    uc_initialiser, uc_action, uc_expirer, uc_etat_public, uc_mot,
+    uc_prochaine_echeance, uc_joueur_parti, uc_joueur_revenu,
 )
 # Casino (roulette, blackjack, poker) : meme principe, moteur pur a part.
 from casino import (
@@ -790,6 +797,20 @@ async def _menteur_instantane(code_salon, joueur, complet, nouveau):
     main = mt_main(etat, idx)
     if main is not None:
         await envoyer(joueur, main)
+
+
+async def _undercover_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    # Son mot est secret : il ne part que vers lui. Un arrivant en pleine
+    # partie regarde (pas de mot) jusqu a la partie suivante.
+    if complet:
+        await envoyer(joueur, {"type": "uc_demarree", "joueurs": noms})
+    await envoyer(joueur, uc_etat_public(etat, time.time()))
+    mot = uc_mot(etat, joueur["index"])
+    if mot is not None:
+        await envoyer(joueur, mot)
 
 
 async def _casino_instantane(code_salon, joueur, complet, nouveau):
@@ -2416,10 +2437,10 @@ async def mt_demarrer(code_salon, mode=None):
     salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
     nb = len(salon["joueurs"])
     if nb < MT_JOUEURS_MIN:
-        await diffuser(code_salon, {"type": "erreur", "message": "Menteur demande au moins 2 joueurs."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Cal 12 demande au moins 2 joueurs."})
         return
     if nb > MT_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Menteur se joue à 8 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Cal 12 se joue à 8 joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
@@ -2505,6 +2526,117 @@ async def mt_traiter(code_salon, joueur, message):
 
 
 # =============================================================
+# UNDERCOVER (deduction sociale, indices a l oral)
+# Les regles sont dans undercover.py. Ici : le reseau, le mot secret de
+# chacun, et le minuteur qui fait avancer la parole, le vote et les
+# revelations. Les points et les paires deja jouees passent d une partie a
+# la suivante dans le meme salon.
+# =============================================================
+
+async def uc_demarrer(code_salon, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if etat is not None and not (salon.get("jeu") == "undercover" and etat.get("phase") == "fin"):
+        return
+    precedent = etat if salon.get("jeu") == "undercover" else salon.get("uc_memoire")
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < UC_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur", "message": "Undercover demande au moins 3 joueurs."})
+        return
+    if nb > UC_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur", "message": f"Undercover se joue à {UC_JOUEURS_MAX} joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    salon["etat"] = uc_initialiser(
+        [j["nom"] for j in salon["joueurs"]], time.time(),
+        message.get("famille"), message.get("undercover"), message.get("white"),
+        points=(precedent or {}).get("points"), deja=(precedent or {}).get("deja"))
+    salon["jeu"] = "undercover"
+    salon["uc_memoire"] = {"points": salon["etat"]["points"], "deja": salon["etat"]["deja"]}
+    await diffuser(code_salon, {"type": "uc_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer_indices(code_salon)
+    await uc_publier(code_salon, [])
+
+
+async def uc_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous et son mot a chacun."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "undercover" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, uc_etat_public(etat, time.time()))
+    for joueur in salon["joueurs"]:
+        if not joueur.get("parti"):
+            mot = uc_mot(etat, joueur["index"])
+            if mot is not None:
+                await envoyer(joueur, mot)
+    uc_programmer(code_salon)
+    salon["uc_memoire"] = {"points": etat["points"], "deja": etat["deja"]}
+    if etat.get("phase") == "fin" and not etat.get("fin_signalee"):
+        etat["fin_signalee"] = True
+        noms = [j["nom"] for j in salon["joueurs"]]
+        res = etat.get("resultat") or {}
+        gagnants = [noms[g] for g in res.get("gagnants", []) if g < len(noms)]
+        await signaler(code_salon, "undercover", "victoire", gagnants=gagnants,
+                       perdants=[n for n in noms if n not in gagnants],
+                       details={"vainqueur": res.get("vainqueur")})
+
+
+def uc_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("uc_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = uc_prochaine_echeance(etat) if etat and salon.get("jeu") == "undercover" else None
+    salon["uc_minuteur"] = None if echeance is None else asyncio.create_task(
+        uc_minuteur(code_salon, salon, echeance))
+
+
+async def uc_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "undercover":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("uc_minuteur") is not moi:
+            return
+        salon["uc_minuteur"] = None
+        etat = salon["etat"]
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = uc_expirer(etat, time.time())
+        if etat["version"] != version:
+            await uc_publier(code_salon, evenements)
+        else:
+            uc_programmer(code_salon)
+
+
+async def uc_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "undercover" or etat is None:
+        return
+    version = etat["version"]
+    evenements = uc_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await uc_publier(code_salon, evenements)
+    else:
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+# =============================================================
 # CASINO (roulette, blackjack, poker)
 # Les regles sont dans casino.py. Ici : le reseau, les cartes privees du
 # poker, et le minuteur qui lance la roue, joue a la place d un joueur absent
@@ -2518,7 +2650,7 @@ async def cs_demarrer(code_salon):
     etat = salon.get("etat")
     if etat is not None:
         jeu = salon.get("jeu")
-        fini = (jeu == "menteur" and etat.get("phase") == "fin") or \
+        fini = (jeu in ("menteur", "undercover") and etat.get("phase") == "fin") or \
                (jeu == "beerbattle" and etat.get("phase") == "fini")
         if not fini:
             return
@@ -2713,6 +2845,20 @@ async def _mt_parti(code_salon, index):
         await mt_publier(code_salon, [])
 
 
+def _uc_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        uc_joueur_revenu(etat, idx, time.time())
+        uc_programmer(code_salon)
+
+
+async def _uc_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        uc_joueur_parti(etat, index, time.time())
+        await uc_publier(code_salon, [])
+
+
 def _cs_revenu(code_salon, salon, idx):
     etat = salon["etat"]
     if idx < etat["nb_joueurs"]:
@@ -2756,7 +2902,7 @@ JEUX = {
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("pp_minuteur",),
         min_joueurs=PP_JOUEURS_MIN, max_joueurs=PP_JOUEURS_MAX),
     "menteur": Jeu(
-        "menteur", "Menteur", "menteur-3d-jeu.html", "mt_demarrer", _prefixe("mt_"),
+        "menteur", "Cal 12", "menteur-3d-jeu.html", "mt_demarrer", _prefixe("mt_"),
         lambda code, m: mt_demarrer(code, m.get("mode")), mt_traiter, _menteur_instantane,
         joueur_parti=_mt_parti, joueur_revenu=_mt_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("mt_minuteur",),
@@ -2767,6 +2913,12 @@ JEUX = {
         joueur_parti=_cs_parti, joueur_revenu=_cs_revenu, arrivee=_casino_arrivee,
         minuteurs=("cs_minuteur",),
         min_joueurs=CS_JOUEURS_MIN, max_joueurs=CS_JOUEURS_MAX),
+    "undercover": Jeu(
+        "undercover", "Undercover", "undercover-3d-jeu.html", "uc_demarrer", _prefixe("uc_"),
+        uc_demarrer, uc_traiter, _undercover_instantane,
+        joueur_parti=_uc_parti, joueur_revenu=_uc_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("uc_minuteur",),
+        min_joueurs=UC_JOUEURS_MIN, max_joueurs=UC_JOUEURS_MAX),
 }
 
 

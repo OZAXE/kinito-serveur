@@ -44,6 +44,7 @@ import casino
 import menteur
 import picolopoly
 import serveur
+import undercover
 
 # Delais raccourcis : le banc n a pas une heure devant lui.
 picolopoly.PP_DELAI_CHOIX = 2
@@ -54,6 +55,13 @@ menteur.MT_DELAI_CIBLE = 3
 menteur.MT_DELAI_ABSENT = 1
 menteur.MT_DELAI_REVELATION = 1.0
 menteur.MT_DELAI_PAR_TIR = 0.3
+undercover.UC_DELAI_LECTURE = 3
+undercover.UC_DELAI_INDICE = 3
+undercover.UC_DELAI_VOTE = 5
+undercover.UC_DELAI_DEVINE = 3
+undercover.UC_DELAI_ABSENT = 1
+undercover.UC_DELAI_REVELATION = 1.0
+undercover.UC_DELAI_RETOUR_VOTE = 3
 casino.CS_DELAI_MISES = 3
 casino.CS_DELAI_TOUR = 3
 casino.CS_DELAI_POKER = 3
@@ -87,7 +95,7 @@ serveur.pp_armer = _armer_trace
 PORT = int(os.environ.get("BANC_PORT", "18765"))
 BLOCAGE = 12          # secondes sans aucun progres = blocage
 
-NB_JOUEURS = {"kinito": 4, "beerbattle": 4, "buckshot": 4, "picolopoly": 4, "menteur": 4, "casino": 4}
+NB_JOUEURS = {"kinito": 4, "beerbattle": 4, "buckshot": 4, "picolopoly": 4, "menteur": 4, "casino": 4, "undercover": 5}
 DEMARRER = {
     "kinito": {"type": "demarrer", "difficulte": "normal"},
     "beerbattle": {"type": "bb_demarrer"},
@@ -95,6 +103,7 @@ DEMARRER = {
     "picolopoly": {"type": "pp_demarrer", "difficulte": "normal"},
     "menteur": {"type": "mt_demarrer", "mode": "chaos"},
     "casino": {"type": "cs_demarrer"},
+    "undercover": {"type": "uc_demarrer", "famille": "melange"},
 }
 
 
@@ -160,13 +169,16 @@ class Banc:
         elif t == "mt_etat":
             sig = (msg["phase"], msg["courant"], msg["manche"], msg["pile"], tuple(msg["tirs"]),
                    json.dumps(msg["cibles"]))
+        elif t == "uc_etat":
+            sig = (msg["phase"], msg["tour"], msg["parole"], tuple(msg["a_vote"]), tuple(msg["vivants"]),
+                   tuple(msg["prets"]))
         elif t == "cs_etat":
             sig = (msg["phase"], msg["jeu"], msg["manche"], json.dumps(msg["table"]), tuple(msg["jetons"]))
         if sig is not None and sig != self.signature:
             self.signature = sig
             self.progres += 1
             self.dernier_progres = time.time()
-        if t in ("etat", "bb_etat", "bt_etat", "pp_etat", "mt_etat", "cs_etat"):
+        if t in ("etat", "bb_etat", "bt_etat", "pp_etat", "mt_etat", "cs_etat", "uc_etat"):
             self.etat = msg
             self.verifier_doublons(msg)
 
@@ -277,6 +289,9 @@ class Robot:
             self.index = msg["index"]
             if msg.get("jeton"):
                 self.jeton = msg["jeton"]
+        elif t == "uc_mot":
+            self.index = msg["index"]
+            self.mot = msg["mot"]
         elif t == "mt_main":
             self.index = msg["index"]
             self.main = msg["main"]
@@ -400,6 +415,27 @@ class Robot:
                 autres = [j for j, v in enumerate(msg["vivants"]) if v and j != i]
                 if autres:
                     self.plus_tard({"type": "mt_cible", "cible": rng.choice(autres)})
+
+    def jouer_undercover(self, msg):
+        if msg.get("type") != "uc_etat" or self.index is None:
+            return
+        i, rng = self.index, self.banc.rng
+        if i >= len(msg["vivants"]):
+            return
+        ph = msg["phase"]
+        if ph == "fin":
+            self.plus_tard(DEMARRER["undercover"], 0.5, 1.5)
+        elif ph == "lecture" and not msg["prets"][i]:
+            self.plus_tard({"type": "uc_pret"})
+        elif ph == "indices" and msg["orateur"] == i:
+            self.plus_tard({"type": "uc_fini"})
+        elif ph == "vote" and msg["vivants"][i] and not msg["a_vote"][i]:
+            cands = msg["departage"] or [j for j, v in enumerate(msg["vivants"]) if v]
+            cands = [j for j in cands if j != i]
+            if cands:
+                self.plus_tard({"type": "uc_voter", "cible": rng.choice(cands)})
+        elif ph == "mrwhite" and msg["elimination"] and msg["elimination"]["joueur"] == i:
+            self.plus_tard({"type": "uc_deviner", "mot": rng.choice(["Café", "Bière", "truc"])})
 
     def jouer_casino(self, msg):
         if msg.get("type") != "cs_etat" or self.index is None:
