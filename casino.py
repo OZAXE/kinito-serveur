@@ -1074,7 +1074,7 @@ def cs_etat_public(etat, maintenant):
         "message": etat["message"],
         "bilan": etat["bilan"],
         "historique": etat["historique"],
-        "regles": {"mise_min": CS_MISE_MIN, "par_gorgee": CS_JETONS_PAR_GORGEE,
+        "regles": {"depart": CS_JETONS_DEPART, "mise_min": CS_MISE_MIN, "par_gorgee": CS_JETONS_PAR_GORGEE,
                    "par_distrib": CS_JETONS_PAR_DISTRIB, "recharge": CS_RECHARGE,
                    "petite": CS_PETITE_BLIND, "grosse": CS_GROSSE_BLIND},
         "table": None,
