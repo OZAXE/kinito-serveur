@@ -999,7 +999,7 @@ async def kinito_lancer(code_salon, joueur):
         etat["premiere_annonce"] = True
         etat["annonce_precedente"] = 0
         etat["joueur_courant"] = joueur_suivant(etat, etat["joueur_courant"])
-        etat["message"] = "51 : tout le monde boit 1 gorgee, on repart de zero !"
+        etat["message"] = "51 : tout le monde boit 1 gorgée, on repart de zéro !"
         etat["phase"] = "lancer"
         await diffuser(code_salon, {
             "type": "effet_special",
@@ -1057,7 +1057,7 @@ async def kinito_annoncer(code_salon, joueur, score_annonce):
     if score_annonce not in SCORES_ANNONCABLES:
         await envoyer(joueur, {
             "type": "erreur",
-            "message": "Ce score ne peut pas etre annonce.",
+            "message": "Ce score ne peut pas être annoncé.",
         })
         return
 
@@ -1133,34 +1133,34 @@ async def kinito_reaction(code_salon, joueur, choix, score_cite=None):
         if il_mentait:
             gorgees = calculer_gorgees_menteur(score_reel, score_annonce)
             await fin_manche(code_salon, etat["joueur_courant"], True,
-                             f"{nom_annonceur} a ete demasque !", gorgees, score_reel, score_annonce)
+                             f"{nom_annonceur} a été démasqué !", gorgees, score_reel, score_annonce)
         else:
             gorgees = penalite(score_annonce, False)
             await fin_manche(code_salon, index_reacteur, False,
-                             f"{nom_reacteur} a accuse a tort", gorgees, score_reel, score_annonce)
+                             f"{nom_reacteur} a accusé à tort", gorgees, score_reel, score_annonce)
 
     elif choix == "moins":
         # Le reacteur doit avoir cite le bon score precedent
         if etat["premiere_annonce"]:
             gorgees = penalite(score_annonce, False)
             await fin_manche(code_salon, index_reacteur, False,
-                             f"{nom_reacteur} a accuse alors qu il n y avait pas d annonce", gorgees, None, score_annonce)
+                             f"{nom_reacteur} a accusé alors qu'il n'y avait pas d'annonce", gorgees, None, score_annonce)
             return
 
         if score_cite != annonce_prec:
             gorgees = penalite(score_annonce, False)
             await fin_manche(code_salon, index_reacteur, False,
-                             f"{nom_reacteur} n a pas cite le bon score precedent", gorgees, None, score_annonce)
+                             f"{nom_reacteur} n'a pas cité le bon score précédent", gorgees, None, score_annonce)
         else:
             annonce_trop_basse = rang(score_annonce) < rang(annonce_prec)
             if annonce_trop_basse:
                 gorgees = penalite(annonce_prec, True)
                 await fin_manche(code_salon, etat["joueur_courant"], True,
-                                 f"{nom_annonceur} a annonce moins que le precedent", gorgees, None, annonce_prec)
+                                 f"{nom_annonceur} a annoncé moins que le précédent", gorgees, None, annonce_prec)
             else:
                 gorgees = penalite(score_annonce, False)
                 await fin_manche(code_salon, index_reacteur, False,
-                                 f"{nom_reacteur} a accuse a tort", gorgees, None, score_annonce)
+                                 f"{nom_reacteur} a accusé à tort", gorgees, None, score_annonce)
 
 
 async def kinito_abandonner(code_salon, joueur):
@@ -1895,9 +1895,9 @@ async def bb_verifier_victoire(code_salon, salons, diffuser):
 # Les 6 objets possibles (memes que la version locale).
 BT_OBJETS = [
     {"id": "loupe",     "nom": "Loupe",     "icone": "\U0001F50D"},
-    {"id": "telephone", "nom": "Telephone", "icone": "\U0001F4F1"},
+    {"id": "telephone", "nom": "Téléphone", "icone": "\U0001F4F1"},
     {"id": "inverseur", "nom": "Inverseur", "icone": "\U0001F504"},
-    {"id": "biere",     "nom": "Biere",     "icone": "\U0001F37A"},
+    {"id": "biere",     "nom": "Bière",     "icone": "\U0001F37A"},
     {"id": "menottes",  "nom": "Menottes",  "icone": "\U0001F512"},
     {"id": "scie",      "nom": "Scie",      "icone": "\U0001FA9A"},
 ]
@@ -2005,7 +2005,7 @@ async def bt_demarrer(code_salon, salons, diffuser):
         await diffuser(code_salon, {"type": "erreur", "message": "Buckshot demande au moins 2 joueurs."})
         return
     if nb > BT_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Buckshot se joue a 8 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Buckshot se joue à 8 joueurs maximum."})
         return
     salon["etat"] = bt_initialiser(nb)
     salon["jeu"] = "buckshot"
@@ -2051,7 +2051,7 @@ async def bt_composer(code_salon, salons, diffuser, joueur, total, reel):
     etat["annonce_total"] = total
     etat["courant"] = etat["chargeur"]     # le chargeur ouvre la manche
     etat["phase"] = "objets"
-    etat["message"] = "Nouvelle manche : " + str(reel) + " reelle(s) sur " + str(total) + "."
+    etat["message"] = "Nouvelle manche : " + str(reel) + " réelle(s) sur " + str(total) + "."
     await diffuser(code_salon, bt_etat_public(salon))
 
 
@@ -2100,7 +2100,7 @@ async def bt_jouer_objet(code_salon, salons, diffuser, joueur, cible):
 
     elif oid == "telephone":
         o["utilise"] = True
-        etat["message"] = joueur["nom"] + " utilise le Telephone."
+        etat["message"] = joueur["nom"] + " utilise le Téléphone."
         if etat["pile"]:
             pos = 0
             if len(etat["pile"]) > 1:
@@ -2121,7 +2121,7 @@ async def bt_jouer_objet(code_salon, salons, diffuser, joueur, cible):
         o["utilise"] = True
         if etat["pile"]:
             etat["pile"].pop(0)
-        etat["message"] = joueur["nom"] + " defausse la carte du dessus."
+        etat["message"] = joueur["nom"] + " défausse la carte du dessus."
         if not etat["pile"]:
             await bt_manche_fin(code_salon, salons, diffuser)
             return
@@ -2130,7 +2130,7 @@ async def bt_jouer_objet(code_salon, salons, diffuser, joueur, cible):
     elif oid == "scie":
         o["utilise"] = True
         etat["scie_active"] = True
-        etat["message"] = joueur["nom"] + " arme la Scie : prochaine reelle doublee."
+        etat["message"] = joueur["nom"] + " arme la Scie : prochaine réelle doublée."
         await diffuser(code_salon, bt_etat_public(salon))
 
     elif oid == "menottes":
@@ -2204,7 +2204,7 @@ async def bt_manche_fin(code_salon, salons, diffuser):
     etat = salon["etat"]
     etat["chargeur"] = bt_le_plus_vide(etat, bt_absents(salon))
     etat["phase"] = "composition"
-    etat["message"] = "Manche terminee."
+    etat["message"] = "Manche terminée."
     await diffuser(code_salon, {
         "type": "bt_manche_fin",
         "joueurs": [j["nom"] for j in salon["joueurs"]],
@@ -2244,7 +2244,7 @@ async def bt_joueur_parti(code_salon, index):
     nom = salon["joueurs"][index]["nom"]
     if etat["phase"] == "composition" and etat["chargeur"] == index:
         etat["chargeur"] = bt_le_plus_vide(etat, absents)
-        etat["message"] = nom + " est parti : " + salon["joueurs"][etat["chargeur"]]["nom"] + " charge a sa place."
+        etat["message"] = nom + " est parti : " + salon["joueurs"][etat["chargeur"]]["nom"] + " charge à sa place."
     elif etat["phase"] == "objets" and etat["courant"] == index:
         bt_prochain(etat, absents)
         etat["message"] = nom + " est parti : la main passe."
@@ -2273,7 +2273,7 @@ async def pp_demarrer(code_salon, difficulte=None):
         await diffuser(code_salon, {"type": "erreur", "message": "Picopoly demande au moins 2 joueurs."})
         return
     if nb > PP_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Picopoly se joue a 8 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Picopoly se joue à 8 joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
@@ -2419,7 +2419,7 @@ async def mt_demarrer(code_salon, mode=None):
         await diffuser(code_salon, {"type": "erreur", "message": "Menteur demande au moins 2 joueurs."})
         return
     if nb > MT_JOUEURS_MAX:
-        await diffuser(code_salon, {"type": "erreur", "message": "Menteur se joue a 8 joueurs maximum."})
+        await diffuser(code_salon, {"type": "erreur", "message": "Menteur se joue à 8 joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
@@ -2820,10 +2820,10 @@ async def lancer_jeu(code_salon, nom, message):
         else:
             presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
             if not (jeu.min_joueurs <= presents <= jeu.max_joueurs):
-                borne = (f"de {jeu.min_joueurs} a {jeu.max_joueurs} joueurs"
+                borne = (f"de {jeu.min_joueurs} à {jeu.max_joueurs} joueurs"
                          if jeu.max_joueurs < 99 else f"a partir de {jeu.min_joueurs} joueurs")
                 await diffuser(code_salon, {"type": "erreur",
-                                            "message": f"{jeu.titre} se joue {borne} ({presents} presents)."})
+                                            "message": f"{jeu.titre} se joue {borne} ({presents} présents)."})
                 return
             await terminer_jeu(code_salon, "remplace")
     avant = salon.get("etat")
@@ -3180,6 +3180,7 @@ async def creer_salon():
 @app.get("/salon/{code}")
 async def info_salon(code: str):
     """Retourne les infos d une table (pour verifier qu elle existe)."""
+    code = code.upper()
     if code not in salons and not (code == soiree_de(code) and soiree_existe(code)):
         return {"existe": False}
     salon = salons.get(code) or nouveau_salon()
@@ -3226,7 +3227,7 @@ def presents_soiree(soiree, tables):
 @app.get("/soiree/{code}")
 async def info_soiree(code: str, nom: str = "", table: str = ""):
     """La soiree : ses tables (jeu, joueurs presents), ses couches et qui est la."""
-    code = soiree_de(code)
+    code = soiree_de(code.upper())
     if not soiree_existe(code):
         return {"existe": False}
     nom = " ".join(nom.split())[:24]
@@ -3264,7 +3265,11 @@ async def rouvrir_soiree(code: str):
 @app.get("/soiree/{code}/nouvelle-table")
 async def nouvelle_table(code: str):
     """Ouvre la prochaine table libre de la soiree (ABCD-2, ABCD-3...)."""
-    code = soiree_de(code)
+    # Meme controle que rouvrir : un code de travers (minuscules, trop long)
+    # ne doit pas creer de table fantome a cote de la vraie soiree.
+    code = soiree_de(code.upper())
+    if not (len(code) == 4 and code.isalpha()):
+        return {"existe": False}
     if not soiree_existe(code):
         await rouvrir_soiree(code)
     if code not in salons:
@@ -3275,7 +3280,7 @@ async def nouvelle_table(code: str):
         if c not in salons:
             salons[c] = nouveau_salon()
             return {"existe": True, "code": c}
-    return {"existe": True, "code": None, "message": f"{TABLES_MAX} tables au plus par soiree."}
+    return {"existe": True, "code": None, "message": f"{TABLES_MAX} tables au plus par soirée."}
 
 
 @app.get("/")

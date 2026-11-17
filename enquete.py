@@ -268,7 +268,26 @@ def action(etat, nom, message, maintenant, rng=random, config=None):
     }.get(t)
     if f is None:
         return []
-    return f(etat, nom, message, maintenant, rng, config)
+    return f(etat, nom, _nettoyer(message), maintenant, rng, config)
+
+
+def _nettoyer(message):
+    """
+    Les champs viennent d un client : un vieil onglet ou un petit malin peut
+    envoyer une liste ou un objet la ou on attend un texte ou un nombre. Les
+    tests du moteur (« x in ensemble », « x == solution ») plantaient alors
+    (TypeError) au milieu d une action. Un champ de travers compte comme
+    absent ; seul « jeux » est une liste, de textes.
+    """
+    propre = {}
+    for k, v in message.items():
+        if k == "jeux":
+            propre[k] = [j for j in v if isinstance(j, str)] if isinstance(v, list) else None
+        elif isinstance(v, (list, dict)):
+            propre[k] = None
+        else:
+            propre[k] = v
+    return propre
 
 
 def _portrait(etat, nom, message, maintenant, rng, config):

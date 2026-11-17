@@ -100,6 +100,7 @@ tout tourne en mémoire. `GET /` indique `"stockage": "postgres"` ou `"memoire"`
 ```
 python tests/menteur_essai.py
 python tests/casino_essai.py
+python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py
 python tests/non_fuite_essai.py 300         # parties au hasard : rien ne trahit le tueur, à chaque étape
@@ -108,8 +109,9 @@ node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôle
 node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 node tests/menteur_annonces_navigateur.js   # Menteur : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
-python tests/banc_reconnexions.py --jeu tous --duree 20
-node tests/navigateur.js                    # serveur_essai.py + site sur localhost:8765
+python tests/banc_reconnexions.py --jeu tous --duree 20   # les six jeux, coupures et retours au hasard
+python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
+node tests/navigateur.js                    # les six jeux ; serveur_essai.py + site sur localhost:8765
 # Pour les tests de soirée et d enquête (scènes 3D lourdes sans carte graphique) :
 #   DELAI_SILENCE=30 ENQ_RAPIDE=1 python tests/serveur_essai.py
 node tests/soiree_navigateur.js             # parcours d une soirée (accueil, changement de jeu)

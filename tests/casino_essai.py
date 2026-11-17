@@ -61,7 +61,16 @@ def essai_split():
     etat = C.cs_initialiser(["A"], 0)
     C.cs_action(etat, 0, {"type": "cs_choisir", "jeu": "blackjack"}, 0)
     C.cs_action(etat, 0, {"type": "cs_bj_miser", "montant": 100}, 0)
-    C.cs_action(etat, 0, {"type": "cs_pret"}, 0)
+    # La premiere donne doit etre sans blackjack : un naturel (1 fois sur 21)
+    # etait paye tout de suite, avant qu on truque la table, et faussait les
+    # jetons (test intermittent). Paquet sans As ni figure pour cette donne.
+    vrai_paquet = C._paquet
+    C._paquet = lambda: ["5D", "6C", "7H", "4S"] * 13
+    try:
+        C.cs_action(etat, 0, {"type": "cs_pret"}, 0)
+    finally:
+        C._paquet = vrai_paquet
+    assert etat["phase"] == "jeu" and etat["jetons"][0] == 900, (etat["phase"], etat["jetons"])
     t = etat["t"]
     # On truque la donne : 8-8 pour le joueur, 10-7 pour le croupier.
     t["mains"][0] = [C._bj_main(["8S", "8H"], 100)]
