@@ -85,7 +85,32 @@ async def essai_debit():
     verifier(await code_fermeture(ws) == 1008, "inondation continue : connexion fermee (1008)")
 
 
-ESSAIS = [essai_taille, essai_debit]
+async def essai_codes():
+    print("Codes de salle et prenoms a l entree")
+    for mauvais in ("abcd" * 50, "AB", "ABCD-1", "ABCD-10", "AB%20D", "ABC1"):
+        refuse = False
+        try:
+            ws = await connecter(f"/ws/{mauvais}/Alice")
+            await ws.close()
+        except websockets.InvalidStatus:
+            refuse = True
+        verifier(refuse and not serveur.salons, f"code {mauvais[:12]!r} refuse, aucun salon cree")
+    refuse = False
+    try:
+        await connecter("/ws-soiree/" + "x" * 300 + "/Alice")
+    except websockets.InvalidStatus:
+        refuse = True
+    verifier(refuse, "connexion soiree a un code de travers : refusee")
+    code = serveur.generer_code()
+    ws = await connecter(f"/ws/{code.lower()}-3/Al%07i%0Ace")
+    await asyncio.sleep(0.3)
+    salon = serveur.salons.get(code + "-3")
+    verifier(salon is not None and salon["joueurs"][0]["nom"] == "Ali ce",
+             "code en minuscules ramene a la table en majuscules, prenom nettoye")
+    await ws.close()
+
+
+ESSAIS = [essai_taille, essai_debit, essai_codes]
 
 
 async def principal():

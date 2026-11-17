@@ -14,9 +14,11 @@ import asyncio
 import json
 import logging
 import random
+import re
 import secrets
 import string
 import time
+import unicodedata
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -132,6 +134,25 @@ VERSION = "2026-11-16 enquete-3d"
 # Un prenom n est qu a une table a la fois.
 # =============================================================
 TABLES_MAX = 9
+
+
+# Forme d un code de table : 4 lettres majuscules, suivies de -2 a -9 pour
+# les tables supplementaires. Tout le reste est refuse a l entree : avant,
+# n importe quelle chaine (longue, minuscules...) creait un salon en memoire.
+CODE_TABLE = re.compile(r"[A-Z]{4}(-[2-9])?")
+
+
+def normaliser_code(code):
+    """Le code en majuscules s il a la bonne forme, sinon None."""
+    code = (code or "").strip().upper()
+    return code if CODE_TABLE.fullmatch(code) else None
+
+
+def nettoyer_prenom(nom):
+    """Prenom affichable : sans caracteres de controle, espaces reduits, 24 caracteres."""
+    nom = "".join(c if unicodedata.category(c) != "Cc" else (" " if c.isspace() else "")
+                  for c in (nom or ""))
+    return " ".join(nom.split())[:24]
 
 
 def soiree_de(code):
@@ -415,9 +436,13 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
     code_salon : le code a 4 lettres du salon
     nom_joueur : le prenom du joueur
     """
+    code_salon = normaliser_code(code_salon)
+    if code_salon is None:
+        await ws.close(4004)        # refus avant l ouverture (HTTP 403)
+        return
     await ws.accept()
     demarrer_veilleur()
-    nom_joueur = " ".join(nom_joueur.split())[:24] or "Joueur"
+    nom_joueur = nettoyer_prenom(nom_joueur) or "Joueur"
 
     # On recupere ou cree le salon
     if code_salon not in salons:
@@ -3321,9 +3346,13 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
     a cote de sa place a une table. Messages "<prefixe>_..." et battements de
     coeur ; rien d autre.
     """
+    code = normaliser_code(code)
+    if code is None:
+        await ws.close(4004)
+        return
     await ws.accept()
-    soiree = soiree_de(code.upper())
-    nom = " ".join(nom_joueur.split())[:24] or "Joueur"
+    soiree = soiree_de(code)
+    nom = nettoyer_prenom(nom_joueur) or "Joueur"
     entree = await abonner(soiree, nom, ws)
     try:
         debit = Debit(DEBIT_MESSAGES, RAFALE_MESSAGES)
@@ -3428,7 +3457,7 @@ async def info_soiree(code: str, nom: str = "", table: str = ""):
     code = soiree_de(code.upper())
     if not soiree_existe(code):
         return {"existe": False}
-    nom = " ".join(nom.split())[:24]
+    nom = nettoyer_prenom(nom)
     if nom:
         vus = presences_accueil.setdefault(code, {})
         k = cle_prenom(nom)
