@@ -42,6 +42,9 @@ class Enquete(Couche):
     def prochaine_echeance(self):
         return moteur.prochaine_echeance(self.etat)
 
+    def en_cours(self):
+        return self.etat["phase"] in ("ouverture", "enquete")
+
     def gorgees_heure(self, nom, maintenant):
         p = self.etat.get("perso", {}).get(moteur.cle_nom(nom))
         return moteur.gorgees_heure(p, maintenant) if p and "gorgees" in p else 0

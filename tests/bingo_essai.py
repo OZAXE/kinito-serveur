@@ -308,7 +308,11 @@ async def essai_couche():
     verifier(ws["Max"].de_type("soiree_couches")[-1]["couches"] == ["bng"], "  tous apprennent que le bingo existe")
     for nom in NOMS[1:3]:
         await serveur.couche_action(code, nom, {"type": "bng_rejoindre"})
+    info = await serveur.info_soiree(code)
+    verifier(info["couches"] == ["bng"] and info["couches_en_cours"] == [],
+             "bingo en salle d'attente : il existe, mais pas « en cours » (pas d'onglet 🎯 dans les jeux)")
     await serveur.couche_action(code, "Lea", {"type": "bng_lancer"})
+    verifier((await serveur.info_soiree(code))["couches_en_cours"] == ["bng"], "  lancé : « en cours »")
     moi = {n: w.de_type("bng_moi")[-1] for n, w in ws.items()}
     verifier(all(len(x["grille"]) == 16 for x in moi.values()), "lancé : chacun reçoit sa grille 4x4")
     verifier(len({json.dumps(x["grille"]) for x in moi.values()}) == 3, "  grilles différentes")

@@ -78,6 +78,14 @@ class Couche:
         """Horodatage du prochain reveil voulu (minuteur), ou None."""
         return None
 
+    def en_cours(self):
+        """
+        Vrai quand la partie est lancee et pas finie. Une couche peut exister
+        sans etre en cours (salle d attente, resultats affiches) : les jeux
+        n affichent son onglet que pendant qu elle est en cours.
+        """
+        return True
+
     def gorgees_heure(self, nom, maintenant):
         """Gorgees bues par ce joueur dans l heure a cause de cette couche (plafond commun)."""
         return 0

@@ -211,7 +211,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-17 bingo"
+VERSION = "2026-11-17 onglets-en-cours"
 
 
 # =============================================================
@@ -3784,6 +3784,18 @@ def presents_soiree(soiree, tables):
     return sorted(out.values(), key=lambda x: x["nom"].casefold())
 
 
+def _couches_en_cours(soiree):
+    """Les couches lancees et pas finies (les onglets 🔍 / 🎯 des jeux ne montrent qu elles)."""
+    out = []
+    for prefixe, couche in sorted(couches.get(soiree, {}).items()):
+        try:
+            if couche.en_cours():
+                out.append(prefixe)
+        except Exception:
+            journal.exception("Couche %s : en_cours()", prefixe)
+    return out
+
+
 @app.get("/soiree/{code}")
 async def info_soiree(code: str, nom: str = "", table: str = "", request: Request = None):
     """La soiree : ses tables (jeu, joueurs presents), ses couches et qui est la."""
@@ -3803,6 +3815,7 @@ async def info_soiree(code: str, nom: str = "", table: str = "", request: Reques
         t["page"] = jeu.page if jeu else None
         tables.append(t)
     return {"existe": True, "code": code, "tables": tables, "couches": sorted(couches.get(code, {})),
+            "couches_en_cours": _couches_en_cours(code),
             "presents": presents_soiree(code, tables)}
 
 
