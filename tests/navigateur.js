@@ -3,7 +3,7 @@
 // Prerequis :
 //   - serveur d essai :  python tests/serveur_essai.py   (127.0.0.1:8000)
 //   - pages du site servies sur http://localhost:8765 (dossier table-de-jeu)
-// Usage : node tests/navigateur.js [kinito|beerbattle|buckshot|picolopoly ...]
+// Usage : node tests/navigateur.js [kinito|beerbattle|buckshot|picolopoly|menteur|casino ...]
 //
 // Pour chaque jeu : trois joueurs (trois navigateurs separes) creent et
 // rejoignent un salon, lancent la partie, puis on fait vivre a un joueur ce
@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
 const SITE = 'http://localhost:8765/';
 const API = 'http://127.0.0.1:8000';
 const JEUX = process.argv.slice(2).length ? process.argv.slice(2)
-  : ['kinito', 'beerbattle', 'buckshot', 'picolopoly'];
+  : ['kinito', 'beerbattle', 'buckshot', 'picolopoly', 'menteur', 'casino'];
 
 const attendre = ms => new Promise(r => setTimeout(r, ms));
 async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).json(); }
@@ -71,7 +71,7 @@ async function tester(navigateur, jeu) {
     await p.locator('button', { hasText: /^Rejoindre$/ }).first().click();
   }
   await attendreQue(async () => (await etat(code)).joueurs?.length === 3, 15000, '3 joueurs dans le salon');
-  await A.locator('button', { hasText: /D.marrer la partie/ }).first().click();
+  await A.locator('button', { hasText: /D.marrer la partie|Ouvrir le casino/ }).first().click();
   await attendreQue(async () => (await etat(code)).en_partie, 15000, 'partie lancée');
 
   const verifierTable = async (quand) => {

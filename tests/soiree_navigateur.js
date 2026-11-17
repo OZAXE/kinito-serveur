@@ -75,7 +75,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   verifier(!!tous && tous.joueurs.map(j => j.nom).sort().join() === 'Lea,Max,Zoe',
     'les trois arrivent dans le salon Kinito sans ressaisir leur prénom');
 
-  await appuyer(lea, 'Demarrer la partie');
+  await appuyer(lea, 'Démarrer la partie');
   verifier(!!await attendreQue(async () => (await etat(code)).jeu === 'kinito', 10000), 'Léa lance Kinito');
 
   // Zoé verrouille son téléphone : sa connexion reste ouverte mais muette, elle
@@ -158,7 +158,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await appuyer(lea, "S'asseoir ici");
   await lea.click('a.jeu.kinito');
   await lea.waitForURL(new RegExp('salon=' + code + '-2'));
-  await appuyer(lea, 'Demarrer la partie', 25000);
+  await appuyer(lea, 'Démarrer la partie', 25000);
   verifier(!!await attendreQue(async () => (await etat(code + '-2')).jeu === 'kinito', 15000), 'Léa lance Kinito à la table 2');
   verifier((await etat(code)).jeu === 'casino', '  la table 1 joue toujours au Casino');
 

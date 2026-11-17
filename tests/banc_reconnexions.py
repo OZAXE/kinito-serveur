@@ -1,5 +1,5 @@
 """
-Banc de test des departs et retours, pour les quatre jeux.
+Banc de test des departs et retours, pour les six jeux.
 
 Lance le vrai serveur (serveur.py) en local, fait jouer des robots qui
 respectent le protocole des clients 3D, et leur fait quitter et rejoindre la
@@ -40,6 +40,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import uvicorn
 import websockets
 
+import casino
+import menteur
 import picolopoly
 import serveur
 
@@ -47,6 +49,20 @@ import serveur
 picolopoly.PP_DELAI_CHOIX = 2
 picolopoly.PP_DELAI_TOUR = 2
 picolopoly.PP_DELAI_ABSENT = 1
+menteur.MT_DELAI_TOUR = 4
+menteur.MT_DELAI_CIBLE = 3
+menteur.MT_DELAI_ABSENT = 1
+menteur.MT_DELAI_REVELATION = 1.0
+menteur.MT_DELAI_PAR_TIR = 0.3
+casino.CS_DELAI_MISES = 3
+casino.CS_DELAI_TOUR = 3
+casino.CS_DELAI_POKER = 3
+casino.CS_DELAI_ABSENT = 1
+casino.CS_DELAI_ROULETTE = 1.5
+casino.CS_DELAI_BJ_FIN = 1.0
+casino.CS_DELAI_PAR_CARTE = 0.1
+casino.CS_DELAI_POKER_FIN = 1.0
+casino.CS_DELAI_POKER_CARTE = 0.1
 if hasattr(serveur, "DELAI_SILENCE"):
     serveur.DELAI_SILENCE = 4          # telephone muet => considere parti
 if hasattr(serveur, "DELAI_SALON_VIDE"):
@@ -71,12 +87,14 @@ serveur.pp_armer = _armer_trace
 PORT = int(os.environ.get("BANC_PORT", "18765"))
 BLOCAGE = 12          # secondes sans aucun progres = blocage
 
-NB_JOUEURS = {"kinito": 4, "beerbattle": 4, "buckshot": 4, "picolopoly": 4}
+NB_JOUEURS = {"kinito": 4, "beerbattle": 4, "buckshot": 4, "picolopoly": 4, "menteur": 4, "casino": 4}
 DEMARRER = {
     "kinito": {"type": "demarrer", "difficulte": "normal"},
     "beerbattle": {"type": "bb_demarrer"},
     "buckshot": {"type": "bt_demarrer"},
     "picolopoly": {"type": "pp_demarrer", "difficulte": "normal"},
+    "menteur": {"type": "mt_demarrer", "mode": "chaos"},
+    "casino": {"type": "cs_demarrer"},
 }
 
 
@@ -107,6 +125,7 @@ class Banc:
         self.compteurs = {}
         self.doublons_vus = set()
         self.fini = False
+        self.progres = 0           # changements d etat observes : la partie avance
 
     def note(self, cle):
         self.compteurs[cle] = self.compteurs.get(cle, 0) + 1
@@ -138,10 +157,16 @@ class Banc:
         elif t == "pp_etat":
             sig = (msg["phase"], msg["courant"], msg["a_lance"], json.dumps(msg["attente"]),
                    tuple(msg["positions"]), tuple(msg["argent"]))
+        elif t == "mt_etat":
+            sig = (msg["phase"], msg["courant"], msg["manche"], msg["pile"], tuple(msg["tirs"]),
+                   json.dumps(msg["cibles"]))
+        elif t == "cs_etat":
+            sig = (msg["phase"], msg["jeu"], msg["manche"], json.dumps(msg["table"]), tuple(msg["jetons"]))
         if sig is not None and sig != self.signature:
             self.signature = sig
+            self.progres += 1
             self.dernier_progres = time.time()
-        if t in ("etat", "bb_etat", "bt_etat", "pp_etat"):
+        if t in ("etat", "bb_etat", "bt_etat", "pp_etat", "mt_etat", "cs_etat"):
             self.etat = msg
             self.verifier_doublons(msg)
 
@@ -252,6 +277,9 @@ class Robot:
             self.index = msg["index"]
             if msg.get("jeton"):
                 self.jeton = msg["jeton"]
+        elif t == "mt_main":
+            self.index = msg["index"]
+            self.main = msg["main"]
         elif t == "bt_mon_index":
             self.index = msg["index"]
         elif t == "bb_ta_main":
@@ -350,6 +378,53 @@ class Robot:
             self.plus_tard({"type": "pp_lancer"})
         elif msg["phase"] == "fin_tour":
             self.plus_tard({"type": "pp_terminer"})
+
+    def jouer_menteur(self, msg):
+        if msg.get("type") != "mt_etat" or self.index is None:
+            return
+        i, rng = self.index, self.banc.rng
+        if i >= len(msg["vivants"]):
+            return
+        if msg["phase"] == "fin":
+            self.plus_tard(DEMARRER["menteur"], 0.5, 1.5)
+        elif msg["phase"] == "jeu" and msg["courant"] == i:
+            nb = msg["nb_cartes"][i]
+            if msg["pose"] is not None and (nb == 0 or rng.random() < 0.35):
+                self.plus_tard({"type": "mt_menteur"})
+            elif nb:
+                k = rng.randrange(nb)
+                self.plus_tard({"type": "mt_poser", "cartes": [k]})
+        elif msg["phase"] == "cible" and msg["cibles"]:
+            c = msg["cibles"]
+            if i in c["tireurs"] and i not in c["choisis"]:
+                autres = [j for j, v in enumerate(msg["vivants"]) if v and j != i]
+                if autres:
+                    self.plus_tard({"type": "mt_cible", "cible": rng.choice(autres)})
+
+    def jouer_casino(self, msg):
+        if msg.get("type") != "cs_etat" or self.index is None:
+            return
+        i, rng = self.index, self.banc.rng
+        if i >= len(msg["jetons"]):
+            return
+        phase, jeu, t = msg["phase"], msg["jeu"], msg["table"] or {}
+        if phase == "hall":
+            self.plus_tard({"type": "cs_choisir", "jeu": rng.choice(["roulette", "blackjack", "poker"])}, 0.2, 1)
+        elif phase == "mises":
+            if rng.random() < 0.05:
+                self.plus_tard({"type": "cs_hall"})
+            elif not t.get("prets", [False] * 8)[i]:
+                if jeu == "roulette":
+                    self.plus_tard({"type": "cs_rl_miser", "pari": rng.choice(["rouge", "pair", "n7"]),
+                                    "montant": 10})
+                else:
+                    self.plus_tard({"type": "cs_bj_miser", "montant": 10})
+                self.plus_tard({"type": "cs_pret"}, 0.4, 0.8)
+        elif phase == "jeu" and t.get("courant") == i:
+            if jeu == "blackjack":
+                self.plus_tard({"type": rng.choice(["cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler"])})
+            elif jeu == "poker":
+                self.plus_tard({"type": rng.choice(["cs_pk_suivre"] * 4 + ["cs_pk_coucher"]),})
 
 
 # =============================================================
@@ -550,7 +625,9 @@ def main():
     for jeu in jeux:
         print(f"== {jeu} (graine {a.graine}, {a.duree:.0f} s)")
         banc = asyncio.run(scenario(jeu, a.duree, a.graine, not a.sans_battement, sortes))
-        print("   chaos :", dict(sorted(banc.compteurs.items())))
+        print("   chaos :", dict(sorted(banc.compteurs.items())), "; etats successifs :", banc.progres)
+        if banc.progres < 10:
+            banc.probleme("la partie n'a presque pas avance (" + str(banc.progres) + " etats)")
         if banc.problemes:
             print(f"   {len(banc.problemes)} probleme(s)")
             total += len(banc.problemes)
