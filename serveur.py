@@ -182,9 +182,14 @@ def soiree_existe(soiree):
 
 
 def generer_code():
-    """Genere un code de soiree unique a 4 lettres."""
+    """
+    Genere un code de soiree unique a 4 lettres. Tirage cryptographique
+    (secrets) : random (Mersenne Twister) se predit apres assez de tirages
+    observes, on aurait pu deviner les codes des autres soirees en
+    appelant /creer-salon a la chaine.
+    """
     while True:
-        code = "".join(random.choices(string.ascii_uppercase, k=4))
+        code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(4))
         # Un code dont la soiree vit encore (une table, ou une couche en cours
         # comme l Enquete, meme si tous ses salons ont ete liberes) n est pas libre.
         if not soiree_existe(code):
