@@ -849,6 +849,12 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
     jeu = JEUX.get(salon.get("jeu"))
     if jeu is not None and jeu.joueur_revenu is not None:
         jeu.joueur_revenu(code_salon, salon, joueur["index"])
+    if salon.get("jeu") == "kinito":
+        # Le retour a pu relancer une partie en attente (kinito_reprendre) :
+        # toute la table doit le voir, pas seulement le revenant. Sinon les
+        # autres restaient sur « Il ne reste plus assez de joueurs », le
+        # revenant note parti, et personne n avait la main.
+        await diffuser(code_salon, construire_etat_public(code_salon))
     if annoncer:
         await diffuser(code_salon, {
             "type": "joueur_rejoint",
