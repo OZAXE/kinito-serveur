@@ -2154,6 +2154,7 @@ async def bb_joueur_parti(code_salon, index):
     absents = bb_absents(salon)
     if len(absents) >= etat["nb_joueurs"]:
         return      # plus personne : on attend un retour
+    bb_programmer_seul(code_salon)
     nom = salon["joueurs"][index]["nom"]
     if etat["phase"] == "placement" and etat["joueur_en_placement"] == index:
         bb_avancer_placement(salon)
@@ -2175,15 +2176,72 @@ async def bb_verifier_victoire(code_salon, salons, diffuser):
     etat = salon["etat"]
     survivants = [i for i in range(etat["nb_joueurs"]) if not etat["elimine"][i]]
     if len(survivants) <= 1:
-        gagnant = survivants[0] if survivants else None
-        nom = salon["joueurs"][gagnant]["nom"] if gagnant is not None else "Personne"
-        etat["phase"] = "fini"
-        etat["gagnant_nom"] = nom
-        await diffuser(code_salon, {"type": "bb_victoire", "gagnant": nom})
-        await signaler(code_salon, "beerbattle", "victoire",
-                       gagnants=[nom] if gagnant is not None else [])
+        await bb_declarer_vainqueur(code_salon, salon, survivants[0] if survivants else None)
         return True
     return False
+
+
+async def bb_declarer_vainqueur(code_salon, salon, gagnant):
+    etat = salon["etat"]
+    annuler_bb_seul(salon)
+    nom = salon["joueurs"][gagnant]["nom"] if gagnant is not None else "Personne"
+    etat["phase"] = "fini"
+    etat["gagnant_nom"] = nom
+    await diffuser(code_salon, {"type": "bb_victoire", "gagnant": nom})
+    await signaler(code_salon, "beerbattle", "victoire",
+                   gagnants=[nom] if gagnant is not None else [])
+
+
+# --- Seul present ---
+# La victoire ne compte que les elimines : si tous les autres joueurs encore
+# en lice quittent la table, le dernier present jouait seul sans fin. S il le
+# reste BB_DELAI_SEUL secondes, il gagne. Pas tout de suite : une simple
+# coupure de reseau ferait perdre les autres.
+BB_DELAI_SEUL = 120
+
+
+def bb_seul_present(salon):
+    """L index du seul joueur en lice present, quand les autres en lice sont absents."""
+    etat = salon["etat"]
+    absents = bb_absents(salon)
+    en_lice = [i for i in range(etat["nb_joueurs"]) if not etat["elimine"][i]]
+    presents = [i for i in en_lice if i not in absents]
+    return presents[0] if len(presents) == 1 and len(en_lice) >= 2 else None
+
+
+def annuler_bb_seul(salon):
+    t = salon.get("bb_seul")
+    if t is not None and not t.done() and t is not asyncio.current_task():
+        t.cancel()
+    salon["bb_seul"] = None
+
+
+def bb_programmer_seul(code_salon):
+    """(Re)arme le delai si un seul joueur en lice reste present, sinon l annule."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "beerbattle" or not salon.get("etat"):
+        return
+    annuler_bb_seul(salon)
+    if salon["etat"]["phase"] != "fini" and bb_seul_present(salon) is not None:
+        salon["bb_seul"] = asyncio.ensure_future(bb_minuteur_seul(code_salon, salon, salon["etat"]))
+
+
+async def bb_minuteur_seul(code_salon, salon, etat):
+    await asyncio.sleep(BB_DELAI_SEUL)
+    if salons.get(code_salon) is not salon:
+        return
+    async with verrou(salon):
+        if salon.get("bb_seul") is not asyncio.current_task():
+            return
+        salon["bb_seul"] = None
+        if salon.get("etat") is not etat or salon.get("jeu") != "beerbattle" or etat["phase"] == "fini":
+            return
+        gagnant = bb_seul_present(salon)
+        if gagnant is None:
+            return
+        etat["message"] = salon["joueurs"][gagnant]["nom"] + " est le dernier à table : il gagne."
+        await bb_declarer_vainqueur(code_salon, salon, gagnant)
+        await diffuser(code_salon, bb_etat_public(salon))
  
 
 
@@ -3098,6 +3156,11 @@ async def _bb_traiter(code_salon, joueur, m):
         await bb_ramasser(code_salon, salons, diffuser, joueur, m.get("decision"), m.get("index_echange"))
 
 
+def _bb_revenu(code_salon, salon, idx):
+    # Un joueur revient : le dernier present n est plus seul (delai annule).
+    bb_programmer_seul(code_salon)
+
+
 async def _bt_traiter(code_salon, joueur, m):
     t = m["type"]
     if t == "bt_composer":
@@ -3172,8 +3235,8 @@ JEUX = {
     "beerbattle": Jeu(
         "beerbattle", "BeerBattle", "beerbattle-3d-jeu.html", "bb_demarrer", _prefixe("bb_"),
         lambda code, m: bb_demarrer(code, salons, diffuser), _bb_traiter, _beerbattle_instantane,
-        joueur_parti=bb_joueur_parti,
-        peut_relancer=lambda etat: etat.get("phase") == "fini",
+        joueur_parti=bb_joueur_parti, joueur_revenu=_bb_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fini", minuteurs=("bb_seul",),
         min_joueurs=3, max_joueurs=BB_JOUEURS_MAX),
     "buckshot": Jeu(
         "buckshot", "Buckshot", "buckshot-3d-jeu.html", "bt_demarrer", _prefixe("bt_"),
