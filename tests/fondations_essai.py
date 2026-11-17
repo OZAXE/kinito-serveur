@@ -136,10 +136,27 @@ async def essai_changement_de_jeu():
     await envoyer(code, a, {"type": "demarrer"})
     verifier(salon["etat"] is etat, "un second « demarrer » ne remet pas Kinito a zero")
 
+    # Sans confirmation (« remplacer »), une partie en cours n est pas remplacee :
+    # seul le demandeur recoit le refus, et la partie continue.
+    _, wb = joueurs[1]
+    wa.recus.clear()
+    wb.recus.clear()
+    await envoyer(code, a, {"type": "pp_demarrer"})
+    verifier(salon["jeu"] == "kinito" and salon["etat"] is etat, "Picopoly sans confirmation ne remplace pas Kinito")
+    refus = [m for m in wa.recus if m.get("type") == "erreur"]
+    verifier(refus and refus[0].get("partie_en_cours") == "kinito" and "Kinito" in refus[0]["message"],
+             "  le demandeur est prevenu qu une partie est en cours")
+    verifier("erreur" not in wb.types(), "  les autres ne sont pas deranges")
+    await envoyer(code, a, {"type": "pp_demarrer", "remplacer": "oui"})
+    verifier(salon["jeu"] == "kinito", "  « remplacer » doit valoir true, pas n importe quoi")
+    info = await serveur.info_salon(code)
+    verifier(info["jeu"] == "kinito" and isinstance(info["depuis"], int) and info["fini"] is False,
+             "/salon donne depuis quand le jeu tourne")
+
     ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "beerbattle", "picolopoly", "casino"]
     for nom in ordre:
         wa.recus.clear()
-        await envoyer(code, a, {"type": serveur.JEUX[nom].demarrage})
+        await envoyer(code, a, {"type": serveur.JEUX[nom].demarrage, "remplacer": True})
         verifier(salon["jeu"] == nom and salon["etat"] is not None, f"on passe a {nom}")
         verifier({"type": "salon_jeu", "jeu": nom, "titre": serveur.JEUX[nom].titre,
                   "page": serveur.JEUX[nom].page} in wa.recus, f"  annonce salon_jeu pour {nom}")
@@ -157,14 +174,14 @@ async def essai_changement_de_jeu():
     for n in ("Ana", "Bob", "Cyd", "Dan", "Eve", "Fox"):
         await entrer(code, n)
     wa.recus.clear()
-    await envoyer(code, a, {"type": "bb_demarrer"})
+    await envoyer(code, a, {"type": "bb_demarrer", "remplacer": True})
     verifier(salon["jeu"] == "casino" and salon["etat"] is etat, "BeerBattle a 9 refuse sans casser le Casino")
     verifier("erreur" in wa.types(), "  avec un message d erreur")
 
     # Un absent ne recoit pas de place dans le jeu suivant.
     _, wz = joueurs[2]
     await partir(code, joueurs[2][0])
-    await envoyer(code, a, {"type": "mt_demarrer"})
+    await envoyer(code, a, {"type": "mt_demarrer", "remplacer": True})
     verifier(salon["jeu"] == "menteur" and salon["etat"]["nb_joueurs"] == 8,
              "Menteur repart des 8 presents (l absente est retiree)")
     verifier([j["index"] for j in salon["joueurs"]] == list(range(8)), "  index renumerotes")
@@ -197,7 +214,7 @@ async def essai_couches():
     await envoyer(code, a, {"type": "demarrer"})
     await envoyer(code, b, {"type": "tst_action"})
     verifier(couche.actions[-1] == ["Max", "tst_action"], "la couche recoit ses messages pendant un jeu")
-    await envoyer(code, a, {"type": "cs_demarrer"})
+    await envoyer(code, a, {"type": "cs_demarrer", "remplacer": True})
     verifier(["kinito", "fin_jeu"] in couche.evenements, "le remplacement du jeu est signale (fin_jeu)")
     await serveur.signaler(code, "casino", "victoire", gagnants=["Max"])
     verifier(["casino", "victoire"] in couche.evenements, "signaler relaie les victoires")

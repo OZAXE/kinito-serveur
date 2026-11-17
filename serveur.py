@@ -397,6 +397,10 @@ async def envoyer_indices(code_salon):
             # Jeton de session : permet de retrouver sa place apres une
             # coupure, depuis n importe quel chemin (bouton, lien, code).
             "jeton": j.get("jeton"),
+            # Le jeu qui tourne a la table : une page qui revient le sait
+            # avant meme d avoir recu la partie (lente a arriver si le
+            # reseau rame) et n affiche pas une salle d attente trompeuse.
+            "jeu": salon.get("jeu"),
         })
 
 
@@ -1205,7 +1209,7 @@ async def traiter_message(code_salon, joueur, message):
         return
     for nom, jeu in JEUX.items():
         if type_msg == jeu.demarrage:
-            await lancer_jeu(code_salon, nom, message)
+            await lancer_jeu(code_salon, nom, message, joueur)
             return
         if jeu.possede(type_msg):
             if salon.get("etat") is not None and salon.get("jeu") == nom:
@@ -3298,7 +3302,7 @@ async def terminer_jeu(code_salon, raison):
     await envoyer_indices(code_salon)      # renumerote : on est en salle d attente
 
 
-async def lancer_jeu(code_salon, nom, message):
+async def lancer_jeu(code_salon, nom, message, joueur=None):
     """
     Regle UNIQUE de lancement, la meme pour tous les jeux :
     - salle d attente : le jeu demarre ;
@@ -3309,6 +3313,11 @@ async def lancer_jeu(code_salon, nom, message):
       etait fini : avec le meme code toute la soiree, on restait bloque.
     Le nombre de joueurs est verifie AVANT de remplacer : un lancement refuse
     ne doit pas detruire la partie en cours.
+    Remplacer une partie pas finie exige "remplacer": true, que la page
+    n envoie qu apres avoir fait confirmer le joueur. Sans ca, un joueur qui
+    rame (sa page n a pas encore recu la partie, ou n a pas pu verifier
+    qu une partie tournait) remplacait une partie d une demi-heure pour tout
+    le monde sans qu on lui demande rien.
     """
     salon = salons[code_salon]
     jeu = JEUX[nom]
@@ -3318,6 +3327,19 @@ async def lancer_jeu(code_salon, nom, message):
             if not jeu.peut_relancer(etat):
                 return
         else:
+            ancien = JEUX.get(salon.get("jeu"))
+            fini = ancien is not None and ancien.peut_relancer(etat)
+            if not fini and message.get("remplacer") is not True:
+                actifs = [j["nom"] for j in salon["joueurs"] if not j.get("parti")]
+                texte = (f"Une partie de {ancien.titre if ancien else 'un autre jeu'} est en cours à ta table"
+                         + (" (" + ", ".join(actifs) + ")" if actifs else "")
+                         + f" : {jeu.titre} n'a pas été lancé. Rejoins la partie depuis l'accueil.")
+                refus = {"type": "erreur", "message": texte, "partie_en_cours": salon.get("jeu")}
+                if joueur is not None:
+                    await envoyer(joueur, refus)
+                else:
+                    await diffuser(code_salon, refus)
+                return
             presents = sum(1 for j in salon["joueurs"] if not j.get("parti"))
             if not (jeu.min_joueurs <= presents <= jeu.max_joueurs):
                 borne = (f"de {jeu.min_joueurs} à {jeu.max_joueurs} joueurs"
@@ -3329,6 +3351,7 @@ async def lancer_jeu(code_salon, nom, message):
     avant = salon.get("etat")
     await jeu.demarrer(code_salon, message)
     if salon.get("etat") is not None and salon.get("etat") is not avant and salon.get("jeu") == nom:
+        salon["debut_jeu"] = time.time()
         # Les pages des AUTRES jeux ne comprennent pas le message de debut de
         # ce jeu : celui-ci leur dit lequel tourne et ou le rejoindre.
         await diffuser(code_salon, {"type": "salon_jeu", "jeu": nom, "titre": jeu.titre, "page": jeu.page})
@@ -3749,6 +3772,10 @@ async def info_salon(code: str, request: Request = None):
         "joueurs": [j["nom"] for j in salon["joueurs"]],
         "jeu": salon["jeu"],
         "page": jeu.page if jeu else None,
+        # Depuis combien de secondes le jeu tourne, et s il est fini : la
+        # confirmation de remplacement le dit (« en cours depuis 32 min »).
+        "depuis": round(time.time() - salon["debut_jeu"]) if salon.get("etat") is not None and salon.get("debut_jeu") else None,
+        "fini": bool(jeu and salon.get("etat") is not None and jeu.peut_relancer(salon["etat"])),
         "couches": sorted(couches.get(soiree_de(code), {})),
     }
 
