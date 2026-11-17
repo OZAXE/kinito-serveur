@@ -258,8 +258,11 @@ def _poser(etat, ev, i, message, maintenant):
     etat["pile"] += len(cartes)
     etat["courant"] = mt_repondant(etat, i)
     nom = etat["noms"][i]
-    etat["message"] = nom + " pose " + str(len(cartes)) + " " \
-        + MT_NOMS_CARTES[etat["carte_table"]] + ("s" if len(cartes) > 1 else "") + "."
+    carte = MT_NOMS_CARTES[etat["carte_table"]]
+    # Pluriel : « 2 Rois », mais « 2 As » (deja termine par un s).
+    if len(cartes) > 1 and not carte.endswith("s"):
+        carte += "s"
+    etat["message"] = nom + " pose " + str(len(cartes)) + " " + carte + "."
     ev.append(_tous({"type": "mt_pose", "joueur": i, "nb": len(cartes)}))
     mt_armer(etat, maintenant)
     return ev
