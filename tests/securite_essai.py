@@ -30,6 +30,8 @@ def verifier(condition, texte):
 
 
 async def connecter(chemin, **options):
+    # max_queue=None : les messages non lus ne bloquent pas la fermeture.
+    options.setdefault("max_queue", None)
     return await websockets.connect(URL + chemin, ping_interval=None, **options)
 
 
@@ -110,7 +112,28 @@ async def essai_codes():
     await ws.close()
 
 
-ESSAIS = [essai_taille, essai_debit, essai_codes]
+async def essai_places():
+    print("Places a une table")
+    code = serveur.generer_code()
+    connexions = [await connecter(f"/ws/{code}/Joueur{i}") for i in range(serveur.PLACES_MAX)]
+    await asyncio.sleep(0.3)
+    de_trop = await connecter(f"/ws/{code}/Intrus")
+    recu, ferme = [], None
+    try:
+        while True:
+            recu.append(json.loads(await asyncio.wait_for(de_trop.recv(), 2)))
+    except websockets.ConnectionClosed as e:
+        ferme = e.rcvd.code if e.rcvd else None
+    verifier(ferme == 4005 and recu and recu[-1]["type"] == "erreur",
+             f"{serveur.PLACES_MAX + 1}e place refusee (message d erreur puis 4005)")
+    verifier(len(serveur.salons[code]["joueurs"]) == serveur.PLACES_MAX, "  la table reste a la limite")
+    revenant = await connecter(f"/ws/{code}/Joueur3")
+    verifier(await ping(revenant), "  un joueur deja assis reprend toujours sa place")
+    for ws in connexions + [revenant]:
+        await ws.close()
+
+
+ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places]
 
 
 async def principal():

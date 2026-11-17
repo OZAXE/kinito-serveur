@@ -134,6 +134,10 @@ VERSION = "2026-11-16 enquete-3d"
 # Un prenom n est qu a une table a la fois.
 # =============================================================
 TABLES_MAX = 9
+# Places au plus a une table (joueurs et spectateurs, places gardees comprises).
+# Chaque jeu verifie en plus son propre maximum au lancement ; ce plafond
+# empeche d entasser des connexions sans fin dans une salle d attente.
+PLACES_MAX = 20
 
 
 # Forme d un code de table : 4 lettres majuscules, suivies de -2 a -9 pour
@@ -454,6 +458,9 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
         if salons.get(code_salon) is not salon:
             salons[code_salon] = salon
         joueur = await arrivee(code_salon, salon, ws, nom_joueur)
+    if joueur is None:
+        await fermer(ws, 4005)
+        return
 
     try:
         # Boucle principale : on ecoute les messages de ce joueur
@@ -585,6 +592,16 @@ async def arrivee(code_salon, salon, ws, nom_joueur):
         joueur["battement"] = bat
         retour = True
     else:
+        if len(salon["joueurs"]) >= PLACES_MAX:
+            # Table pleine : refus annonce avec le message d erreur habituel.
+            try:
+                await asyncio.wait_for(ws.send_text(json.dumps({
+                    "type": "erreur",
+                    "message": f"Table complète ({PLACES_MAX} places). Ouvre une autre table.",
+                })), 1)
+            except Exception:
+                pass
+            return None
         joueur = {
             "nom": nom_joueur,
             "ws": ws,
