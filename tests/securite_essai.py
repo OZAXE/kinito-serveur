@@ -10,6 +10,8 @@ import asyncio
 import json
 import os
 import sys
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -33,6 +35,21 @@ async def connecter(chemin, **options):
     # max_queue=None : les messages non lus ne bloquent pas la fermeture.
     options.setdefault("max_queue", None)
     return await websockets.connect(URL + chemin, ping_interval=None, **options)
+
+
+def http(chemin, ip=None):
+    """GET sur le serveur ; rend (statut, JSON). ip : simule X-Forwarded-For."""
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}{chemin}",
+                                 headers={"X-Forwarded-For": ip} if ip else {})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"null")
+
+
+async def get(chemin, ip=None):
+    return await asyncio.to_thread(http, chemin, ip)
 
 
 async def code_fermeture(ws, delai=2.0):
@@ -133,7 +150,60 @@ async def essai_places():
         await ws.close()
 
 
-ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places]
+async def refusee(chemin, ip):
+    try:
+        ws = await connecter(chemin, additional_headers={"X-Forwarded-For": ip})
+    except websockets.InvalidStatus:
+        return True, None
+    return False, ws
+
+
+async def essai_limites_ip():
+    print("Limites par adresse IP")
+    serveur.connexions_ip.limite, avant = 3, serveur.connexions_ip.limite
+    try:
+        code = (await get("/creer-salon"))[1]["code"]
+        ouvertes = []
+        for i in range(3):
+            r, ws = await refusee(f"/ws/{code}/J{i}", "10.0.0.1")
+            ouvertes.append(ws)
+        r4, _ = await refusee(f"/ws-soiree/{code}/J9", "10.0.0.1")
+        r5, autre = await refusee(f"/ws/{code}/Autre", "10.0.0.2")
+        verifier(all(ouvertes) and r4 and not r5,
+                 "connexions simultanees limitees par adresse (les autres adresses passent)")
+        await ouvertes[0].close()
+        await asyncio.sleep(0.3)
+        r6, ws = await refusee(f"/ws/{code}/J0", "10.0.0.1")
+        verifier(not r6, "  une place se libere a la fermeture d une connexion")
+        for w in ouvertes[1:] + [ws, autre]:
+            await w.close()
+    finally:
+        serveur.connexions_ip.limite = avant
+
+    code = (await get("/creer-salon"))[1]["code"]
+    statuts = []
+    for i in range(serveur.RATES_PAR_IP):
+        statuts.append((await get(f"/salon/QQ{chr(65 + i // 26)}{chr(65 + i % 26)}", "10.0.0.3"))[1]["existe"])
+    bloque = (await get(f"/salon/{code}", "10.0.0.3"))[1]
+    bloque_soiree = (await get(f"/soiree/{code}", "10.0.0.3"))[1]
+    r_ws, _ = await refusee(f"/ws/{code}/Devin", "10.0.0.3")
+    libre = (await get(f"/salon/{code}", "10.0.0.4"))[1]
+    verifier(not any(statuts) and not bloque["existe"] and not bloque_soiree["existe"] and r_ws,
+             f"{serveur.RATES_PAR_IP} codes inexistants essayes : l adresse ne voit plus aucune soiree")
+    verifier(libre["existe"], "  une autre adresse voit toujours la soiree")
+
+    codes = [await get("/creer-salon", "10.0.0.5") for _ in range(serveur.CREATIONS_PAR_IP + 1)]
+    verifier(all(c[0] == 200 for c in codes[:-1]) and codes[-1][0] == 429,
+             f"creation de soirees limitee a {serveur.CREATIONS_PAR_IP} par minute et par adresse")
+    serveur.requetes_ip.limite, avant = 5, serveur.requetes_ip.limite
+    try:
+        rep = [(await get("/", "10.0.0.6"))[0] for _ in range(6)]
+    finally:
+        serveur.requetes_ip.limite = avant
+    verifier(rep[:5] == [200] * 5 and rep[5] == 429, "requetes HTTP limitees par adresse (429)")
+
+
+ESSAIS = [essai_taille, essai_debit, essai_codes, essai_places, essai_limites_ip]
 
 
 async def principal():

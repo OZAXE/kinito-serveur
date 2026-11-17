@@ -20,7 +20,8 @@ import string
 import time
 import unicodedata
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 # Le moteur de Picolopoly vit dans son propre fichier : c est un Monopoly
 # complet, et il est pur (ni reseau ni asyncio), donc testable hors ligne.
@@ -52,7 +53,7 @@ from casino import (
 # paralleles d une soiree (l Enquete).
 from stockage import creer_stockage, Sauvegarde
 from couches import Contexte, TYPES_COUCHES
-from protection import Debit
+from protection import Debit, Fenetre, Connexions, ip_client
 import enquete_couche  # noqa: F401  (enregistre la couche « enq » : l Enquete)
 
 # =============================================================
@@ -68,6 +69,61 @@ async def cycle_de_vie(_app):
 
 
 app = FastAPI(lifespan=cycle_de_vie)
+
+# =============================================================
+# LIMITES PAR ADRESSE IP
+# Une soiree, c est souvent 10 a 20 telephones sur le meme wifi (donc la meme
+# adresse) : chacun a une connexion de table, parfois une connexion soiree,
+# se reconnecte apres une coupure et l accueil interroge le serveur toutes
+# les 8 s. Les limites laissent cette marge, mais bloquent un script qui
+# ouvre des milliers de connexions ou essaie les codes un par un.
+# =============================================================
+CONNEXIONS_PAR_IP = 40          # WebSockets ouvertes en meme temps
+OUVERTURES_PAR_IP = 120         # nouvelles WebSockets par minute
+REQUETES_PAR_IP = 600           # requetes HTTP par minute
+CREATIONS_PAR_IP = 30           # soirees / tables creees ou rouvertes par minute
+RATES_PAR_IP = 30               # codes inexistants essayes par minute
+
+connexions_ip = Connexions(CONNEXIONS_PAR_IP)
+ouvertures_ip = Fenetre(OUVERTURES_PAR_IP)
+requetes_ip = Fenetre(REQUETES_PAR_IP)
+creations_ip = Fenetre(CREATIONS_PAR_IP)
+rates_ip = Fenetre(RATES_PAR_IP)
+
+
+def _ip_requete(request):
+    return ip_client(request.headers, request.client) if request is not None else None
+
+
+@app.middleware("http")
+async def limiter_requetes(request: Request, call_next):
+    if not requetes_ip.autoriser(_ip_requete(request)):
+        return JSONResponse({"detail": "Trop de requêtes, réessaie dans une minute."}, status_code=429)
+    return await call_next(request)
+
+
+def deviner_bloque(ip, code):
+    """
+    Anti-devinette : chaque essai d un code de soiree inexistant compte. Au-dela
+    de RATES_PAR_IP par minute, cette adresse ne recoit plus que « n existe pas »
+    (y compris pour un code qui existe) : parcourir les 456 976 codes a 4 lettres
+    prendrait des semaines au lieu de quelques heures.
+    """
+    if rates_ip.plein(ip):
+        return True
+    if not soiree_existe(soiree_de(code)):
+        rates_ip.autoriser(ip)
+    return False
+
+
+def admettre_connexion(ws, code):
+    """Controle a l ouverture d une WebSocket. Rend (admise, ip)."""
+    ip = ip_client(ws.headers, ws.client)
+    if not ouvertures_ip.autoriser(ip) or deviner_bloque(ip, code):
+        return False, ip
+    if not connexions_ip.entrer(ip):
+        return False, ip
+    return True, ip
 
 # CORS : autorise les pages HTML a se connecter au serveur
 # meme si elles viennent d un autre domaine (important pour GitHub Pages).
@@ -449,6 +505,17 @@ async def websocket_endpoint(ws: WebSocket, code_salon: str, nom_joueur: str):
     if code_salon is None:
         await ws.close(4004)        # refus avant l ouverture (HTTP 403)
         return
+    admise, ip = admettre_connexion(ws, code_salon)
+    if not admise:
+        await ws.close(1013)
+        return
+    try:
+        await connexion_table(ws, code_salon, nom_joueur)
+    finally:
+        connexions_ip.sortir(ip)
+
+
+async def connexion_table(ws, code_salon, nom_joueur):
     await ws.accept()
     demarrer_veilleur()
     nom_joueur = nettoyer_prenom(nom_joueur) or "Joueur"
@@ -3372,6 +3439,17 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
     if code is None:
         await ws.close(4004)
         return
+    admise, ip = admettre_connexion(ws, code)
+    if not admise:
+        await ws.close(1013)
+        return
+    try:
+        await connexion_soiree(ws, code, nom_joueur)
+    finally:
+        connexions_ip.sortir(ip)
+
+
+async def connexion_soiree(ws, code, nom_joueur):
     await ws.accept()
     soiree = soiree_de(code)
     nom = nettoyer_prenom(nom_joueur) or "Joueur"
@@ -3419,17 +3497,21 @@ async def websocket_soiree(ws: WebSocket, code: str, nom_joueur: str):
 # =============================================================
 
 @app.get("/creer-salon")
-async def creer_salon():
+async def creer_salon(request: Request = None):
     """Cree un nouveau salon vide et retourne son code."""
+    if not creations_ip.autoriser(_ip_requete(request)):
+        return JSONResponse({"detail": "Trop de soirées créées, réessaie dans une minute."}, status_code=429)
     code = generer_code()
     salons[code] = nouveau_salon()
     return {"code": code}
 
 
 @app.get("/salon/{code}")
-async def info_salon(code: str):
+async def info_salon(code: str, request: Request = None):
     """Retourne les infos d une table (pour verifier qu elle existe)."""
     code = code.upper()
+    if deviner_bloque(_ip_requete(request), code):
+        return {"existe": False}
     if code not in salons and not (code == soiree_de(code) and soiree_existe(code)):
         return {"existe": False}
     salon = salons.get(code) or nouveau_salon()
@@ -3474,10 +3556,10 @@ def presents_soiree(soiree, tables):
 
 
 @app.get("/soiree/{code}")
-async def info_soiree(code: str, nom: str = "", table: str = ""):
+async def info_soiree(code: str, nom: str = "", table: str = "", request: Request = None):
     """La soiree : ses tables (jeu, joueurs presents), ses couches et qui est la."""
     code = soiree_de(code.upper())
-    if not soiree_existe(code):
+    if deviner_bloque(_ip_requete(request), code) or not soiree_existe(code):
         return {"existe": False}
     nom = nettoyer_prenom(nom)
     if nom:
@@ -3496,7 +3578,7 @@ async def info_soiree(code: str, nom: str = "", table: str = ""):
 
 
 @app.get("/soiree/{code}/rouvrir")
-async def rouvrir_soiree(code: str):
+async def rouvrir_soiree(code: str, request: Request = None):
     """
     Une soiree que le serveur ne connait plus (il a redemarre : les salons
     vivent en memoire) est rouverte sous le meme code, tables vides. Le code
@@ -3506,19 +3588,23 @@ async def rouvrir_soiree(code: str):
     if not (len(code) == 4 and code.isalpha() and code.isupper()):
         return {"existe": False}
     if not soiree_existe(code):
+        if not creations_ip.autoriser(_ip_requete(request)):
+            return JSONResponse({"detail": "Trop de soirées rouvertes, réessaie dans une minute."}, status_code=429)
         salons[code] = nouveau_salon()
         return {"existe": True, "rouverte": True}
     return {"existe": True, "rouverte": False}
 
 
 @app.get("/soiree/{code}/nouvelle-table")
-async def nouvelle_table(code: str):
+async def nouvelle_table(code: str, request: Request = None):
     """Ouvre la prochaine table libre de la soiree (ABCD-2, ABCD-3...)."""
     # Meme controle que rouvrir : un code de travers (minuscules, trop long)
     # ne doit pas creer de table fantome a cote de la vraie soiree.
     code = soiree_de(code.upper())
     if not (len(code) == 4 and code.isalpha()):
         return {"existe": False}
+    if not creations_ip.autoriser(_ip_requete(request)):
+        return JSONResponse({"detail": "Trop de tables ouvertes, réessaie dans une minute."}, status_code=429)
     if not soiree_existe(code):
         await rouvrir_soiree(code)
     if code not in salons:
