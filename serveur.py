@@ -2584,9 +2584,10 @@ async def uc_publier(code_salon, evenements):
         noms = [j["nom"] for j in salon["joueurs"]]
         res = etat.get("resultat") or {}
         gagnants = [noms[g] for g in res.get("gagnants", []) if g < len(noms)]
+        doses = {noms[b["joueur"]]: b["gorgees"] for b in res.get("gorgees", []) if b["joueur"] < len(noms)}
         await signaler(code_salon, "undercover", "victoire", gagnants=gagnants,
                        perdants=[n for n in noms if n not in gagnants],
-                       details={"vainqueur": res.get("vainqueur")})
+                       details={"vainqueur": res.get("vainqueur"), "gorgees": doses})
 
 
 def uc_programmer(code_salon):
@@ -3200,11 +3201,16 @@ async def annoncer_resultat(table, salon, jeu, type_evt, gagnants, perdants, det
             gorgees = par
     if jeu == "kinito" and perdus:
         gorgees = {perdus[0]: details.get("gorgees")}      # None : cul sec
+    elif jeu != "buckshot" and isinstance(details.get("gorgees"), dict):
+        # Gorgees a boire maintenant, par prenom (Undercover : les perdants).
+        gorgees = {n: v for n, v in details["gorgees"].items() if v is None or (isinstance(v, int) and v > 0)}
     if not perdus:
         return
     try:
+        # « joueurs » : toute la table, pour que l ecran de resultat (le meme
+        # chez tous) liste aussi ceux qui ne boivent pas.
         await diffuser(table, {"type": "table_resultat", "jeu": jeu, "evt": type_evt, "gagnants": list(gagnants),
-                               "perdants": perdus, "gorgees": gorgees})
+                               "perdants": perdus, "gorgees": gorgees, "joueurs": presents})
     except Exception:
         journal.exception("Annonce du resultat a la table %s", table)
 

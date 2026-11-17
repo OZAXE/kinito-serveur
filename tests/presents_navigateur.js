@@ -62,16 +62,16 @@ async function attendreQue(test, delai) {
   await max.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find(x => x.textContent === 'Plus tard').click());
   verifier(await max.evaluate(() => /Salle d'attente · 🎲 Kinito/.test(document.querySelector('.tables').innerText)), '  et sa table affiche « Salle d’attente · 🎲 Kinito »');
   zoe.close();
-  // Animation de défaite (commune à tous les jeux, dans commun/soiree.js)
-  const resultat = { type: 'table_resultat', jeu: 'kinito', evt: 'manche', gagnants: [], perdants: ['Lea'], gorgees: { Lea: 3 } };
+  // Écran de résultat (commun à tous les jeux, dans commun/soiree.js) : le même chez tous
+  const resultat = { type: 'table_resultat', jeu: 'kinito', evt: 'manche', gagnants: [], perdants: ['Lea'], gorgees: { Lea: 3 }, joueurs: ['Lea', 'Max'] };
   await lea.evaluate((m) => Soiree.traiterMessage(m, 'kinito'), resultat);
   await max.evaluate((m) => Soiree.traiterMessage(m, 'kinito'), resultat);
   const anim = await attendreQue(() => lea.evaluate(() => { const v = document.querySelector('.res-voile.perdu'); return v && v.innerText; }), 5000);
-  verifier(!!anim && /Bois 3 gorgées/.test(anim), 'Léa perd la manche : animation de défaite (« ' + (anim || '').replace(/\n/g, ' ').slice(0, 60) + ' »)');
-  if (CAPTURES) { await attendre(900); await lea.screenshot({ path: CAPTURES + '/defaite.png' }); }
-  const bandeau = await attendreQue(() => max.evaluate(() => { const b = document.querySelector('.res-bandeau'); return b && b.textContent; }), 5000);
-  verifier(!!bandeau && /Lea a perdu la manche/.test(bandeau), '  Max voit le bandeau : « ' + (bandeau || '') + ' »');
-  verifier(!!await attendreQue(() => lea.evaluate(() => !document.querySelector('.res-voile')), 6000), '  l’animation disparaît seule, sans bloquer le jeu');
+  verifier(!!anim && /Tu bois : 3 gorgées/.test(anim), 'Léa perd la manche : écran de défaite (« ' + (anim || '').replace(/\n/g, ' ').slice(0, 70) + ' »)');
+  if (CAPTURES) { await attendre(1200); await lea.screenshot({ path: CAPTURES + '/defaite.png' }); }
+  const chezMax = await attendreQue(() => max.evaluate(() => { const v = document.querySelector('.res-voile.neutre'); return v && v.innerText; }), 5000);
+  verifier(!!chezMax && /Lea perd/.test(chezMax) && /\+3 gorgées/.test(chezMax), '  Max voit le même écran, avec les gorgées de Léa (« ' + (chezMax || '').replace(/\n/g, ' ').slice(0, 70) + ' »)');
+  verifier(!!await attendreQue(() => lea.evaluate(() => !document.querySelector('.res-voile')), 8000), '  l’écran disparaît seul');
   await max.evaluate(() => Soiree.traiterMessage({ type: 'table_resultat', jeu: 'menteur', evt: 'victoire', gagnants: ['Max'], perdants: ['Lea'], gorgees: {} }, 'menteur'));
   verifier(!!await attendreQue(() => max.evaluate(() => !!document.querySelector('.res-voile.gagne')), 5000), 'fin de partie : le gagnant a droit à « Bien joué ! »');
   if (CAPTURES) { await attendre(900); await max.screenshot({ path: CAPTURES + '/victoire.png' }); }
