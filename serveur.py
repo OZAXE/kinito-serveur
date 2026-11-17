@@ -849,6 +849,12 @@ async def revenir(code_salon, salon, joueur, annoncer=True):
     jeu = JEUX.get(salon.get("jeu"))
     if jeu is not None and jeu.joueur_revenu is not None:
         jeu.joueur_revenu(code_salon, salon, joueur["index"])
+    if salon.get("jeu") == "kinito":
+        # Le retour a pu relancer une partie en attente (kinito_reprendre) :
+        # toute la table doit le voir, pas seulement le revenant. Sinon les
+        # autres restaient sur « Il ne reste plus assez de joueurs », le
+        # revenant note parti, et personne n avait la main.
+        await diffuser(code_salon, construire_etat_public(code_salon))
     if annoncer:
         await diffuser(code_salon, {
             "type": "joueur_rejoint",
@@ -1846,6 +1852,31 @@ async def bb_deplacer(code_salon, salons, diffuser, joueur, ligne, colonne, via_
     await bb_envoyer_carte_case(code_salon, salons)
  
 
+def bb_carte_main(etat, idx, index_carte, types=None):
+    """
+    La carte index_carte de la main du joueur idx, si l index est valide et
+    la carte d un des types demandes (types None : n importe laquelle).
+    Sinon None : l action est refusee (avant, un index absent ou hors bornes
+    levait une exception, et n importe quelle carte passait pour une Dame).
+    """
+    main = etat["mains"][idx]
+    if isinstance(index_carte, bool) or not isinstance(index_carte, int) \
+            or not 0 <= index_carte < len(main):
+        return None
+    carte = main[index_carte]
+    return carte if types is None or carte["type"] in types else None
+
+
+def bb_arme_a_portee(etat, idx, cible):
+    """La premiere arme posee du joueur qui atteint la cible (Roi : 6, Valet : 2)."""
+    dist = bb_distance(etat["positions"][idx], etat["positions"][cible])
+    for arme in etat["armes"][idx]:
+        portee = 6 if arme["type"] == "roi" else 2
+        if dist <= portee:
+            return arme
+    return None
+
+
 async def bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, ligne, colonne, cible, index_carte):
     """
     L As : se deplacer d une case vers une cible, puis la frapper en mi-verre.
@@ -1859,6 +1890,8 @@ async def bb_as_deplacer_frapper(code_salon, salons, diffuser, joueur, ligne, co
     if not bb_case_valide(ligne, colonne, bb_taille(etat)):
         return
     if not isinstance(cible, int) or not 0 <= cible < etat["nb_joueurs"]:
+        return
+    if bb_carte_main(etat, idx, index_carte, ("as",)) is None:
         return
 
     # On verifie que la destination est bien a 1 case (deplacement As)
@@ -1917,22 +1950,20 @@ async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, 
         etat["message"] = f"{salon['joueurs'][idx]['nom']} frappe à mains nues ({degats})"
  
     elif type_attaque == "cc_gorgee":
-        carte = main[index_carte]
+        carte = bb_carte_main(etat, idx, index_carte, ("gorgee",))
+        if carte is None:
+            return
         bb_appliquer_gorgees(etat, cible, carte["valeur"])
         main.pop(index_carte)
         etat["message"] = f"{salon['joueurs'][idx]['nom']} attaque ({carte['valeur']} gorgées)"
  
     elif type_attaque == "arme":
         # index_carte = carte gorgee ; le serveur verifie la portee via l arme la plus adaptee
-        carte = main[index_carte]
+        carte = bb_carte_main(etat, idx, index_carte, ("gorgee",))
+        if carte is None:
+            return
         # On determine quelle arme peut atteindre la cible
-        dist = bb_distance(etat["positions"][idx], etat["positions"][cible])
-        arme_utilisee = None
-        for arme in etat["armes"][idx]:
-            portee = 6 if arme["type"] == "roi" else 2
-            if dist <= portee:
-                arme_utilisee = arme
-                break
+        arme_utilisee = bb_arme_a_portee(etat, idx, cible)
         if not arme_utilisee:
             return  # pas d arme a portee
         if arme_utilisee["type"] == "roi":
@@ -1944,15 +1975,25 @@ async def bb_attaquer(code_salon, salons, diffuser, joueur, cible, index_carte, 
         etat["message"] = f"{salon['joueurs'][idx]['nom']} tire ({degats} gorgées)"
  
     elif type_attaque == "as":
+        if bb_carte_main(etat, idx, index_carte, ("as",)) is None:
+            return
         bb_mi_verre(etat, cible)
         main.pop(index_carte)
         etat["message"] = f"{salon['joueurs'][idx]['nom']} frappe à l'As (mi-verre)"
  
     elif type_attaque == "joker":
+        # Le Joker se tire avec une arme posee, cible a portee (regle et page).
+        if bb_carte_main(etat, idx, index_carte, ("joker",)) is None:
+            return
+        if bb_arme_a_portee(etat, idx, cible) is None:
+            return
         bb_mi_verre(etat, cible)
         main.pop(index_carte)
         etat["message"] = f"{salon['joueurs'][idx]['nom']} tire au Joker (mi-verre)"
- 
+
+    else:
+        return      # type d attaque inconnu : rien ne se passe
+
     etat["action_faite"] = True
  
     # Verifie la victoire
@@ -1970,8 +2011,8 @@ async def bb_poser_arme(code_salon, salons, diffuser, joueur, index_carte):
     idx = joueur["index"]
     if etat["phase"] != "jeu" or idx != etat["joueur_courant"] or etat["action_faite"]:
         return
-    carte = etat["mains"][idx][index_carte]
-    if carte["type"] not in ("roi", "valet"):
+    carte = bb_carte_main(etat, idx, index_carte, ("roi", "valet"))
+    if carte is None:
         return
     etat["armes"][idx].append(carte)
     etat["mains"][idx].pop(index_carte)
@@ -1989,6 +2030,8 @@ async def bb_dame(code_salon, salons, diffuser, joueur, cible, index_carte):
     if etat["phase"] != "jeu" or idx != etat["joueur_courant"] or etat["action_faite"]:
         return
     if not isinstance(cible, int) or not 0 <= cible < etat["nb_joueurs"]:
+        return
+    if bb_carte_main(etat, idx, index_carte, ("dame",)) is None:
         return
     etat["verres"][cible] = 0
     etat["mains"][idx].pop(index_carte)
@@ -2027,7 +2070,9 @@ async def bb_ramasser(code_salon, salons, diffuser, joueur, decision, index_echa
         if len(etat["mains"][idx]) < etat["max_cartes"]:
             etat["mains"][idx].append(carte_sol)
             etat["plateau"][pos["ligne"]][pos["colonne"]] = None
-    elif decision == "echanger" and carte_sol is not None and index_echange is not None:
+    elif decision == "echanger" and carte_sol is not None:
+        if bb_carte_main(etat, idx, index_echange) is None:
+            return      # carte a echanger invalide : le tour n est pas fini
         ma_carte = etat["mains"][idx][index_echange]
         etat["plateau"][pos["ligne"]][pos["colonne"]] = ma_carte
         etat["mains"][idx][index_echange] = carte_sol
@@ -2109,6 +2154,7 @@ async def bb_joueur_parti(code_salon, index):
     absents = bb_absents(salon)
     if len(absents) >= etat["nb_joueurs"]:
         return      # plus personne : on attend un retour
+    bb_programmer_seul(code_salon)
     nom = salon["joueurs"][index]["nom"]
     if etat["phase"] == "placement" and etat["joueur_en_placement"] == index:
         bb_avancer_placement(salon)
@@ -2130,15 +2176,72 @@ async def bb_verifier_victoire(code_salon, salons, diffuser):
     etat = salon["etat"]
     survivants = [i for i in range(etat["nb_joueurs"]) if not etat["elimine"][i]]
     if len(survivants) <= 1:
-        gagnant = survivants[0] if survivants else None
-        nom = salon["joueurs"][gagnant]["nom"] if gagnant is not None else "Personne"
-        etat["phase"] = "fini"
-        etat["gagnant_nom"] = nom
-        await diffuser(code_salon, {"type": "bb_victoire", "gagnant": nom})
-        await signaler(code_salon, "beerbattle", "victoire",
-                       gagnants=[nom] if gagnant is not None else [])
+        await bb_declarer_vainqueur(code_salon, salon, survivants[0] if survivants else None)
         return True
     return False
+
+
+async def bb_declarer_vainqueur(code_salon, salon, gagnant):
+    etat = salon["etat"]
+    annuler_bb_seul(salon)
+    nom = salon["joueurs"][gagnant]["nom"] if gagnant is not None else "Personne"
+    etat["phase"] = "fini"
+    etat["gagnant_nom"] = nom
+    await diffuser(code_salon, {"type": "bb_victoire", "gagnant": nom})
+    await signaler(code_salon, "beerbattle", "victoire",
+                   gagnants=[nom] if gagnant is not None else [])
+
+
+# --- Seul present ---
+# La victoire ne compte que les elimines : si tous les autres joueurs encore
+# en lice quittent la table, le dernier present jouait seul sans fin. S il le
+# reste BB_DELAI_SEUL secondes, il gagne. Pas tout de suite : une simple
+# coupure de reseau ferait perdre les autres.
+BB_DELAI_SEUL = 120
+
+
+def bb_seul_present(salon):
+    """L index du seul joueur en lice present, quand les autres en lice sont absents."""
+    etat = salon["etat"]
+    absents = bb_absents(salon)
+    en_lice = [i for i in range(etat["nb_joueurs"]) if not etat["elimine"][i]]
+    presents = [i for i in en_lice if i not in absents]
+    return presents[0] if len(presents) == 1 and len(en_lice) >= 2 else None
+
+
+def annuler_bb_seul(salon):
+    t = salon.get("bb_seul")
+    if t is not None and not t.done() and t is not asyncio.current_task():
+        t.cancel()
+    salon["bb_seul"] = None
+
+
+def bb_programmer_seul(code_salon):
+    """(Re)arme le delai si un seul joueur en lice reste present, sinon l annule."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "beerbattle" or not salon.get("etat"):
+        return
+    annuler_bb_seul(salon)
+    if salon["etat"]["phase"] != "fini" and bb_seul_present(salon) is not None:
+        salon["bb_seul"] = asyncio.ensure_future(bb_minuteur_seul(code_salon, salon, salon["etat"]))
+
+
+async def bb_minuteur_seul(code_salon, salon, etat):
+    await asyncio.sleep(BB_DELAI_SEUL)
+    if salons.get(code_salon) is not salon:
+        return
+    async with verrou(salon):
+        if salon.get("bb_seul") is not asyncio.current_task():
+            return
+        salon["bb_seul"] = None
+        if salon.get("etat") is not etat or salon.get("jeu") != "beerbattle" or etat["phase"] == "fini":
+            return
+        gagnant = bb_seul_present(salon)
+        if gagnant is None:
+            return
+        etat["message"] = salon["joueurs"][gagnant]["nom"] + " est le dernier à table : il gagne."
+        await bb_declarer_vainqueur(code_salon, salon, gagnant)
+        await diffuser(code_salon, bb_etat_public(salon))
  
 
 
@@ -3053,6 +3156,11 @@ async def _bb_traiter(code_salon, joueur, m):
         await bb_ramasser(code_salon, salons, diffuser, joueur, m.get("decision"), m.get("index_echange"))
 
 
+def _bb_revenu(code_salon, salon, idx):
+    # Un joueur revient : le dernier present n est plus seul (delai annule).
+    bb_programmer_seul(code_salon)
+
+
 async def _bt_traiter(code_salon, joueur, m):
     t = m["type"]
     if t == "bt_composer":
@@ -3127,8 +3235,8 @@ JEUX = {
     "beerbattle": Jeu(
         "beerbattle", "BeerBattle", "beerbattle-3d-jeu.html", "bb_demarrer", _prefixe("bb_"),
         lambda code, m: bb_demarrer(code, salons, diffuser), _bb_traiter, _beerbattle_instantane,
-        joueur_parti=bb_joueur_parti,
-        peut_relancer=lambda etat: etat.get("phase") == "fini",
+        joueur_parti=bb_joueur_parti, joueur_revenu=_bb_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fini", minuteurs=("bb_seul",),
         min_joueurs=3, max_joueurs=BB_JOUEURS_MAX),
     "buckshot": Jeu(
         "buckshot", "Buckshot", "buckshot-3d-jeu.html", "bt_demarrer", _prefixe("bt_"),
