@@ -64,7 +64,9 @@ undercover.UC_DELAI_ABSENT = 1
 undercover.UC_DELAI_REVELATION = 1.0
 undercover.UC_DELAI_RETOUR_VOTE = 3
 for _v in telephone.TD_CONFIG["vitesses"].values():
-    _v.update(phrase=4, dessin=4, ecriture=4)
+    _v.update(phrase=4, dessin=4, ecriture=4, visionnage=1, speedrun_phrase=3, speedrun_dessin=3,
+              speedrun_ecriture=3)
+telephone.TD_CONFIG["knockoff"]["minimum"] = 2
 telephone.TD_CONFIG["delai_grace"] = 1
 telephone.TD_CONFIG["delai_absent"] = 1
 telephone.TD_CONFIG["revelation"].update(vote_album=4, vote_final=4, retour_vote=3,
@@ -464,7 +466,8 @@ class Robot:
             return
         ph = msg["phase"]
         if ph == "fin":
-            self.plus_tard(DEMARRER["telephone"], 0.5, 1.5)
+            mode = rng.choice(["normal", "knockoff", "speedrun"])
+            self.plus_tard(dict(DEMARRER["telephone"], mode=mode), 0.5, 1.5)
         elif ph == "pret" and msg["hote"] == i:
             self.plus_tard({"type": "td_reveler", "auto": rng.random() < 0.5})
         elif ph in ("revelation", "resultat_album") and msg["hote"] == i:

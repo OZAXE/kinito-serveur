@@ -1034,7 +1034,7 @@ async def _telephone_instantane(code_salon, joueur, complet, nouveau):
     if complet:
         await envoyer(joueur, {"type": "td_demarree", "joueurs": noms})
     await envoyer(joueur, td_etat_public(etat, time.time()))
-    tache = td_tache(etat, joueur["index"])
+    tache = td_tache(etat, joueur["index"], time.time())
     if tache is not None:
         await envoyer(joueur, tache)
     galerie = td_galerie(etat)
@@ -3070,7 +3070,7 @@ async def td_publier(code_salon, evenements):
         salon["td_tache_envoyee"] = cle
         for joueur in salon["joueurs"]:
             if not joueur.get("parti"):
-                tache = td_tache(etat, joueur["index"])
+                tache = td_tache(etat, joueur["index"], time.time())
                 if tache is not None:
                     await envoyer(joueur, tache)
     # Tous les albums, une seule fois, quand toute la revelation est passee.

@@ -107,7 +107,7 @@ DEMARRER = {
     "menteur": {"type": "mt_demarrer", "mode": "chaos"},
     "casino": {"type": "cs_demarrer"},
     "undercover": {"type": "uc_demarrer", "famille": "melange"},
-    "telephone": {"type": "td_demarrer", "vitesse": "flash"},
+    "telephone": {"type": "td_demarrer", "vitesse": "flash", "mode": "speedrun"},
 }
 
 

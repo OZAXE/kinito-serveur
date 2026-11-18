@@ -110,12 +110,19 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
 
 - 3 à 8 joueurs, page `telephone-jeu.html` (2D, portrait). On écrit, on dessine, on devine ; à la fin chaque
   album est révélé étape par étape. Toutes les valeurs (minuteurs, tailles, gorgées) sont dans
-  `telephone_config.json`. Pas de plafond de gorgées. v1 : mode Normal seulement (Knock-Off, Speedrun ensuite).
+  `telephone_config.json`. Pas de plafond de gorgées. Trois modes (`mode`) :
+  - `normal` : phrase, dessin, description, dessin… ;
+  - `knockoff` : une seule phrase de la banque pour tous les albums (`source` ignorée), puis uniquement des
+    dessins ; dès la 2e étape, le dessin précédent n'est visible que `visionnage` secondes (5 / 8 / 10 s) puis
+    on le recopie de mémoire, avec un temps de dessin qui baisse à chaque étape (x `decroissance`, jamais sous
+    `minimum`). Jusqu'à N étapes ;
+  - `speedrun` : comme Normal avec des minuteurs très courts (dessin 8 / 12 / 15 s) et 4 étapes par défaut ;
+    à chaque étape, l'album de chacun est tiré au hasard (jamais un album déjà touché, tous jouent).
 - `td_demarrer` : `vitesse` (`flash`, `normal`, `long`), `source` des phrases de départ (`libre`, `banque` :
-  l'étape 0 est sautée, `mixte` : le champ est prérempli par la banque), `etapes` (1 à N-1, défaut N-1 :
-  chaque album passe par tout le monde). Celui qui lance est l'**hôte** (`hote`) ; s'il part, le premier
+  l'étape 0 est sautée, `mixte` : le champ est prérempli par la banque), `mode`, `etapes` (1 à N-1, N en
+  Knock-Off ; défaut : toutes, chaque album passe par tout le monde ; 4 en Speedrun). Celui qui lance est l'**hôte** (`hote`) ; s'il part, le premier
   présent le remplace.
-- Rotation : N albums ; à l'étape k le joueur i travaille sur l'album (i + k) % N. Étape 0 : phrase,
+- Rotation : N albums ; à l'étape k le joueur i travaille sur l'album (i + k) % N (Speedrun : tirage). Étape 0 : phrase,
   impaires : dessin, paires : description. L'étape finit quand tous les présents ont envoyé, ou à
   l'échéance (+ `delai_grace`) : ce qui manque est rempli par le brouillon, sinon page vide ou « ... ».
 - Messages : `td_contribuer` (`contenu` : texte de 80 caractères au plus, ou dessin ; `auto: true` quand la
@@ -130,7 +137,8 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   (meilleur moment, anonyme, pas pour soi), `resultat_album`, `vote_final` (dessin le plus mal compris),
   `fin` (`resultats`, `final`).
 - Secret : `td_etat` ne contient que l'album en cours de révélation, jusqu'à la contribution dévoilée ;
-  chacun reçoit par `td_tache` la SEULE contribution précédente de son album. Tous les albums (`td_galerie`)
+  chacun reçoit par `td_tache` la SEULE contribution précédente de son album. En Knock-Off, `td_tache` a `copie` et `vision` (secondes de
+  visionnage restantes) ; passé ce délai, le serveur ne renvoie plus le modèle (une page rechargée non plus). Tous les albums (`td_galerie`)
   ne partent qu'au vote final.
 - Gorgées (x1,25 / x1 / x0,75 selon la vitesse) : la plus votée d'un album distribue 2, la plus votée de la
   partie distribue 3, le dessin le plus mal compris boit 1, une contribution pas envoyée à temps boit 1
