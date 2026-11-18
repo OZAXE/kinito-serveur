@@ -9,7 +9,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   minuteurs, nombre de joueurs). Ajouter un jeu = ajouter une entrée.
 - Moteurs de règles purs, testables hors ligne : `picolopoly.py`, `menteur.py`, `casino.py`, `undercover.py`
   (mots dans `undercover_mots.py` : familles « classique » et « trash »), `telephone.py` (Téléphone Dessiné :
-  chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`).
+  chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`), `conquete.py` (Royaumes : chiffres
+  dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -144,6 +145,56 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
   partie distribue 3, le dessin le plus mal compris boit 1, une contribution pas envoyée à temps boit 1
   (`td_gorgees` à chaque fois).
 
+## Royaumes (conquête, préfixe `sw_`)
+
+Jeu de conquête de régions, 2 à 8 joueurs, page `conquete-3d-jeu.html`. Inspiré des mécaniques de
+Small World (race + pouvoir, conquête, déclin, pièces) ; noms, textes et visuels sont originaux.
+Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à régler en test).
+
+- **Cartes** : une par tranche (2-3, 4-5, 6-8 joueurs : 12, 16, 22 régions, soit 6 + 2 par joueur en haut
+  de tranche). Graphes de régions (terrain : plaine, forêt, colline, marais, montagne ; marque : mine ou
+  source magique ; bord). Fabriquées une fois par `conquete_cartes.py` (graine fixe, Voronoï relâché) et
+  vérifiées : carte d'un seul tenant, terrains à 1 près, voisines de terrains différents si possible,
+  marques jamais voisines, au moins la moitié des régions au bord.
+- **Combinaisons** : race (16) + pouvoir (20) tirés au hasard, pions = race + pouvoir, au moins 7.
+  File de 6 : la première gratuite, 1 pièce par combinaison sautée (posée dessus, ramassée par qui la
+  prend). `bannis` et `bonus_depart` dans la config ; mode `aleatoire` : 12 races et 15 pouvoirs par partie.
+- **Tour** : choisir une combinaison si on n'a pas de peuple actif ; puis étendre (conquêtes puis
+  redéploiement) ou passer en déclin (fin du tour). Score de fin de tour : 1 pièce par région (actif et
+  déclin) + bonus de race et de pouvoir. Partie en N tours par joueur (vitesse) ; égalité : le plus de
+  régions, puis le sort. Premier joueur tiré au sort.
+- **Conquête** : coût = 2 + pions adverses + 1 en montagne + fortin + Titans − effets, jamais sous 1.
+  Premier pas d'un peuple sur une région de bord, ensuite une voisine (Aérien, Marins, Souterrain, dragon :
+  exceptions). Défenseur actif : perd 1 pion, récupère les autres en main ; peuple en déclin : perd tout.
+  Dé de renfort (faces 0 0 0 1 2 3, tiré par le serveur) pour une dernière conquête (Furie : à tout moment).
+- **Déclin** : 1 pion par région, plus de pouvoirs, 1 pièce par région. L'ancien peuple en déclin
+  disparaît (sauf pouvoir Immortel).
+- **Interprétations de la trame** : Revenants = en déclin, ils gardent les pièces de leur pouvoir ;
+  Mages = relance auto d'un dé raté + 1 pièce par source magique (sinon les sources ne servaient à
+  personne) ; Nomades = 2 régions gardées sans pion ; Immortel = ce peuple, une fois en déclin, ne
+  disparaît jamais ; Souterrain = depuis une de ses montagnes, toutes les montagnes sont voisines ;
+  Endurant = déclin après le score d'un tour où il a conquis. Fortins, camps et gardiens disparaissent
+  au déclin.
+- **Vitesses** : Flash 4 tours / 40 s / gorgées ×1,5, Express 6 / 45 s / ×1,25, Soirée 8 / 60 s / ×1,
+  Marathon 10 / 90 s / ×0,75. À 7 joueurs et plus, Flash par défaut.
+- **Gorgées** (sans plafond) : région perdue, l'ancien occupant boit 1 (au plus 3 par tour d'attaquant) ;
+  déclin, 2 à distribuer ; fin, le dernier boit 3 et le vainqueur distribue 5 ; option vengeance (3 tours
+  adverses d'affilée à perdre des régions : 1 à distribuer).
+- **Messages** : `sw_demarrer` (`vitesse`, `tours`, `aleatoire`, `vengeance`, et `remplacer`). Actions du
+  joueur dont c'est le tour : `sw_choisir` (`rang`), `sw_declin`, `sw_abandonner` (`region`, avant toute
+  conquête), `sw_conquerir` (`region`), `sw_tenter` (`region`, dé de renfort), `sw_dragon` (`region`),
+  `sw_fin_conquete`, `sw_redeployer` (`pions` : {région: nombre}, et selon le pouvoir `fortin`, `camp`,
+  `gardiens`, `sabotage`, `emissaire`, `declin` pour Endurant). `sw_reaction` (`emoji`) : n'importe qui,
+  n'importe quand. Le serveur envoie `sw_demarree` (carte, races, pouvoirs, réglage : au début et à la
+  reconnexion) puis `sw_etat` après chaque coup, avec `possibles` (régions conquérables par le joueur
+  actif et leur coût, calculées ici : la page ne refait jamais les règles). Événements : `sw_choix`,
+  `sw_conquete`, `sw_de`, `sw_declin`, `sw_abandon`, `sw_sabotage`, `sw_score`, `sw_gorgees`,
+  `sw_reaction`, `sw_fin`.
+- **Minuteur** : à l'échéance (ou 3 s pour un joueur parti), le serveur finit le tour : combinaison
+  gratuite si besoin, redéploiement sûr (pions en main vers les régions les plus exposées), score.
+- Lien avec l'Enquête : la victoire est signalée, mais ne rapporte rien tant que `conquete` n'est pas
+  dans la table des PE de `enquete_config.json` (désactivé par défaut).
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -156,6 +207,7 @@ tout tourne en mémoire. `GET /` indique `"stockage": "postgres"` ou `"memoire"`
 python tests/menteur_essai.py
 python tests/telephone_essai.py 300         # rotation, non-fuite des albums, votes, gorgées, absents
 python tests/undercover_essai.py             # règles, mot de Mr White (tolérance), égalités, non-fuite des mots
+python tests/conquete_essai.py 300          # Royaumes : cartes, règles dirigées, parties au hasard (invariants)
 python tests/casino_essai.py
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
@@ -167,6 +219,7 @@ node tests/solo_navigateur.js               # un seul joueur et des joueurs fict
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)
+node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 navigateurs, en touchant la carte
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
 python tests/securite_essai.py              # attaques : taille, debit, codes, places, origines, limites par IP

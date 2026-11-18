@@ -1,0 +1,101 @@
+{
+  "_": "Royaumes (jeu de conquete, prefixe sw_) : TOUTES les valeurs chiffrees du jeu. Valeurs de depart, a regler en test.",
+  "joueurs_min": 2,
+  "joueurs_max": 8,
+  "pions_min": 7,
+  "_pions_min": "Une combinaison a au moins ce nombre de pions (race + pouvoir), complete si besoin.",
+  "file_visible": 6,
+  "cout_base": 2,
+  "cout_montagne": 1,
+  "cout_min": 1,
+  "de_renfort": [0, 0, 0, 1, 2, 3],
+  "delai_absent": 3,
+  "_delai_absent": "Secondes laissees a un joueur deconnecte avant de jouer son tour a sa place.",
+  "journal_max": 40,
+
+  "vitesse_defaut": "soiree",
+  "vitesse_defaut_nombreux": "flash",
+  "_vitesse_defaut_nombreux": "Vitesse proposee a 7 joueurs et plus (minuteur le plus court).",
+  "joueurs_nombreux": 7,
+  "vitesses": {
+    "flash":    {"titre": "Flash",    "tours": 4,  "minuteur": 40, "mult_gorgees": 1.5},
+    "express":  {"titre": "Express",  "tours": 6,  "minuteur": 45, "mult_gorgees": 1.25},
+    "soiree":   {"titre": "Soirée",   "tours": 8,  "minuteur": 60, "mult_gorgees": 1.0},
+    "marathon": {"titre": "Marathon", "tours": 10, "minuteur": 90, "mult_gorgees": 0.75}
+  },
+  "tours_choix": [3, 4, 5, 6, 8, 10, 12],
+
+  "gorgees": {
+    "region_perdue": 1,
+    "plafond_par_attaque": 3,
+    "declin_distribue": 2,
+    "dernier_boit": 3,
+    "vainqueur_distribue": 5,
+    "vengeance_seuil": 3,
+    "vengeance_distribue": 1
+  },
+
+  "aleatoire": {"races": 12, "pouvoirs": 15},
+
+  "bannis": [["titans", "gardien"]],
+  "_bannis": "Combinaisons [race, pouvoir] jamais tirees. null = n importe laquelle, ex. [\"hordes\", null].",
+  "bonus_depart": [
+    {"race": "titans", "pouvoir": null, "pieces": 1}
+  ],
+  "_bonus_depart": "Pieces posees d avance sur une combinaison quand elle entre dans la file (les moins attirantes).",
+
+  "races": {
+    "taupiers":     {"nom": "Taupiers",     "pions": 5, "icone": "⛏️", "effet": "+1 pièce par mine occupée en fin de tour."},
+    "cultivateurs": {"nom": "Cultivateurs", "pions": 5, "icone": "🌾", "effet": "+1 pièce par plaine occupée en fin de tour."},
+    "pillards":     {"nom": "Pillards",     "pions": 5, "icone": "🏴", "effet": "+1 pièce par région déjà occupée conquise ce tour."},
+    "intouchables": {"nom": "Intouchables", "pions": 6, "icone": "🛡️", "effet": "Ne perdent aucun pion quand on leur prend une région."},
+    "colosses":     {"nom": "Colosses",     "pions": 6, "icone": "🗿", "effet": "Montagne ou colline : conquête 1 pion moins chère."},
+    "hordes":       {"nom": "Hordes",       "pions": 8, "icone": "🐺", "effet": "Aucun bonus, mais beaucoup de pions."},
+    "nuees":        {"nom": "Nuées",        "pions": 5, "icone": "🦗", "effet": "+1 pion en main par région déjà occupée conquise."},
+    "spectres":     {"nom": "Spectres",     "pions": 5, "icone": "👻", "effet": "Région d'un peuple en déclin : 1 pion moins chère."},
+    "pecheurs":     {"nom": "Pêcheurs",     "pions": 5, "icone": "🎣", "effet": "+1 pièce par région de bord occupée en fin de tour."},
+    "forgerons":    {"nom": "Forgerons",    "pions": 5, "icone": "🔨", "effet": "+2 pièces par montagne occupée en fin de tour."},
+    "nomades":      {"nom": "Nomades",      "pions": 6, "icone": "🐪", "effet": "Peuvent garder 2 régions sans aucun pion au redéploiement."},
+    "voleurs":      {"nom": "Voleurs",      "pions": 5, "icone": "🗝️", "effet": "Prendre une région à un peuple actif lui vole 1 pièce (1 fois par tour)."},
+    "mages":        {"nom": "Mages",        "pions": 5, "icone": "🔮", "effet": "Relancent le dé raté une fois par tour. +1 pièce par source magique."},
+    "revenants":    {"nom": "Revenants",    "pions": 5, "icone": "💀", "effet": "En déclin, gardent les pièces de leur pouvoir (ses autres effets sont perdus)."},
+    "titans":       {"nom": "Titans",       "pions": 4, "icone": "⛰️", "effet": "Leurs régions coûtent 1 pion de plus à conquérir."},
+    "marins":       {"nom": "Marins",       "pions": 6, "icone": "⚓", "effet": "Conquièrent une région de bord même éloignée (1 fois par tour)."}
+  },
+
+  "pouvoirs": {
+    "sylvestre":   {"nom": "Sylvestre",          "pions": 4, "icone": "🌲", "effet": "+1 pièce par forêt occupée."},
+    "alpin":       {"nom": "Alpin",              "pions": 4, "icone": "🏔️", "effet": "+1 pièce par colline occupée."},
+    "fangeux":     {"nom": "Fangeux",            "pions": 4, "icone": "🐸", "effet": "+1 pièce par marais occupé."},
+    "chevaucheur": {"nom": "Chevaucheur",        "pions": 5, "icone": "🐎", "effet": "Plaine ou colline : conquête 1 pion moins chère."},
+    "aerien":      {"nom": "Aérien",             "pions": 5, "icone": "🦅", "effet": "Conquiert n'importe quelle région, même éloignée."},
+    "batisseur":   {"nom": "Bâtisseur",          "pions": 3, "icone": "🏯", "effet": "Pose un fortin par tour (6 max) : +1 en défense, +1 pièce."},
+    "negociant":   {"nom": "Négociant",          "pions": 2, "icone": "💰", "effet": "+1 pièce par région occupée."},
+    "furie":       {"nom": "Furie",              "pions": 4, "icone": "🔥", "effet": "Peut lancer le dé avant n'importe quelle conquête, sans finir son tour."},
+    "emissaire":   {"nom": "Émissaire",          "pions": 5, "icone": "🕊️", "effet": "Fin de tour : un adversaire non attaqué ne pourra pas t'attaquer à son prochain tour."},
+    "transmuteur": {"nom": "Transmuteur",        "pions": 4, "icone": "⚗️", "effet": "+2 pièces à chaque fin de tour."},
+    "eclaireur":   {"nom": "Éclaireur",          "pions": 4, "icone": "🧭", "effet": "Chaque conquête coûte 1 pion de moins."},
+    "gardien":     {"nom": "Gardien",            "pions": 3, "icone": "🗼", "effet": "2 gardiens : une région gardée ne peut pas être conquise."},
+    "mecene":      {"nom": "Mécène",             "pions": 1, "icone": "🎁", "effet": "+6 pièces au premier tour du peuple."},
+    "immortel":    {"nom": "Immortel",           "pions": 3, "icone": "♾️", "effet": "Une fois en déclin, ce peuple ne disparaît jamais de la carte."},
+    "endurant":    {"nom": "Endurant",           "pions": 3, "icone": "🏃", "effet": "Peut passer en déclin à la fin d'un tour de conquête."},
+    "souterrain":  {"nom": "Souterrain",         "pions": 4, "icone": "🕳️", "effet": "Depuis une de tes montagnes, toutes les montagnes sont voisines."},
+    "chasseur":    {"nom": "Chasseur de primes", "pions": 4, "icone": "🎯", "effet": "+2 pièces par région prise au joueur en tête."},
+    "campeur":     {"nom": "Campeur",            "pions": 5, "icone": "⛺", "effet": "Un camp par tour (5 max) : la région reste à toi même sans pion."},
+    "dompteur":    {"nom": "Dompteur",           "pions": 3, "icone": "🐉", "effet": "Un dragon, une seule fois : conquiert n'importe quelle région pour 1 pion."},
+    "saboteur":    {"nom": "Saboteur",           "pions": 4, "icone": "💣", "effet": "Fin de tour : une région adverse voisine perd 1 pion."}
+  },
+
+  "limites": {
+    "fortins": 6,
+    "camps": 5,
+    "gardiens": 2,
+    "nomades_vides": 2
+  },
+  "bonus": {
+    "mecene": 6,
+    "transmuteur": 2,
+    "chasseur": 2,
+    "forgerons": 2
+  }
+}

@@ -18,12 +18,13 @@ dans la même modification quand un comportement change.
 Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
 
 - **Registre des jeux** `JEUX` (`serveur.py`) : kinito, beerbattle, buckshot, picolopoly,
-  menteur (affiché « Cal 12 »), casino, undercover, telephone (Téléphone Dessiné, préfixe `td_`). Chaque jeu y est déclaré une fois
+  menteur (affiché « Cal 12 »), casino, undercover, telephone (Téléphone Dessiné, préfixe `td_`), conquete (Royaumes, préfixe `sw_`). Chaque jeu y est déclaré une fois
   (démarrage, actions, reprise, départ, retour, minuteurs, nombre de joueurs) : ajouter un jeu
   = ajouter une entrée.
 - **Moteurs de règles purs** à part, testables hors ligne : `picolopoly.py`, `menteur.py`,
   `casino.py`, `undercover.py` (mots dans `undercover_mots.py`), `telephone.py` (config
-  `telephone_config.json`, phrases `telephone_phrases.py`), `enquete.py`, `bingo.py`.
+  `telephone_config.json`, phrases `telephone_phrases.py`), `conquete.py` (chiffres dans `conquete_config.json`, cartes
+  dans `conquete_cartes.json` fabriquées par `conquete_cartes.py`), `enquete.py`, `bingo.py`.
 - `stockage.py` : Postgres Neon si `DATABASE_URL` est défini (variable Render, jamais dans le
   dépôt), sinon mémoire. Le serveur ne doit jamais planter à cause de la base.
 - `protection.py` : garde-fous (débit, taille, connexions par IP).
@@ -58,6 +59,7 @@ python tests/enquete_essai.py
 python tests/casino_essai.py
 python tests/undercover_essai.py
 python tests/telephone_essai.py 300
+python tests/conquete_essai.py 300
 python tests/picolopoly_essai.py 300
 python tests/non_fuite_essai.py 300   # rien ne trahit le tueur de l'Enquête
 ```

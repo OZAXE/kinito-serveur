@@ -49,6 +49,12 @@ from telephone import (
     td_initialiser, td_action, td_expirer, td_etat_public, td_tache, td_galerie,
     td_prochaine_echeance, td_joueur_parti, td_joueur_revenu,
 )
+# Royaumes (conquete de regions, race + pouvoir) : meme principe.
+from conquete import (
+    SW_JOUEURS_MIN, SW_JOUEURS_MAX,
+    sw_initialiser, sw_action, sw_expirer, sw_etat_public, sw_catalogue,
+    sw_prochaine_echeance, sw_joueur_parti, sw_joueur_revenu,
+)
 # Casino (roulette, blackjack, poker) : meme principe, moteur pur a part.
 from casino import (
     CS_JOUEURS_MIN, CS_JOUEURS_MAX,
@@ -217,7 +223,7 @@ _veilleur = None
 
 # Affichee sur la page d accueil du serveur : permet de verifier qu un
 # deploiement est bien en ligne.
-VERSION = "2026-11-17 onglets-en-cours"
+VERSION = "2026-11-18 royaumes"
 
 
 # =============================================================
@@ -1040,6 +1046,14 @@ async def _telephone_instantane(code_salon, joueur, complet, nouveau):
     galerie = td_galerie(etat)
     if galerie is not None:
         await envoyer(joueur, galerie)
+
+
+async def _conquete_instantane(code_salon, joueur, complet, nouveau):
+    # Tout est public : la carte et le catalogue (sw_demarree), puis l etat.
+    # La page ne reconstruit son plateau que si la carte ou les joueurs changent.
+    etat = salons[code_salon]["etat"]
+    await envoyer(joueur, sw_catalogue(etat))
+    await envoyer(joueur, sw_etat_public(etat, time.time()))
 
 
 async def _casino_instantane(code_salon, joueur, complet, nouveau):
@@ -3144,6 +3158,114 @@ async def _td_parti(code_salon, index):
 
 
 # =============================================================
+# ROYAUMES (conquete, prefixe sw_)
+# Les regles sont dans conquete.py (chiffres : conquete_config.json, cartes :
+# conquete_cartes.json). Ici : le reseau et le minuteur du tour, qui finit
+# le tour d un joueur trop lent ou parti (redeploiement sur).
+# =============================================================
+
+async def sw_demarrer(code_salon, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if etat is not None and not (salon.get("jeu") == "conquete" and etat.get("phase") == "fin"):
+        return
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < SW_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur", "message": f"Royaumes demande au moins {SW_JOUEURS_MIN} joueurs."})
+        return
+    if nb > SW_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur", "message": f"Royaumes se joue à {SW_JOUEURS_MAX} joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    options = {k: message.get(k) for k in ("vitesse", "tours", "aleatoire", "vengeance")}
+    salon["etat"] = sw_initialiser([j["nom"] for j in salon["joueurs"]], time.time(), options)
+    salon["jeu"] = "conquete"
+    await diffuser(code_salon, sw_catalogue(salon["etat"]))
+    await envoyer_indices(code_salon)
+    await sw_publier(code_salon, [])
+
+
+async def sw_diffuser_evenements(salon, code_salon, evenements):
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+async def sw_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "conquete" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    await sw_diffuser_evenements(salon, code_salon, evenements)
+    await diffuser(code_salon, sw_etat_public(etat, time.time()))
+    sw_programmer(code_salon)
+    if etat.get("phase") == "fin" and not etat.get("fin_signalee"):
+        etat["fin_signalee"] = True
+        noms = etat["joueurs"]
+        res = etat.get("resultat") or {}
+        gagnant = res.get("gagnant")
+        gagnants = [noms[gagnant]] if gagnant is not None else []
+        # A boire maintenant : la fin de partie seulement (les gorgees des
+        # conquetes ont deja ete annoncees au fil des tours).
+        doses = {noms[x["joueur"]]: x["boit"] for x in res.get("gorgees", []) if x.get("boit")}
+        await signaler(code_salon, "conquete", "victoire", gagnants=gagnants,
+                       perdants=[n for n in noms if n not in gagnants],
+                       details={"gorgees": doses})
+
+
+def sw_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("sw_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = sw_prochaine_echeance(etat) if etat and salon.get("jeu") == "conquete" else None
+    salon["sw_minuteur"] = None if echeance is None else asyncio.create_task(
+        sw_minuteur(code_salon, salon, echeance))
+
+
+async def sw_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "conquete":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("sw_minuteur") is not moi:
+            return
+        salon["sw_minuteur"] = None
+        etat = salon["etat"]
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = sw_expirer(etat, time.time())
+        if etat["version"] != version:
+            await sw_publier(code_salon, evenements)
+        else:
+            sw_programmer(code_salon)
+
+
+async def sw_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "conquete" or etat is None:
+        return
+    version = etat["version"]
+    evenements = sw_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await sw_publier(code_salon, evenements)
+    else:
+        # refus (prive) ou reaction (pour tous) : l etat n a pas change
+        await sw_diffuser_evenements(salon, code_salon, evenements)
+
+
+# =============================================================
 # CASINO (roulette, blackjack, poker)
 # Les regles sont dans casino.py. Ici : le reseau, les cartes privees du
 # poker, et le minuteur qui lance la roue, joue a la place d un joueur absent
@@ -3157,7 +3279,7 @@ async def cs_demarrer(code_salon):
     etat = salon.get("etat")
     if etat is not None:
         jeu = salon.get("jeu")
-        fini = (jeu in ("menteur", "undercover", "telephone") and etat.get("phase") == "fin") or \
+        fini = (jeu in ("menteur", "undercover", "telephone", "conquete") and etat.get("phase") == "fin") or \
                (jeu == "beerbattle" and etat.get("phase") == "fini")
         if not fini:
             return
@@ -3385,6 +3507,20 @@ async def _cs_parti(code_salon, index):
         await cs_publier(code_salon, evenements)
 
 
+def _sw_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        sw_joueur_revenu(etat, idx, time.time())
+        sw_programmer(code_salon)
+
+
+async def _sw_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        sw_joueur_parti(etat, index, time.time())
+        await sw_publier(code_salon, [])
+
+
 def _prefixe(p):
     return lambda t: t.startswith(p)
 
@@ -3437,6 +3573,12 @@ JEUX = {
         joueur_parti=_td_parti, joueur_revenu=_td_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("td_minuteur",),
         min_joueurs=TD_JOUEURS_MIN, max_joueurs=TD_JOUEURS_MAX),
+    "conquete": Jeu(
+        "conquete", "Royaumes", "conquete-3d-jeu.html", "sw_demarrer", _prefixe("sw_"),
+        sw_demarrer, sw_traiter, _conquete_instantane,
+        joueur_parti=_sw_parti, joueur_revenu=_sw_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("sw_minuteur",),
+        min_joueurs=SW_JOUEURS_MIN, max_joueurs=SW_JOUEURS_MAX),
 }
 
 
