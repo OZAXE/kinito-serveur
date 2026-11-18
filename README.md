@@ -153,11 +153,13 @@ Jeu de conquête de régions, 2 à 8 joueurs, page `conquete-3d-jeu.html`. Inspi
 Small World (race + pouvoir, conquête, déclin, pièces) ; noms, textes et visuels sont originaux.
 Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à régler en test).
 
-- **Cartes** : une par tranche (2-3, 4-5, 6-8 joueurs : 12, 16, 22 régions, soit 6 + 2 par joueur en haut
-  de tranche). Graphes de régions (terrain : plaine, forêt, colline, marais, montagne ; marque : mine ou
-  source magique ; bord). Fabriquées une fois par `conquete_cartes.py` (graine fixe, Voronoï relâché) et
-  vérifiées : carte d'un seul tenant, terrains à 1 près, voisines de terrains différents si possible,
-  marques jamais voisines, au moins la moitié des régions au bord.
+- **Cartes** : une par tranche (2-3, 4-5, 6-8 joueurs : 12, 16, 22 régions conquérables, soit 6 + 2 par
+  joueur en haut de tranche). Chaque carte est une île : régions aux frontières sinueuses (Voronoï relâché,
+  frontières déplacées puis lissées, le même tracé partagé par les deux voisines), mer tout autour et 1 ou 2
+  lacs intérieurs (`eaux` : ni conquérables, ni voisins à travers l'eau). Terrain (plaine, forêt, colline,
+  marais, montagne), marque (mine, source magique), `bord` = la région touche la mer. Fabriquées une fois par
+  `conquete_cartes.py` (graine fixe) et vérifiées : terres d'un seul tenant, terrains à 1 près, voisines de
+  terrains différents si possible, marques jamais voisines, au moins la moitié des régions au bord.
 - **Combinaisons** : race (16) + pouvoir (20) tirés au hasard, pions = race + pouvoir, au moins 7.
   File de 6 : la première gratuite, 1 pièce par combinaison sautée (posée dessus, ramassée par qui la
   prend). `bannis` et `bonus_depart` dans la config ; mode `aleatoire` : 12 races et 15 pouvoirs par partie.
