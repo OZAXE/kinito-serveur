@@ -36,12 +36,16 @@ def dessin_au_hasard(rng, marque):
 
 def contenus_secrets(etat, montre_par_album):
     """Ce qui n a pas encore ete devoile, sous une forme cherchable dans du JSON."""
-    out = []
+    out, vus = [], set()
     for a, album in enumerate(etat["albums"]):
         for k, c in enumerate(album):
+            s = json.dumps(c["contenu"], ensure_ascii=False)
             if k >= montre_par_album.get(a, 0):
-                out.append(json.dumps(c["contenu"], ensure_ascii=False))
-    return out
+                out.append(s)
+            else:
+                vus.add(s)
+    # Knock-Off : la meme phrase ouvre tous les albums, deja devoilee une fois.
+    return [s for s in out if s not in vus]
 
 
 def verifier_secret(etat, maintenant):
@@ -75,7 +79,7 @@ def verifier_secret(etat, maintenant):
             assert t is None
             continue
         k = etat["etape"]
-        a = (i + k) % etat["nb_joueurs"]
+        a = T.album_de(etat, i)
         if k == 0:
             assert t["modele"] is None
         else:
@@ -108,12 +112,20 @@ def verifier(etat):
         assert len(auteurs) == len(set(auteurs)), "un joueur revient sur le meme album"
         for k, c in enumerate(album):
             if c["auteur"] is not None:
-                assert (c["auteur"] + k) % n == a, "mauvaise rotation"
-            assert c["type"] == ("dessin" if T.nature_etape(k) == "dessin" else "texte")
+                assert T.album_de(etat, c["auteur"], k) == a, "mauvaise rotation"
+                if etat["mode"] != "speedrun":
+                    assert (c["auteur"] + k) % n == a, "mauvaise rotation"
+            assert c["type"] == ("dessin" if T.nature_etape(k, etat["mode"]) == "dessin" else "texte")
             if c["type"] == "texte":
                 assert isinstance(c["contenu"], str) and 1 <= len(c["contenu"]) <= TD_CONFIG["texte_max"]
             else:
                 assert T.valider_dessin(c["contenu"]) is not None
+    # Chaque joueur sur un album different a chaque etape.
+    for k, aff in enumerate(etat["affectations"]):
+        if aff is not None:
+            assert sorted(aff) == list(range(n)), "deux joueurs sur le meme album"
+    if etat["mode"] == "knockoff":
+        assert len({json.dumps(al[0]) for al in etat["albums"]}) == 1, "Knock-Off : une seule phrase de depart"
     assert 0 <= etat["hote"] < n
 
 
@@ -122,13 +134,16 @@ def partie(n, graine):
     t = 1000.0
     noms = [f"J{i}" for i in range(n)]
     source = rng.choice(["libre", "banque", "mixte", "nimporte"])
+    mode = rng.choice(["normal", "knockoff", "speedrun", "nimporte"])
     vitesse = rng.choice(["flash", "normal", "long", None])
     etapes = rng.choice([None, 1, 2, n - 1, n + 3, "x"])
     etat = T.td_initialiser(noms, t, hote=rng.randrange(n), vitesse=vitesse, source=source,
-                            etapes=etapes, rng=rng)
-    attendu = n - 1 if not isinstance(etapes, int) or not 1 <= etapes <= n - 1 else etapes
+                            etapes=etapes, mode=mode, rng=rng)
+    maxi = n if mode == "knockoff" else n - 1
+    defaut = min(maxi, TD_CONFIG["speedrun"]["etapes_defaut"]) if mode == "speedrun" else maxi
+    attendu = defaut if not isinstance(etapes, int) or not 1 <= etapes <= maxi else etapes
     assert etat["nb_etapes"] == attendu
-    assert etat["etape"] == (1 if source == "banque" else 0)
+    assert etat["etape"] == (1 if source == "banque" or mode == "knockoff" else 0)
     compteur = [0]
 
     def marque():
@@ -155,7 +170,7 @@ def partie(n, graine):
             continue
         phase = etat["phase"]
         if phase == "etape":
-            nature = T.nature_etape(etat["etape"])
+            nature = T.nature_etape(etat["etape"], etat["mode"])
             if nature == "dessin":
                 contenu = dessin_au_hasard(rng, marque())
                 if rng.random() < 0.05:
@@ -256,9 +271,63 @@ def scenario_simple():
     print("  scenario a 3 joueurs : ok")
 
 
+def scenario_knockoff():
+    """Knock-Off : meme phrase partout, copies de memoire, de moins en moins de temps."""
+    t = 0.0
+    e = T.td_initialiser(["A", "B", "C", "D"], t, mode="knockoff", vitesse="normal", source="libre")
+    assert e["source"] == "banque" and e["etape"] == 1 and e["nb_etapes"] == 4
+    phrase = e["albums"][0][0]["contenu"]
+    assert all(al[0]["contenu"] == phrase for al in e["albums"])
+    assert T.td_tache(e, 2, t)["modele"] == phrase and not T.td_tache(e, 2, t)["copie"]
+    v = TD_CONFIG["vitesses"]["normal"]
+    assert e["fin_etape"] - t == v["dessin"]
+    durees = []
+    for k in range(1, 5):
+        debut = t
+        d = [{"c": k, "e": 0, "p": enc(k) + enc(k) + enc(50 + k) + enc(60)}]
+        for i in range(4):
+            T.td_action(e, i, {"type": "td_contribuer", "contenu": d}, t)
+        if k < 4:
+            assert e["etape"] == k + 1
+            durees.append(e["fin_etape"] - t - v["visionnage"])
+            tache = T.td_tache(e, 0, t + 1)
+            assert tache["copie"] and tache["nature"] == "dessin" and tache["modele"] == d
+            assert 0 < tache["vision"] <= v["visionnage"]
+            # Le temps de visionnage passe : le modele n est plus envoye.
+            tard = T.td_tache(e, 0, e["fin_vision"] + 0.1)
+            assert tard["modele"] is None and tard["vision"] == 0
+            assert "phrase" not in json.dumps(tard)
+    assert durees == sorted(durees, reverse=True) and min(durees) >= TD_CONFIG["knockoff"]["minimum"]
+    assert e["phase"] == "pret"
+    assert all(al[k]["type"] == "dessin" for al in e["albums"] for k in range(1, 5))
+    print("  Knock-Off : ok", [round(x) for x in durees])
+
+
+def scenario_speedrun():
+    """Speedrun : minuteurs courts, peu d etapes, repartition au hasard sans repasser."""
+    for n in range(3, 9):
+        for graine in range(30):
+            rng = random.Random(graine)
+            e = T.td_initialiser([f"J{i}" for i in range(n)], 0.0, mode="speedrun", vitesse="flash",
+                                 etapes=n - 1, rng=rng)
+            assert e["fin_etape"] == TD_CONFIG["vitesses"]["flash"]["speedrun_phrase"]
+            for k in range(n):
+                for i in range(n):
+                    T.td_action(e, i, {"type": "td_contribuer", "contenu": "x%d %d" % (k, i)
+                                       if T.nature_etape(e["etape"], "speedrun") != "dessin" else []}, 0.0)
+            assert e["phase"] == "pret"
+            for album in e["albums"]:
+                assert sorted(c["auteur"] for c in album) == list(range(n)), "chacun une fois par album"
+    e = T.td_initialiser(["A", "B", "C", "D", "E", "F", "G", "H"], 0.0, mode="speedrun")
+    assert e["nb_etapes"] == TD_CONFIG["speedrun"]["etapes_defaut"]
+    print("  Speedrun : ok")
+
+
 def main():
     nb = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     scenario_simple()
+    scenario_knockoff()
+    scenario_speedrun()
     for g in range(nb):
         partie(3 + g % 6, g)
     print(f"  {nb} parties au hasard (3 a 8 joueurs) : ok")

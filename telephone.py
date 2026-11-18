@@ -24,6 +24,14 @@ Deroule (mode Normal) :
     vote anonyme du « meilleur moment » (pas pour soi), puis resultat.
   - Vote final : « le dessin le plus mal compris ». Puis fin de partie.
 
+Knock-Off : une seule phrase de la banque ouvre tous les albums ; on ne fait
+que dessiner. A partir de la 2e etape, le modele (dessin precedent) n est
+montre que pendant le temps de visionnage, puis on le recopie de memoire,
+avec un peu moins de temps a chaque etape. Jusqu a N etapes.
+Speedrun : comme Normal, minuteurs tres courts et moins d etapes par defaut ;
+a chaque etape le serveur tire au hasard l album de chacun (jamais un album
+deja touche), au lieu de la rotation (i + k) % N.
+
 Gorgees (x multiplicateur de la vitesse, pas de plafond) :
   - contribution la plus votee d un album : son auteur distribue ;
   - la plus votee de toute la partie : son auteur distribue ;
@@ -147,15 +155,58 @@ def _defaut(nature):
     return [] if nature == "dessin" else TD_CONFIG["texte_vide"]
 
 
-def nature_etape(k):
+def nature_etape(k, mode="normal"):
     if k == 0:
         return "phrase"
+    if mode == "knockoff":
+        return "dessin"              # on ne fait que recopier des dessins
     return "dessin" if k % 2 else "ecriture"
+
+
+def _nature(etat, k=None):
+    return nature_etape(etat["etape"] if k is None else k, etat["mode"])
 
 
 def album_de(etat, i, k=None):
     k = etat["etape"] if k is None else k
+    aff = etat.get("affectations") or []
+    if k < len(aff) and aff[k] is not None:
+        return aff[k][i]              # Speedrun : repartition tiree au hasard
     return (i + k) % etat["nb_joueurs"]
+
+
+def _repartir(etat, rng=random):
+    """
+    Speedrun : chaque joueur sur un album different, jamais un album qu il a
+    deja touche. Un tel choix existe toujours (rectangle latin : chaque
+    joueur et chaque album ont encore N - k partenaires possibles) ; on le
+    cherche au hasard, avec retour en arriere (8 joueurs au plus).
+    """
+    n = etat["nb_joueurs"]
+    deja = [{c["auteur"] for c in album if c["auteur"] is not None} for album in etat["albums"]]
+    ordre = list(range(n))
+    rng.shuffle(ordre)
+    choix = [None] * n
+    pris = set()
+
+    def placer(r):
+        if r == n:
+            return True
+        i = ordre[r]
+        albums = [a for a in range(n) if a not in pris and i not in deja[a]]
+        rng.shuffle(albums)
+        for a in albums:
+            choix[i] = a
+            pris.add(a)
+            if placer(r + 1):
+                return True
+            pris.discard(a)
+        return False
+
+    if not placer(0):                 # impossible en theorie : rotation classique
+        k = etat["etape"]
+        return [(i + k) % n for i in range(n)]
+    return choix
 
 
 def _tirer_phrases(etat, n, rng=random):
@@ -179,8 +230,16 @@ def td_initialiser(noms, maintenant, hote=0, vitesse=None, source=None, etapes=N
     vitesse = vitesse if vitesse in TD_CONFIG["vitesses"] else TD_CONFIG["vitesse_defaut"]
     source = source if source in TD_CONFIG["sources"] else TD_CONFIG["source_defaut"]
     mode = mode if mode in TD_CONFIG["modes"] else TD_CONFIG["modes"][0]
+    if mode == "knockoff":
+        source = "banque"            # tout le monde part de la MEME phrase de la banque
+    # Knock-Off : la phrase vient de la banque, chacun peut toucher chaque album (N copies).
+    maxi = n if mode == "knockoff" else n - 1
+    if mode == "speedrun":
+        defaut = min(maxi, TD_CONFIG["speedrun"]["etapes_defaut"])
+    else:
+        defaut = maxi
     nb = _entier(etapes)
-    nb = n - 1 if nb is None or not 1 <= nb <= n - 1 else nb
+    nb = defaut if nb is None or not 1 <= nb <= maxi else nb
     hote = hote if isinstance(hote, int) and 0 <= hote < n else 0
     etat = {
         "version": 0,
@@ -197,6 +256,8 @@ def td_initialiser(noms, maintenant, hote=0, vitesse=None, source=None, etapes=N
         "fin_etape": None,       # echeance affichee aux joueurs
         "echeance": None,        # echeance du serveur (avec la grace)
         "albums": [[] for _ in range(n)],
+        "affectations": [],      # Speedrun : album de chaque joueur, par etape
+        "fin_vision": None,      # Knock-Off : le modele disparait a cet instant
         "envoyes": [False] * n,
         "brouillons": [None] * n,
         "suggestions": [None] * n,
@@ -211,7 +272,12 @@ def td_initialiser(noms, maintenant, hote=0, vitesse=None, source=None, etapes=N
         "derniere_reaction": [0.0] * n,
         "fin_signalee": False,
     }
-    if source == "banque":
+    if mode == "knockoff":
+        phrase = _tirer_phrases(etat, 1, rng)[0]
+        for a in range(n):
+            etat["albums"][a].append({"auteur": None, "type": "texte", "contenu": phrase, "auto": False})
+        _ouvrir_etape(etat, 1, maintenant, rng)
+    elif source == "banque":
         for a, phrase in enumerate(_tirer_phrases(etat, n, rng)):
             etat["albums"][a].append({"auteur": None, "type": "texte", "contenu": phrase, "auto": False})
         _ouvrir_etape(etat, 1, maintenant, rng)
@@ -220,8 +286,21 @@ def td_initialiser(noms, maintenant, hote=0, vitesse=None, source=None, etapes=N
     return etat
 
 
-def _duree(etat, nature):
-    return TD_CONFIG["vitesses"][etat["vitesse"]][nature]
+def _duree(etat, nature, k=None):
+    v = TD_CONFIG["vitesses"][etat["vitesse"]]
+    if etat["mode"] == "speedrun":
+        return v["speedrun_" + nature]
+    if etat["mode"] == "knockoff" and k is not None and k >= 2:
+        ko = TD_CONFIG["knockoff"]
+        return max(ko["minimum"], round(v["dessin"] * ko["decroissance"] ** (k - 1)))
+    return v[nature]
+
+
+def _vision(etat, k):
+    """Knock-Off, a partir de la 2e etape : temps pour regarder le modele."""
+    if etat["mode"] == "knockoff" and k >= 2:
+        return TD_CONFIG["vitesses"][etat["vitesse"]]["visionnage"]
+    return 0
 
 
 def _ouvrir_etape(etat, k, maintenant, rng=random):
@@ -233,7 +312,12 @@ def _ouvrir_etape(etat, k, maintenant, rng=random):
     etat["suggestions"] = [None] * n
     if k == 0:
         etat["suggestions"] = _tirer_phrases(etat, n, rng)
-    etat["fin_etape"] = maintenant + _duree(etat, nature_etape(k))
+    if etat["mode"] == "speedrun":
+        etat["affectations"] += [None] * (k + 1 - len(etat["affectations"]))
+        etat["affectations"][k] = _repartir(etat, rng)
+    vision = _vision(etat, k)
+    etat["fin_vision"] = maintenant + vision if vision else None
+    etat["fin_etape"] = maintenant + vision + _duree(etat, _nature(etat, k), k)
     etat["echeance"] = etat["fin_etape"] + TD_CONFIG["delai_grace"]
     _accelerer_si_complet(etat, maintenant)
 
@@ -298,7 +382,7 @@ def td_etat_public(etat, maintenant):
         "phase": phase,
         "etape": etat["etape"],
         "nb_etapes": etat["nb_etapes"],
-        "nature": nature_etape(etat["etape"]) if phase == "etape" else None,
+        "nature": _nature(etat) if phase == "etape" else None,
         "prets": etat["envoyes"] if phase == "etape" else None,
         "reste": reste,
         "revelation": rev,
@@ -316,20 +400,32 @@ def td_etat_public(etat, maintenant):
     }
 
 
-def td_tache(etat, i):
-    """Ce que le joueur i doit faire a l etape en cours (message prive)."""
+def td_tache(etat, i, maintenant=None):
+    """
+    Ce que le joueur i doit faire a l etape en cours (message prive).
+    Knock-Off : le modele n est donne que pendant le temps de visionnage
+    (une page qui revient apres ne le recoit plus : on copie de memoire).
+    """
     if etat["phase"] != "etape" or not 0 <= i < etat["nb_joueurs"]:
         return None
     k = etat["etape"]
-    nature = nature_etape(k)
+    nature = _nature(etat, k)
     a = album_de(etat, i)
     modele = etat["albums"][a][k - 1]["contenu"] if k >= 1 else None
+    vision = None
+    if etat.get("fin_vision") is not None:
+        reste = etat["fin_vision"] - (maintenant if maintenant is not None else 0)
+        vision = max(0, round(reste, 1)) if maintenant is not None else _vision(etat, k)
+        if maintenant is not None and reste <= 0:
+            modele = None
     return {
         "type": "td_tache",
         "version": etat["version"],
         "etape": k,
         "nature": nature,
         "modele": modele,
+        "copie": etat["mode"] == "knockoff" and k >= 2,
+        "vision": vision,
         "suggestion": etat["suggestions"][i] if k == 0 else None,
         "prerempli": k == 0 and etat["source"] == "mixte",
         "envoye": etat["envoyes"][i],
@@ -352,7 +448,7 @@ def _contribuer(etat, ev, i, message, maintenant):
         return _erreur(i, "Ce n'est pas le moment d'envoyer.")
     if etat["envoyes"][i]:
         return _erreur(i, "Tu as déjà envoyé ta contribution pour cette étape.")
-    nature = nature_etape(etat["etape"])
+    nature = _nature(etat)
     contenu = _contenu_valide(nature, message.get("contenu"))
     if contenu is None:
         return _erreur(i, "Contribution refusée (dessin trop chargé ou texte invalide).")
@@ -371,7 +467,7 @@ def _enregistrer(etat, ev, i, contenu, en_retard):
     album = etat["albums"][a]
     if len(album) != k:          # garde-fou : une seule contribution par etape et par album
         return
-    nature = nature_etape(k)
+    nature = _nature(etat, k)
     album.append({"auteur": i, "type": "dessin" if nature == "dessin" else "texte",
                   "contenu": contenu, "auto": en_retard})
     etat["envoyes"][i] = True
@@ -388,7 +484,7 @@ def _enregistrer(etat, ev, i, contenu, en_retard):
 def _brouillon(etat, ev, i, message, maintenant):
     if etat["phase"] != "etape" or etat["envoyes"][i]:
         return []
-    contenu = _contenu_valide(nature_etape(etat["etape"]), message.get("contenu"))
+    contenu = _contenu_valide(_nature(etat), message.get("contenu"))
     if contenu is not None:
         etat["brouillons"][i] = contenu
     return []                    # rien a diffuser
@@ -404,7 +500,7 @@ def _suggestion(etat, ev, i, message, maintenant):
 def _clore_etape(etat, ev, maintenant):
     """Remplit ce qui manque (brouillon, sinon vide), puis etape suivante."""
     k = etat["etape"]
-    nature = nature_etape(k)
+    nature = _nature(etat, k)
     for i in range(etat["nb_joueurs"]):
         if etat["envoyes"][i]:
             continue
