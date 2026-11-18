@@ -182,8 +182,12 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   disparaît jamais ; Souterrain = depuis une de ses montagnes, toutes les montagnes sont voisines ;
   Endurant = déclin après le score d'un tour où il a conquis. Fortins, camps et gardiens disparaissent
   au déclin.
-- **Vitesses** : Flash 4 tours / 40 s / gorgées ×1,5, Express 6 / 45 s / ×1,25, Soirée 8 / 60 s / ×1,
-  Marathon 10 / 90 s / ×0,75. À 7 joueurs et plus, Flash par défaut.
+- **Tours et vitesses** : en Soirée, 10 tours par joueur à 2-3 joueurs, 9 à 4, 8 à 5-6, 7 à 7-8
+  (`tours_joueurs`, règle de l'extension officielle Realms prolongée à 7-8). Les vitesses multiplient ce nombre
+  (`facteur_tours`, arrondi) et règlent le minuteur et les gorgées : Flash ×0,5 / 40 s / gorgées ×1,5,
+  Express ×0,75 / 45 s / ×1,25, Soirée ×1 / 60 s / ×1, Marathon ×1,25 / 90 s / ×0,75. L'hôte peut imposer
+  `tours` entre 3 et 15 ; hors bornes, on prend le conseillé (`reglage.tours_conseilles` dans `sw_demarree`).
+  À 7 joueurs et plus, Flash par défaut.
 - **Gorgées** (sans plafond) : région perdue, l'ancien occupant boit 1 (au plus 3 par tour d'attaquant) ;
   déclin, 2 à distribuer ; fin, le dernier boit 3 et le vainqueur distribue 5 ; option vengeance (3 tours
   adverses d'affilée à perdre des régions : 1 à distribuer).

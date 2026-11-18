@@ -198,6 +198,16 @@ def sw_vitesse_conseillee(n):
     return SW_CONFIG["vitesse_defaut_nombreux"] if n >= SW_CONFIG["joueurs_nombreux"] else SW_CONFIG["vitesse_defaut"]
 
 
+def sw_tours_conseilles(n, vitesse):
+    """Tours par joueur conseilles : base selon le nombre de joueurs, x facteur de la vitesse."""
+    base = SW_CONFIG["tours_joueurs"].get(str(n))
+    if base is None:
+        proche = min(SW_CONFIG["tours_joueurs"], key=lambda k: abs(int(k) - n))
+        base = SW_CONFIG["tours_joueurs"][proche]
+    t = _arrondi(base * SW_CONFIG["vitesses"][vitesse]["facteur_tours"])
+    return max(SW_CONFIG["tours_min"], min(SW_CONFIG["tours_max"], t))
+
+
 def sw_initialiser(noms, maintenant, options=None):
     options = options or {}
     n = len(noms)
@@ -205,9 +215,11 @@ def sw_initialiser(noms, maintenant, options=None):
     if vitesse not in SW_CONFIG["vitesses"]:
         vitesse = sw_vitesse_conseillee(n)
     v = SW_CONFIG["vitesses"][vitesse]
+    # Choix de l hote s il est valable, sinon le nombre conseille pour ce nombre de joueurs
+    conseilles = sw_tours_conseilles(n, vitesse)
     tours = _entier(options.get("tours"))
-    if tours not in SW_CONFIG["tours_choix"]:
-        tours = v["tours"]
+    if tours is None or not SW_CONFIG["tours_min"] <= tours <= SW_CONFIG["tours_max"]:
+        tours = conseilles
     aleatoire = options.get("aleatoire") is True
     races = list(SW_RACES)
     pouvoirs = list(SW_POUVOIRS)
@@ -1018,6 +1030,7 @@ def sw_catalogue(etat):
         "reactions": SW_REACTIONS,
         "reglage": {"vitesse": etat["vitesse"], "titre_vitesse": SW_CONFIG["vitesses"][etat["vitesse"]]["titre"],
                     "tours": etat["tours_max"], "minuteur": etat["minuteur"], "mult": etat["mult"],
+                    "tours_conseilles": sw_tours_conseilles(etat["nb_joueurs"], etat["vitesse"]),
                     "aleatoire": etat["aleatoire"], "vengeance": etat["vengeance"]},
     }
 

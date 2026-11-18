@@ -22,12 +22,15 @@
   "_vitesse_defaut_nombreux": "Vitesse proposee a 7 joueurs et plus (minuteur le plus court).",
   "joueurs_nombreux": 7,
   "vitesses": {
-    "flash":    {"titre": "Flash",    "tours": 4,  "minuteur": 40, "mult_gorgees": 1.5},
-    "express":  {"titre": "Express",  "tours": 6,  "minuteur": 45, "mult_gorgees": 1.25},
-    "soiree":   {"titre": "Soirée",   "tours": 8,  "minuteur": 60, "mult_gorgees": 1.0},
-    "marathon": {"titre": "Marathon", "tours": 10, "minuteur": 90, "mult_gorgees": 0.75}
+    "flash":    {"titre": "Flash",    "facteur_tours": 0.5,  "minuteur": 40, "mult_gorgees": 1.5},
+    "express":  {"titre": "Express",  "facteur_tours": 0.75, "minuteur": 45, "mult_gorgees": 1.25},
+    "soiree":   {"titre": "Soirée",   "facteur_tours": 1.0,  "minuteur": 60, "mult_gorgees": 1.0},
+    "marathon": {"titre": "Marathon", "facteur_tours": 1.25, "minuteur": 90, "mult_gorgees": 0.75}
   },
-  "tours_choix": [3, 4, 5, 6, 8, 10, 12],
+  "tours_joueurs": {"2": 10, "3": 10, "4": 9, "5": 8, "6": 8, "7": 7, "8": 7},
+  "_tours_joueurs": "Tours par joueur en vitesse Soiree selon le nombre de joueurs (regle de l extension officielle Realms : 10 a 2-3, 9 a 4, 8 a 5-6 ; prolongee a 7 a 7-8). Les autres vitesses multiplient par facteur_tours (arrondi). L hote peut choisir autre chose entre tours_min et tours_max.",
+  "tours_min": 3,
+  "tours_max": 15,
 
   "gorgees": {
     "region_perdue": 1,
