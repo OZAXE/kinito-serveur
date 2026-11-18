@@ -47,6 +47,9 @@ TYPES = [
     "mt_demarrer", "mt_poser", "mt_menteur", "mt_cible",
     # Undercover
     "uc_demarrer", "uc_pret", "uc_fini", "uc_voter", "uc_deviner",
+    # Royaumes
+    "sw_demarrer", "sw_choisir", "sw_declin", "sw_abandonner", "sw_conquerir", "sw_tenter", "sw_dragon",
+    "sw_fin_conquete", "sw_redeployer", "sw_reaction",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -63,7 +66,9 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "mise", "mode", "montant", "nom", "numero", "paiement", "pari", "plafond", "portrait",
           "recoit", "reel", "sabotage", "score", "score_cite", "suspect", "tapis", "total",
           "type_attaque", "unite", "univers", "valeur", "via_carte", "vitesse", "page",
-          "famille", "undercover", "white", "mot"]
+          "famille", "undercover", "white", "mot",
+          "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire", "emoji", "tours",
+          "aleatoire", "vengeance"]
 
 
 def valeur_bizarre(rnd):
@@ -103,6 +108,7 @@ DEMARRER = {
     "menteur": {"type": "mt_demarrer", "mode": "chaos"},
     "casino": {"type": "cs_demarrer"},
     "undercover": {"type": "uc_demarrer", "famille": "melange"},
+    "conquete": {"type": "sw_demarrer", "vitesse": "flash"},
 }
 
 
