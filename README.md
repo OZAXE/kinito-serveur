@@ -179,6 +179,7 @@ node tests/solo_navigateur.js               # un seul joueur et des joueurs fict
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)
+node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 navigateurs, en touchant la carte
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
 python tests/securite_essai.py              # attaques : taille, debit, codes, places, origines, limites par IP

@@ -53,6 +53,9 @@ SW_POUVOIRS = SW_CONFIG["pouvoirs"]
 SW_REACTIONS = ["👏", "😂", "😱", "🔥", "💀", "🍻", "😡", "🙏"]
 SW_DELAI_REACTION = 1.2
 SW_DELAI_RETOUR = 20       # un joueur revenu pendant son tour a au moins ce temps
+# Pour le journal : le terrain avec son article
+SW_TERRAINS = {"plaine": "une plaine", "foret": "une forêt", "colline": "une colline",
+               "marais": "un marais", "montagne": "une montagne"}
 
 
 # =============================================================
@@ -412,11 +415,12 @@ def _conquerir(etat, ev, i, r, poses, cout, voie, de=None):
         etat["tour"]["marin"] = True
     if voie == "dragon":
         p["dragon"] = True
-    terrain = _region(etat, r)["terrain"]
+    terrain = SW_TERRAINS[_region(etat, r)["terrain"]]
+    pl = "s" if poses > 1 else ""
     if ancien_j is None:
-        texte = f"{_nom(etat, i)} prend une {terrain} libre ({poses} pions)."
+        texte = f"{_nom(etat, i)} prend {terrain} libre ({poses} pion{pl})."
     else:
-        texte = f"{_nom(etat, i)} prend une {terrain} à {_nom(etat, ancien_j)} ({poses} pions)."
+        texte = f"{_nom(etat, i)} prend {terrain} à {_nom(etat, ancien_j)} ({poses} pion{pl})."
     if voie == "dragon":
         texte += " Le dragon frappe !"
     if texte_bonus:
@@ -537,7 +541,7 @@ def _abandonner(etat, ev, i, message, maintenant):
     reg = etat["regions"][r]
     p["main"] += reg["pions"]
     reg.update({"j": None, "p": None, "pions": 0, "fortin": False, "camp": False, "gardien": False})
-    _journal(etat, f"{_nom(etat, i)} abandonne une {_region(etat, r)['terrain']}.", i, "abandon")
+    _journal(etat, f"{_nom(etat, i)} abandonne {SW_TERRAINS[_region(etat, r)['terrain']]}.", i, "abandon")
     ev.append(_tous({"type": "sw_abandon", "joueur": i, "region": r}))
     return ev
 

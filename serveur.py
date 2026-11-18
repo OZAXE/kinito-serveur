@@ -3050,7 +3050,9 @@ async def sw_publier(code_salon, evenements):
         res = etat.get("resultat") or {}
         gagnant = res.get("gagnant")
         gagnants = [noms[gagnant]] if gagnant is not None else []
-        doses = {noms[c["joueur"]]: c["bu"] for c in res.get("classement", [])}
+        # A boire maintenant : la fin de partie seulement (les gorgees des
+        # conquetes ont deja ete annoncees au fil des tours).
+        doses = {noms[x["joueur"]]: x["boit"] for x in res.get("gorgees", []) if x.get("boit")}
         await signaler(code_salon, "conquete", "victoire", gagnants=gagnants,
                        perdants=[n for n in noms if n not in gagnants],
                        details={"gorgees": doses})
