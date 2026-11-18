@@ -407,8 +407,16 @@ def tests_pouvoirs_speciaux():
 
 
 def tests_minuteur_et_fin():
+    # Tours conseilles : base selon le nombre de joueurs (Realms), x facteur de la vitesse
+    assert [C.sw_tours_conseilles(n, "soiree") for n in range(2, 9)] == [10, 10, 9, 8, 8, 7, 7]
+    assert [C.sw_tours_conseilles(5, v) for v in ("flash", "express", "soiree", "marathon")] == [4, 6, 8, 10]
+    assert C.sw_tours_conseilles(2, "flash") == 5 and C.sw_tours_conseilles(2, "marathon") == 13
+    assert nouvelle(4)["tours_max"] == 9
+    # L hote choisit ; un choix hors bornes est remplace par le conseille
+    assert nouvelle(4, tours=12)["tours_max"] == 12
+    assert nouvelle(4, tours=99)["tours_max"] == 9 and nouvelle(4, tours="x")["tours_max"] == 9
     e = nouvelle(2, vitesse="flash")
-    assert e["tours_max"] == 4 and e["minuteur"] == 40
+    assert e["tours_max"] == 5 and e["minuteur"] == 40
     t = 0
     tours = 0
     while e["phase"] == "jeu":
@@ -417,7 +425,7 @@ def tests_minuteur_et_fin():
         verifier(e)
         tours += 1
         assert tours < 100
-    assert tours == 2 * 4
+    assert tours == 2 * 5
     res = e["resultat"]
     assert e["j"][res["dernier"]]["bu"] >= C._gorgees(e, CFG["gorgees"]["dernier_boit"])
     assert e["j"][res["gagnant"]]["distribue"] >= C._gorgees(e, CFG["gorgees"]["vainqueur_distribue"])
