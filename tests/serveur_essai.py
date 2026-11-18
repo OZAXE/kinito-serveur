@@ -61,6 +61,8 @@ async def etat(code: str):
         # Undercover : roles et mots, pour verifier ce que montrent les pages.
         "uc": {"roles": e.get("roles"), "mots": e.get("mots"), "vivants": e.get("vivants")}
               if salon.get("jeu") == "undercover" else None,
+        # Telephone Dessine : les albums, pour verifier ce que les pages ont envoye.
+        "td": {"albums": e.get("albums")} if salon.get("jeu") == "telephone" else None,
     }
 
 
