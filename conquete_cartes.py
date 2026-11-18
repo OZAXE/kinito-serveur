@@ -25,7 +25,7 @@ Equilibrage (verifie a l ecriture) :
   - les 5 terrains presents, a 1 pres en nombre ;
   - deux voisines n ont pas le meme terrain quand c est possible ;
   - mines et sources magiques reparties (jamais voisines entre elles) ;
-  - au moins la moitie des regions au bord de la mer (entree des peuples).
+  - au moins 30 % des regions au bord de la mer (entree des peuples).
 """
 import json
 import math
@@ -35,15 +35,27 @@ import sys
 
 TERRAINS = ["plaine", "foret", "colline", "marais", "montagne"]
 
-# nom -> joueurs, regions conquerables (6 + 2 par joueur, haut de tranche),
-# lacs, taille du cadre, graine
-CARTES = {
-    "petite":  {"joueurs": [2, 3], "regions": 12, "lacs": 1, "largeur": 8.5, "hauteur": 10.5, "graine": 3},
-    "moyenne": {"joueurs": [4, 5], "regions": 16, "lacs": 1, "largeur": 9.5, "hauteur": 12.0, "graine": 8},
-    "grande":  {"joueurs": [6, 8], "regions": 22, "lacs": 2, "largeur": 10.5, "hauteur": 13.5, "graine": 21},
-}
+# Une carte par nombre de joueurs : regions conquerables lues dans
+# conquete_config.json (« cartes »), cadre en portrait dont la surface suit le
+# nombre de regions (la taille d une region reste la meme), lacs selon la taille.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conquete_config.json"), encoding="utf-8") as _f:
+    _CFG = json.load(_f)
+FORMAT = 0.78          # largeur / hauteur du cadre (portrait, pour le telephone)
+
+
+def _spec(joueurs, regions):
+    surface = _CFG["aire_region"] * regions
+    largeur = round(math.sqrt(surface * FORMAT), 2)
+    # Lacs : plus nombreux et plus grands (plusieurs cellules d eau) sur les grandes cartes
+    return {"joueurs": [joueurs, joueurs], "regions": regions, "lacs": 1 + regions // 25,
+            "taille_lacs": 1 + (regions >= 30) + (regions >= 54),
+            "largeur": largeur, "hauteur": round(largeur / FORMAT, 2), "graine": 100 + joueurs}
+
+
+CARTES = {k: _spec(int(k), v) for k, v in _CFG["cartes"].items()}
 
 EPS = 1e-7
+BORD_MIN = 0.3      # part minimale des regions au bord de la mer (entree des peuples)
 ILE = 0.44          # demi-taille de l ile dans le cadre (le reste est de la mer)
 
 
@@ -145,7 +157,7 @@ def _sinueux(a, b, s1, s2, rng, prof=0):
     L amplitude est bornee par la distance aux deux germes (s1, s2) : le trace
     reste dans sa zone et ne croise jamais une autre frontiere."""
     longueur = math.dist(a, b)
-    if longueur < 0.3 or prof > 4:
+    if longueur < 0.32 or prof > 4:
         return []
     mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
     nx, ny = -(b[1] - a[1]) / longueur, (b[0] - a[0]) / longueur
@@ -156,7 +168,7 @@ def _sinueux(a, b, s1, s2, rng, prof=0):
     return _sinueux(a, m, s1, s2, rng, prof + 1) + [m] + _sinueux(m, b, s1, s2, rng, prof + 1)
 
 
-def _lisser(pts, tours=2):
+def _lisser(pts, tours=1):
     """Chaikin sur une ligne ouverte : les extremites ne bougent pas (le trace reste raccorde)."""
     for _ in range(tours):
         if len(pts) < 3:
@@ -218,13 +230,14 @@ def _marques(vois, rng, n_mines, n_sources):
 def fabriquer(nom, spec):
     rng = random.Random(spec["graine"])
     L, H = spec["largeur"], spec["hauteur"]
-    n, nl = spec["regions"], spec["lacs"]
+    n, nl, tl = spec["regions"], spec["lacs"], spec.get("taille_lacs", 1)
     for essai in range(300):
         r = _rayon_ile(rng)
         # Germes de mer : un anneau autour de l ile, plus serre que les terres
         mer = []
-        for k in range(64):
-            t = 2 * math.pi * k / 64
+        anneau = int(14 * math.sqrt(n))
+        for k in range(anneau):
+            t = 2 * math.pi * k / anneau
             for f in (1.17, 1.5):
                 x = L / 2 + math.cos(t) * L * ILE * r(t) * f
                 y = H / 2 + math.sin(t) * H * ILE * r(t) * f
@@ -232,7 +245,7 @@ def fabriquer(nom, spec):
                 mer.append((min(max(x, 0.12), L - 0.12), min(max(y, 0.12), H - 0.12)))
         mer += [(0.01, 0.01), (L - 0.01, 0.01), (0.01, H - 0.01), (L - 0.01, H - 0.01)]
         terre = []
-        while len(terre) < n + nl:
+        while len(terre) < n + nl * tl:
             x, y = rng.uniform(0, L), rng.uniform(0, H)
             if _dans_ile(x, y, L, H, lambda t: r(t) * 0.92):
                 terre.append((x, y))
@@ -266,23 +279,34 @@ def fabriquer(nom, spec):
                 vois[j].add(i)
         if any(math.dist(points[i], points[j]) < 0.9 for i in range(nt) for j in vois[i]):
             continue
-        # Lacs : regions interieures bien entourees, jamais voisines entre elles
+        # Lacs : groupes de cellules interieures, jamais voisins d un autre lac
         interieures = [i for i in range(nt) if not touche_mer[i] and len(vois[i]) >= 4]
         rng.shuffle(interieures)
         lacs = []
+        groupes = 0
         for i in interieures:
-            if len(lacs) == nl:
+            if groupes == nl:
                 break
-            if any(j in lacs for j in vois[i]):
+            if i in lacs or any(j in lacs for j in vois[i]):
                 continue
-            reste = [k for k in range(nt) if k not in lacs and k != i]
+            groupe = [i]
+            while len(groupe) < tl:
+                cand = [j for g in groupe for j in vois[g] if j not in groupe and not touche_mer[j]
+                        and not any(k in lacs for k in vois[j])]
+                if not cand:
+                    break
+                groupe.append(rng.choice(sorted(set(cand))))
+            if len(groupe) < tl:
+                continue
+            reste = [k for k in range(nt) if k not in lacs and k not in groupe]
             if _connexe(vois, reste):
-                lacs.append(i)
-        if len(lacs) < nl:
+                lacs += groupe
+                groupes += 1
+        if groupes < nl:
             continue
         regions_idx = [i for i in range(nt) if i not in lacs]
         bords = [touche_mer[i] for i in regions_idx]
-        if not (n / 2 <= sum(bords) < n):
+        if not (BORD_MIN * n <= sum(bords) < n):
             continue
         # Frontieres sinueuses, partagees entre les deux cotes
         traces = {}
@@ -314,7 +338,7 @@ def fabriquer(nom, spec):
             nouvel[i] = k
         vois_r = [sorted(nouvel[j] for j in vois[i] if j in nouvel) for i in ordre]
         terrains = _terrains([set(v) for v in vois_r], rng)
-        marques = _marques([set(v) for v in vois_r], rng, max(2, n // 5), max(2, n // 6))
+        marques = _marques([set(v) for v in vois_r], rng, max(2, n // 6), max(2, n // 7))
         cx, cy = L / 2, H / 2
         arr = lambda pts: [[round(x - cx, 2), round(y - cy, 2)] for x, y in pts]
         regions = []
@@ -347,7 +371,7 @@ def verifier(carte):
     compte = {t: sum(1 for r in regions if r["terrain"] == t) for t in TERRAINS}
     assert max(compte.values()) - min(compte.values()) <= 1, f"terrains desequilibres {compte}"
     bords = sum(1 for r in regions if r["bord"])
-    assert n / 2 <= bords < n, f"{bords} regions de bord sur {n}"
+    assert BORD_MIN * n <= bords < n, f"{bords} regions de bord sur {n}"
     for r in regions:
         if r["marque"]:
             assert not any(regions[j]["marque"] for j in r["voisins"]), "marques voisines"
@@ -366,7 +390,7 @@ if __name__ == "__main__":
         verifier(c)
         n = len(c["regions"])
         print(f"{c['nom']:8} {n} regions, {sum(r['bord'] for r in c['regions'])} au bord, "
-              f"{len(c['eaux'])} lac(s), {sum(len(r['voisins']) for r in c['regions']) / n:.1f} voisins en moyenne, "
+              f"{len(c['eaux'])} cellule(s) d eau, {sum(len(r['voisins']) for r in c['regions']) / n:.1f} voisins en moyenne, "
               f"{sum(len(r['poly']) for r in c['regions'])} points")
     if "--verifier" not in sys.argv:
         chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conquete_cartes.json")
