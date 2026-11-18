@@ -1,5 +1,5 @@
 {
-  "_note": "Téléphone Dessiné : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Durées en secondes.",
+  "_note": "Gribouillophone : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Durées en secondes.",
   "joueurs": {
     "min": 3,
     "max": 8

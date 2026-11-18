@@ -1,4 +1,4 @@
-// Téléphone Dessiné : modes Knock-Off et Speedrun dans de vrais navigateurs (3 joueurs, téléphone).
+// Gribouillophone : modes Knock-Off et Speedrun dans de vrais navigateurs (3 joueurs, téléphone).
 //
 // Prérequis : comme tests/telephone_navigateur.js (serveur_essai.py + site sur localhost:8765).
 // Usage : node tests/telephone_modes_navigateur.js [dossier_captures]

@@ -8,7 +8,7 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   (message de démarrage, actions, reprise après coupure, départ, retour, arrivée en cours de partie,
   minuteurs, nombre de joueurs). Ajouter un jeu = ajouter une entrée.
 - Moteurs de règles purs, testables hors ligne : `picolopoly.py`, `menteur.py`, `casino.py`, `undercover.py`
-  (mots dans `undercover_mots.py` : familles « classique » et « trash »), `telephone.py` (Téléphone Dessiné :
+  (mots dans `undercover_mots.py` : familles « classique » et « trash »), `telephone.py` (Gribouillophone :
   chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`), `conquete.py` (Royaumes : chiffres
   dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
@@ -107,8 +107,10 @@ Une couche survit à la libération du salon (son code n'est pas redonné) et au
 - Secret : `uc_etat` n'a jamais les mots ni les rôles des vivants avant la fin ; chacun reçoit son mot
   par `uc_mot`. Les points (2 / 6 / 10) et les paires déjà jouées suivent d'une partie à l'autre du salon.
 
-## Téléphone Dessiné
+## Gribouillophone
 
+- Nom affiché « Gribouillophone » ; les identifiants restent `telephone` (registre, page `telephone-jeu.html`,
+  fichiers `telephone*.py`) et le préfixe `td_`, pour ne pas casser les liens et les parties en cours.
 - 3 à 8 joueurs, page `telephone-jeu.html` (2D, portrait). On écrit, on dessine, on devine ; à la fin chaque
   album est révélé étape par étape. Toutes les valeurs (minuteurs, tailles, gorgées) sont dans
   `telephone_config.json`. Pas de plafond de gorgées. Trois modes (`mode`) :

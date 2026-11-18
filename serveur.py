@@ -43,7 +43,7 @@ from undercover import (
     uc_initialiser, uc_action, uc_expirer, uc_etat_public, uc_mot,
     uc_prochaine_echeance, uc_joueur_parti, uc_joueur_revenu,
 )
-# Telephone Dessine (on ecrit, on dessine, on devine) : meme principe.
+# Gribouillophone (on ecrit, on dessine, on devine) : meme principe.
 from telephone import (
     TD_JOUEURS_MIN, TD_JOUEURS_MAX,
     td_initialiser, td_action, td_expirer, td_etat_public, td_tache, td_galerie,
@@ -3037,11 +3037,11 @@ async def td_demarrer(code_salon, message):
     nb = len(salon["joueurs"])
     if nb < TD_JOUEURS_MIN:
         await diffuser(code_salon, {"type": "erreur",
-                                    "message": f"Le Téléphone Dessiné demande au moins {TD_JOUEURS_MIN} joueurs."})
+                                    "message": f"Le Gribouillophone demande au moins {TD_JOUEURS_MIN} joueurs."})
         return
     if nb > TD_JOUEURS_MAX:
         await diffuser(code_salon, {"type": "erreur",
-                                    "message": f"Le Téléphone Dessiné se joue à {TD_JOUEURS_MAX} joueurs maximum."})
+                                    "message": f"Le Gribouillophone se joue à {TD_JOUEURS_MAX} joueurs maximum."})
         return
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
@@ -3568,7 +3568,7 @@ JEUX = {
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("uc_minuteur",),
         min_joueurs=UC_JOUEURS_MIN, max_joueurs=UC_JOUEURS_MAX),
     "telephone": Jeu(
-        "telephone", "Téléphone Dessiné", "telephone-jeu.html", "td_demarrer", _prefixe("td_"),
+        "telephone", "Gribouillophone", "telephone-jeu.html", "td_demarrer", _prefixe("td_"),
         td_demarrer, td_traiter, _telephone_instantane,
         joueur_parti=_td_parti, joueur_revenu=_td_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("td_minuteur",),
@@ -3658,7 +3658,7 @@ async def lancer_jeu(code_salon, nom, message, joueur=None):
             await terminer_jeu(code_salon, "remplace")
     avant = salon.get("etat")
     if joueur is not None:
-        # Qui a lance (l hote du Telephone Dessine) ; les autres jeux l ignorent.
+        # Qui a lance (l hote du Gribouillophone) ; les autres jeux l ignorent.
         message = {**message, "_par": joueur.get("nom")}
     await jeu.demarrer(code_salon, message)
     if salon.get("etat") is not None and salon.get("etat") is not avant and salon.get("jeu") == nom:

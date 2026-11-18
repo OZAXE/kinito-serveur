@@ -1,5 +1,5 @@
 """
-Moteur de regles du Telephone Dessine (on ecrit, on dessine, on devine).
+Moteur de regles du Gribouillophone (on ecrit, on dessine, on devine).
 
 Meme principe que undercover.py : moteur PUR, sans reseau ni horloge
 implicite (le temps est passe en parametre). Chaque action prend l etat (un

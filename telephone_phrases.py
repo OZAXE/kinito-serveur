@@ -1,5 +1,5 @@
 """
-Banque de phrases de depart du Telephone Dessine : droles ou absurdes, tout
+Banque de phrases de depart du Gribouillophone : droles ou absurdes, tout
 public, faciles a dessiner sans etre evidentes. A relire et completer.
 """
 
