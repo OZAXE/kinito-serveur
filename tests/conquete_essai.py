@@ -128,11 +128,10 @@ def interieure(e):
 def tests_cartes():
     for nom, carte in C.SW_CARTES.items():
         CC.verifier(carte)
-        bas, haut = carte["joueurs"]
-        attendu = CFG["joueurs_max"] if haut >= 6 else haut
-        assert len(carte["regions"]) == 6 + 2 * attendu, nom
-    for n in range(2, 9):
-        assert C._carte_pour(n)["joueurs"][0] <= n <= C._carte_pour(n)["joueurs"][1]
+        assert len(carte["regions"]) == CFG["cartes"][nom], nom
+        assert carte["joueurs"] == [int(nom), int(nom)]
+    for n in range(C.SW_JOUEURS_MIN, C.SW_JOUEURS_MAX + 1):
+        assert len(C._carte_pour(n)["regions"]) == CFG["cartes"][str(n)], "une carte par nombre de joueurs"
     # Les cartes du JSON sont bien celles que fabrique le script (rien d edite a la main)
     refaites = CC.toutes()
     for nom in C.SW_CARTES:

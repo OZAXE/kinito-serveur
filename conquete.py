@@ -91,11 +91,11 @@ def _gorgees(etat, base):
 
 
 def _carte_pour(n):
-    for carte in SW_CARTES.values():
-        bas, haut = carte["joueurs"]
-        if bas <= n <= haut:
-            return carte
-    return SW_CARTES["grande"] if n > 5 else SW_CARTES["petite"]
+    """La carte faite pour ce nombre de joueurs (la plus proche sinon)."""
+    if str(n) in SW_CARTES:
+        return SW_CARTES[str(n)]
+    proche = min(SW_CARTES, key=lambda k: abs(int(k) - n))
+    return SW_CARTES[proche]
 
 
 def _region(etat, r):
@@ -255,7 +255,7 @@ def sw_initialiser(noms, maintenant, options=None):
         "reactions": {},
     }
     _remplir_file(etat)
-    _journal(etat, f"Partie lancée sur la {carte['nom']} carte ({len(carte['regions'])} régions), "
+    _journal(etat, f"Partie lancée sur la carte à {carte['joueurs'][0]} joueurs ({len(carte['regions'])} régions), "
                    f"{tours} tours chacun. {noms[premier]} commence.", genre="debut")
     _debut_tour(etat, maintenant)
     return etat
