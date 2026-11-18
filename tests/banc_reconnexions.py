@@ -44,6 +44,7 @@ import casino
 import menteur
 import picolopoly
 import serveur
+import telephone
 import undercover
 
 # Delais raccourcis : le banc n a pas une heure devant lui.
@@ -62,6 +63,14 @@ undercover.UC_DELAI_DEVINE = 3
 undercover.UC_DELAI_ABSENT = 1
 undercover.UC_DELAI_REVELATION = 1.0
 undercover.UC_DELAI_RETOUR_VOTE = 3
+for _v in telephone.TD_CONFIG["vitesses"].values():
+    _v.update(phrase=4, dessin=4, ecriture=4, visionnage=1, speedrun_phrase=3, speedrun_dessin=3,
+              speedrun_ecriture=3)
+telephone.TD_CONFIG["knockoff"]["minimum"] = 2
+telephone.TD_CONFIG["delai_grace"] = 1
+telephone.TD_CONFIG["delai_absent"] = 1
+telephone.TD_CONFIG["revelation"].update(vote_album=4, vote_final=4, retour_vote=3,
+                                         auto_texte=0.5, auto_dessin=0.5, auto_resultat=0.5)
 casino.CS_DELAI_MISES = 3
 casino.CS_DELAI_TOUR = 3
 casino.CS_DELAI_POKER = 3
@@ -95,7 +104,8 @@ serveur.pp_armer = _armer_trace
 PORT = int(os.environ.get("BANC_PORT", "18765"))
 BLOCAGE = 12          # secondes sans aucun progres = blocage
 
-NB_JOUEURS = {"kinito": 4, "beerbattle": 4, "buckshot": 4, "picolopoly": 4, "menteur": 4, "casino": 4, "undercover": 5}
+NB_JOUEURS = {"kinito": 4, "beerbattle": 4, "buckshot": 4, "picolopoly": 4, "menteur": 4, "casino": 4, "undercover": 5,
+              "telephone": 4}
 DEMARRER = {
     "kinito": {"type": "demarrer", "difficulte": "normal"},
     "beerbattle": {"type": "bb_demarrer"},
@@ -104,6 +114,7 @@ DEMARRER = {
     "menteur": {"type": "mt_demarrer", "mode": "chaos"},
     "casino": {"type": "cs_demarrer"},
     "undercover": {"type": "uc_demarrer", "famille": "melange"},
+    "telephone": {"type": "td_demarrer", "vitesse": "flash"},
 }
 
 
@@ -172,13 +183,15 @@ class Banc:
         elif t == "uc_etat":
             sig = (msg["phase"], msg["tour"], msg["parole"], tuple(msg["a_vote"]), tuple(msg["vivants"]),
                    tuple(msg["prets"]))
+        elif t == "td_etat":
+            sig = (msg["phase"], msg["etape"], msg["version"])
         elif t == "cs_etat":
             sig = (msg["phase"], msg["jeu"], msg["manche"], json.dumps(msg["table"]), tuple(msg["jetons"]))
         if sig is not None and sig != self.signature:
             self.signature = sig
             self.progres += 1
             self.dernier_progres = time.time()
-        if t in ("etat", "bb_etat", "bt_etat", "pp_etat", "mt_etat", "cs_etat", "uc_etat"):
+        if t in ("etat", "bb_etat", "bt_etat", "pp_etat", "mt_etat", "cs_etat", "uc_etat", "td_etat"):
             self.etat = msg
             self.verifier_doublons(msg)
 
@@ -436,6 +449,40 @@ class Robot:
                 self.plus_tard({"type": "uc_voter", "cible": rng.choice(cands)})
         elif ph == "mrwhite" and msg["elimination"] and msg["elimination"]["joueur"] == i:
             self.plus_tard({"type": "uc_deviner", "mot": rng.choice(["Café", "Bière", "truc"])})
+
+    def jouer_telephone(self, msg):
+        if self.index is None:
+            return
+        i, rng = self.index, self.banc.rng
+        if msg.get("type") == "td_tache" and not msg["envoye"]:
+            if msg["nature"] == "dessin":
+                contenu = [{"c": rng.randrange(9), "e": rng.randrange(3), "p": "AKAKAUAU"}]
+            else:
+                contenu = "texte %d" % rng.randrange(1000)
+            if rng.random() < 0.8:
+                self.plus_tard({"type": "td_contribuer", "contenu": contenu})
+            return
+        if msg.get("type") != "td_etat" or i >= len(msg["partis"]):
+            return
+        ph = msg["phase"]
+        if ph == "fin":
+            mode = rng.choice(["normal", "knockoff", "speedrun"])
+            self.plus_tard(dict(DEMARRER["telephone"], mode=mode), 0.5, 1.5)
+        elif ph == "pret" and msg["hote"] == i:
+            self.plus_tard({"type": "td_reveler", "auto": rng.random() < 0.5})
+        elif ph in ("revelation", "resultat_album") and msg["hote"] == i:
+            self.plus_tard({"type": "td_suivant"})
+        elif ph == "vote_album" and not msg["a_vote"][i]:
+            cands = [c["index"] for c in msg["revelation"]["contributions"]
+                     if c["auteur"] is not None and c["auteur"] != i]
+            if cands:
+                self.plus_tard({"type": "td_voter", "cible": rng.choice(cands)})
+        elif ph == "vote_final" and not msg["a_vote"][i]:
+            if msg["candidats"]:
+                a, k = rng.choice(msg["candidats"])
+                self.plus_tard({"type": "td_voter", "album": a, "cible": k})
+        if ph in ("revelation", "vote_album") and rng.random() < 0.2:
+            self.plus_tard({"type": "td_reaction", "emoji": "😂"})
 
     def jouer_casino(self, msg):
         if msg.get("type") != "cs_etat" or self.index is None:

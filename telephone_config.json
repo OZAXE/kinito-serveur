@@ -1,0 +1,101 @@
+{
+  "_note": "Téléphone Dessiné : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Durées en secondes.",
+  "joueurs": {
+    "min": 3,
+    "max": 8
+  },
+  "modes": [
+    "normal",
+    "knockoff",
+    "speedrun"
+  ],
+  "sources": [
+    "libre",
+    "banque",
+    "mixte"
+  ],
+  "source_defaut": "libre",
+  "vitesse_defaut": "normal",
+  "vitesses": {
+    "flash": {
+      "phrase": 30,
+      "dessin": 40,
+      "ecriture": 20,
+      "multiplicateur": 1.25,
+      "visionnage": 5,
+      "speedrun_phrase": 20,
+      "speedrun_dessin": 8,
+      "speedrun_ecriture": 10
+    },
+    "normal": {
+      "phrase": 45,
+      "dessin": 60,
+      "ecriture": 30,
+      "multiplicateur": 1.0,
+      "visionnage": 8,
+      "speedrun_phrase": 25,
+      "speedrun_dessin": 12,
+      "speedrun_ecriture": 14
+    },
+    "long": {
+      "phrase": 60,
+      "dessin": 90,
+      "ecriture": 45,
+      "multiplicateur": 0.75,
+      "visionnage": 10,
+      "speedrun_phrase": 30,
+      "speedrun_dessin": 15,
+      "speedrun_ecriture": 18
+    }
+  },
+  "delai_grace": 2.5,
+  "delai_absent": 3,
+  "texte_max": 80,
+  "texte_vide": "...",
+  "dessin": {
+    "largeur": 400,
+    "hauteur": 300,
+    "couleurs": 8,
+    "epaisseurs": [
+      3,
+      8,
+      18
+    ],
+    "traits_max": 200,
+    "points_max": 2500
+  },
+  "revelation": {
+    "auto_texte": 4,
+    "auto_dessin": 7,
+    "auto_resultat": 6,
+    "vote_album": 30,
+    "vote_final": 45,
+    "retour_vote": 15
+  },
+  "reactions": [
+    "😂",
+    "🤣",
+    "😱",
+    "👏",
+    "🔥",
+    "💀",
+    "🤔",
+    "❤️"
+  ],
+  "reaction_intervalle": 0.6,
+  "gorgees": {
+    "meilleur_album": 2,
+    "meilleur_soiree": 3,
+    "mal_compris": 1,
+    "retard": 1
+  },
+  "knockoff": {
+    "_note": "Chaque copie a un peu moins de temps que la précédente (durée de dessin x decroissance^(k-1)), jamais moins que minimum.",
+    "decroissance": 0.85,
+    "minimum": 15
+  },
+  "speedrun": {
+    "_note": "Étapes par album par défaut en Speedrun (moins que toutes : révélation courte).",
+    "etapes_defaut": 4
+  }
+}

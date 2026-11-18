@@ -43,6 +43,12 @@ from undercover import (
     uc_initialiser, uc_action, uc_expirer, uc_etat_public, uc_mot,
     uc_prochaine_echeance, uc_joueur_parti, uc_joueur_revenu,
 )
+# Telephone Dessine (on ecrit, on dessine, on devine) : meme principe.
+from telephone import (
+    TD_JOUEURS_MIN, TD_JOUEURS_MAX,
+    td_initialiser, td_action, td_expirer, td_etat_public, td_tache, td_galerie,
+    td_prochaine_echeance, td_joueur_parti, td_joueur_revenu,
+)
 # Royaumes (conquete de regions, race + pouvoir) : meme principe.
 from conquete import (
     SW_JOUEURS_MIN, SW_JOUEURS_MAX,
@@ -1023,6 +1029,23 @@ async def _undercover_instantane(code_salon, joueur, complet, nouveau):
     mot = uc_mot(etat, joueur["index"])
     if mot is not None:
         await envoyer(joueur, mot)
+
+
+async def _telephone_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    noms = [j["nom"] for j in salon["joueurs"]]
+    # Sa tache (la seule contribution precedente) ne part que vers lui ; un
+    # arrivant en pleine partie regarde jusqu a la partie suivante.
+    if complet:
+        await envoyer(joueur, {"type": "td_demarree", "joueurs": noms})
+    await envoyer(joueur, td_etat_public(etat, time.time()))
+    tache = td_tache(etat, joueur["index"], time.time())
+    if tache is not None:
+        await envoyer(joueur, tache)
+    galerie = td_galerie(etat)
+    if galerie is not None:
+        await envoyer(joueur, galerie)
 
 
 async def _conquete_instantane(code_salon, joueur, complet, nouveau):
@@ -2998,6 +3021,143 @@ async def uc_traiter(code_salon, joueur, message):
 
 
 # =============================================================
+# TELEPHONE DESSINE (on ecrit, on dessine, on devine)
+# Les regles sont dans telephone.py (chiffres : telephone_config.json).
+# Ici : le reseau, la tache privee de chacun (la SEULE contribution
+# precedente de son album), et le minuteur des etapes et de la revelation.
+# Les phrases de la banque deja sorties passent d une partie a la suivante.
+# =============================================================
+
+async def td_demarrer(code_salon, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if etat is not None and not (salon.get("jeu") == "telephone" and etat.get("phase") == "fin"):
+        return
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < TD_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"Le Téléphone Dessiné demande au moins {TD_JOUEURS_MIN} joueurs."})
+        return
+    if nb > TD_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"Le Téléphone Dessiné se joue à {TD_JOUEURS_MAX} joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    noms = [j["nom"] for j in salon["joueurs"]]
+    par = message.get("_par")
+    hote = next((i for i, n in enumerate(noms) if par is not None and meme_prenom(n, par)), 0)
+    salon["etat"] = td_initialiser(
+        noms, time.time(), hote=hote, vitesse=message.get("vitesse"), source=message.get("source"),
+        etapes=message.get("etapes"), mode=message.get("mode"), deja=salon.get("td_deja"))
+    salon["jeu"] = "telephone"
+    salon["td_tache_envoyee"] = None
+    salon["td_phase"] = None
+    salon["td_deja"] = salon["etat"]["deja"]
+    await diffuser(code_salon, {"type": "td_demarree", "joueurs": noms})
+    await envoyer_indices(code_salon)
+    await td_publier(code_salon, [])
+
+
+async def td_envoyer_evenements(salon, code_salon, evenements):
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+async def td_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous et sa tache a chacun."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "telephone" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    phase_avant = salon.get("td_phase")
+    await td_envoyer_evenements(salon, code_salon, evenements)
+    await diffuser(code_salon, td_etat_public(etat, time.time()))
+    # La tache ne change qu avec l etape : inutile de renvoyer un dessin a
+    # chaque contribution des autres.
+    cle = (etat["phase"], etat["etape"])
+    if salon.get("td_tache_envoyee") != cle:
+        salon["td_tache_envoyee"] = cle
+        for joueur in salon["joueurs"]:
+            if not joueur.get("parti"):
+                tache = td_tache(etat, joueur["index"], time.time())
+                if tache is not None:
+                    await envoyer(joueur, tache)
+    # Tous les albums, une seule fois, quand toute la revelation est passee.
+    if etat["phase"] in ("vote_final", "fin") and phase_avant not in ("vote_final", "fin"):
+        galerie = td_galerie(etat)
+        if galerie is not None:
+            await diffuser(code_salon, galerie)
+    salon["td_phase"] = etat["phase"]
+    salon["td_deja"] = etat["deja"]
+    td_programmer(code_salon)
+
+
+def td_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("td_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = td_prochaine_echeance(etat) if etat and salon.get("jeu") == "telephone" else None
+    salon["td_minuteur"] = None if echeance is None else asyncio.create_task(
+        td_minuteur(code_salon, salon, echeance))
+
+
+async def td_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "telephone":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("td_minuteur") is not moi:
+            return
+        salon["td_minuteur"] = None
+        etat = salon["etat"]
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = td_expirer(etat, time.time())
+        if etat["version"] != version:
+            await td_publier(code_salon, evenements)
+        else:
+            td_programmer(code_salon)
+
+
+async def td_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "telephone" or etat is None:
+        return
+    version = etat["version"]
+    evenements = td_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await td_publier(code_salon, evenements)
+    else:
+        await td_envoyer_evenements(salon, code_salon, evenements)
+
+
+def _td_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        td_joueur_revenu(etat, idx, time.time())
+        td_programmer(code_salon)
+
+
+async def _td_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        td_joueur_parti(etat, index, time.time())
+        await td_publier(code_salon, [])
+
+
+# =============================================================
 # ROYAUMES (conquete, prefixe sw_)
 # Les regles sont dans conquete.py (chiffres : conquete_config.json, cartes :
 # conquete_cartes.json). Ici : le reseau et le minuteur du tour, qui finit
@@ -3119,7 +3279,7 @@ async def cs_demarrer(code_salon):
     etat = salon.get("etat")
     if etat is not None:
         jeu = salon.get("jeu")
-        fini = (jeu in ("menteur", "undercover", "conquete") and etat.get("phase") == "fin") or \
+        fini = (jeu in ("menteur", "undercover", "telephone", "conquete") and etat.get("phase") == "fin") or \
                (jeu == "beerbattle" and etat.get("phase") == "fini")
         if not fini:
             return
@@ -3407,6 +3567,12 @@ JEUX = {
         joueur_parti=_uc_parti, joueur_revenu=_uc_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("uc_minuteur",),
         min_joueurs=UC_JOUEURS_MIN, max_joueurs=UC_JOUEURS_MAX),
+    "telephone": Jeu(
+        "telephone", "Téléphone Dessiné", "telephone-jeu.html", "td_demarrer", _prefixe("td_"),
+        td_demarrer, td_traiter, _telephone_instantane,
+        joueur_parti=_td_parti, joueur_revenu=_td_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("td_minuteur",),
+        min_joueurs=TD_JOUEURS_MIN, max_joueurs=TD_JOUEURS_MAX),
     "conquete": Jeu(
         "conquete", "Royaumes", "conquete-3d-jeu.html", "sw_demarrer", _prefixe("sw_"),
         sw_demarrer, sw_traiter, _conquete_instantane,
@@ -3491,6 +3657,9 @@ async def lancer_jeu(code_salon, nom, message, joueur=None):
                 return
             await terminer_jeu(code_salon, "remplace")
     avant = salon.get("etat")
+    if joueur is not None:
+        # Qui a lance (l hote du Telephone Dessine) ; les autres jeux l ignorent.
+        message = {**message, "_par": joueur.get("nom")}
     await jeu.demarrer(code_salon, message)
     if salon.get("etat") is not None and salon.get("etat") is not avant and salon.get("jeu") == nom:
         salon["debut_jeu"] = time.time()

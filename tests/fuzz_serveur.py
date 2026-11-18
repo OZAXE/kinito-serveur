@@ -47,6 +47,9 @@ TYPES = [
     "mt_demarrer", "mt_poser", "mt_menteur", "mt_cible",
     # Undercover
     "uc_demarrer", "uc_pret", "uc_fini", "uc_voter", "uc_deviner",
+    # Telephone Dessine
+    "td_demarrer", "td_contribuer", "td_brouillon", "td_suggestion", "td_reveler", "td_suivant",
+    "td_auto", "td_voter", "td_reaction",
     # Royaumes
     "sw_demarrer", "sw_choisir", "sw_declin", "sw_abandonner", "sw_conquerir", "sw_tenter", "sw_dragon",
     "sw_fin_conquete", "sw_redeployer", "sw_reaction",
@@ -66,9 +69,9 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "mise", "mode", "montant", "nom", "numero", "paiement", "pari", "plafond", "portrait",
           "recoit", "reel", "sabotage", "score", "score_cite", "suspect", "tapis", "total",
           "type_attaque", "unite", "univers", "valeur", "via_carte", "vitesse", "page",
-          "famille", "undercover", "white", "mot",
-          "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire", "emoji", "tours",
-          "aleatoire", "vengeance"]
+          "famille", "undercover", "white", "mot", "contenu", "auto", "actif", "emoji", "album",
+          "source", "etapes", "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire",
+          "tours", "aleatoire", "vengeance"]
 
 
 def valeur_bizarre(rnd):
@@ -108,6 +111,7 @@ DEMARRER = {
     "menteur": {"type": "mt_demarrer", "mode": "chaos"},
     "casino": {"type": "cs_demarrer"},
     "undercover": {"type": "uc_demarrer", "famille": "melange"},
+    "telephone": {"type": "td_demarrer", "vitesse": "flash", "mode": "speedrun"},
     "conquete": {"type": "sw_demarrer", "vitesse": "flash"},
 }
 
