@@ -50,6 +50,9 @@ TYPES = [
     # Gribouillophone
     "td_demarrer", "td_contribuer", "td_brouillon", "td_suggestion", "td_reveler", "td_suivant",
     "td_auto", "td_voter", "td_reaction",
+    # Royaumes
+    "sw_demarrer", "sw_choisir", "sw_declin", "sw_abandonner", "sw_conquerir", "sw_tenter", "sw_dragon",
+    "sw_fin_conquete", "sw_redeployer", "sw_reaction",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -67,7 +70,8 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "recoit", "reel", "sabotage", "score", "score_cite", "suspect", "tapis", "total",
           "type_attaque", "unite", "univers", "valeur", "via_carte", "vitesse", "page",
           "famille", "undercover", "white", "mot", "contenu", "auto", "actif", "emoji", "album",
-          "source", "etapes"]
+          "source", "etapes", "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire",
+          "tours", "aleatoire", "vengeance"]
 
 
 def valeur_bizarre(rnd):
@@ -108,6 +112,7 @@ DEMARRER = {
     "casino": {"type": "cs_demarrer"},
     "undercover": {"type": "uc_demarrer", "famille": "melange"},
     "telephone": {"type": "td_demarrer", "vitesse": "flash", "mode": "speedrun"},
+    "conquete": {"type": "sw_demarrer", "vitesse": "flash"},
 }
 
 
