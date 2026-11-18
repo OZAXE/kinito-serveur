@@ -1,4 +1,4 @@
-// Partie complète du Téléphone Dessiné dans de vrais navigateurs (3 joueurs, téléphone en portrait).
+// Partie complète du Gribouillophone dans de vrais navigateurs (3 joueurs, téléphone en portrait).
 //
 // Prérequis :
 //   - serveur d essai :  python tests/serveur_essai.py   (127.0.0.1:8000)

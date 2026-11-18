@@ -18,7 +18,7 @@ dans la même modification quand un comportement change.
 Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
 
 - **Registre des jeux** `JEUX` (`serveur.py`) : kinito, beerbattle, buckshot, picolopoly,
-  menteur (affiché « Cal 12 »), casino, undercover, telephone (Téléphone Dessiné, préfixe `td_`). Chaque jeu y est déclaré une fois
+  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`). Chaque jeu y est déclaré une fois
   (démarrage, actions, reprise, départ, retour, minuteurs, nombre de joueurs) : ajouter un jeu
   = ajouter une entrée.
 - **Moteurs de règles purs** à part, testables hors ligne : `picolopoly.py`, `menteur.py`,

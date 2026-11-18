@@ -47,7 +47,7 @@ TYPES = [
     "mt_demarrer", "mt_poser", "mt_menteur", "mt_cible",
     # Undercover
     "uc_demarrer", "uc_pret", "uc_fini", "uc_voter", "uc_deviner",
-    # Telephone Dessine
+    # Gribouillophone
     "td_demarrer", "td_contribuer", "td_brouillon", "td_suggestion", "td_reveler", "td_suivant",
     "td_auto", "td_voter", "td_reaction",
     # Casino

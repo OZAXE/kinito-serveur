@@ -1,5 +1,5 @@
 """
-Essai du moteur du Telephone Dessine, hors ligne : des parties jouees au
+Essai du moteur du Gribouillophone, hors ligne : des parties jouees au
 hasard (contributions valides et invalides, retards, absents, revenants,
 votes de travers), de 3 a 8 joueurs, dans toutes les sources et vitesses.
 On verifie qu aucune ne plante ni ne se fige, que la rotation est juste,
