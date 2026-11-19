@@ -71,7 +71,7 @@ async function attendreQue(test, delai) {
   const verdict = await attendreQue(() => p.evaluate(() => window.__annonces.find((t) => /VRAI|MENSONGE|DIABLE|CHAOS|MAÎTRE/.test(t))), 15000);
   verifier(!!verdict, '  puis le verdict, en grand : « ' + (verdict || '') + ' »');
   verifier(!!verdict && (/[♔♕AJ★]/.test(verdict) || /DIABLE|CHAOS|MAÎTRE/.test(verdict)), '  avec les cartes réellement posées, montrées à tous');
-  const suite = await attendreQue(() => p.evaluate(() => window.__annonces.find((t) => /BANG|clic/.test(t))), 15000);
+  const suite = await attendreQue(() => p.evaluate(() => window.__annonces.find((t) => /BANG|clic/i.test(t))), 15000);
   verifier(!!suite, '  puis le tir : « ' + (suite || '') + ' »');
   if (CAPTURES) await p.screenshot({ path: CAPTURES + '/menteur-tir.png' });
   verifier(erreurs.length === 0, 'aucune erreur JavaScript' + (erreurs.length ? ' : ' + erreurs.join(' | ') : ''));

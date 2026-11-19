@@ -217,7 +217,9 @@ async function sansDefilement(page) {
   const solT = await (await fetch(API + '/test/solution/' + code)).json();
   const tueur = solT.tueur;
   const geste = async (page, essai = 0) => {
-    const b = await (await page.$('.bouton-role')).boundingBox();
+    // L'écran peut être en train de se redessiner : on attend que le bouton soit affiché.
+    const b = await attendreQue(async () => { const e = await page.$('.bouton-role'); return e && e.boundingBox(); }, 10000);
+    if (!b) return null;
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
     const z = await attendreQue(() => page.evaluate(() => { const e = document.querySelector('.role-voile.ouvert .zone-dossier'); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }), 5000);
@@ -383,18 +385,15 @@ async function sansDefilement(page) {
   verifier(/Témoin/i.test(recap) && /Expertises/i.test(recap), '  récapitulatif : plis du témoin et contre-expertises par joueur');
   verifier(recap.includes(enqueteur) && recap.includes('2/3') && recap.includes('3/3'), '  récapitulatif : les deux accusations');
 
-  // Onglet par-dessus un jeu
+  // Onglet par-dessus un jeu : seulement pendant l'enquête (couches_en_cours).
+  // Elle vient de finir : le jeu n'affiche plus la loupe, et Léa garde sa place.
   const lea = pages.Lea;
   await lea.goto(SITE + 'kinito-3d-jeu.html?salon=' + code);
-  await attendreQue(() => lea.evaluate(() => !!document.getElementById('onglet-enquete')), 15000);
-  await lea.click('#onglet-enquete');
-  const cadre = await attendreQue(async () => {
-    const f = lea.frames().find(fr => fr.url().includes('enquete.html'));
-    return f && (await f.evaluate(() => document.body.innerText)).includes('Grand Détective') ? f : null;
-  }, 15000);
-  verifier(!!cadre, "l'onglet 🔍 d'un jeu ouvre l'enquête par-dessus");
+  await attendreQue(async () => (await (await fetch(API + '/test/etat/' + code)).json()).joueurs.some(j => j.nom === 'Lea' && !j.parti), 15000);
+  await attendre(3000);
+  verifier(await lea.evaluate(() => !document.getElementById('onglet-enquete')), "enquête finie : plus d'onglet 🔍 dans les jeux");
   const etatTable = await (await fetch(API + '/test/etat/' + code)).json();
-  verifier(etatTable.joueurs.some(j => j.nom === 'Lea' && !j.parti), '  sans couper la place de Léa à la table');
+  verifier(etatTable.joueurs.some(j => j.nom === 'Lea' && !j.parti), '  Léa est bien à sa table');
 
   verifier(erreurs.length === 0, 'aucune erreur JavaScript' + (erreurs.length ? ' : ' + erreurs.join(' | ') : ''));
   await nav.close();
