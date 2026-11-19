@@ -134,12 +134,12 @@ async function tester(navigateur, jeu) {
     await D.goto(SITE + page + '?salon=' + code);
     await D.fill('#pseudo', 'Bruno');
     await D.locator('button', { hasText: /^Rejoindre$/ }).first().click();
-    await attendreQue(async () => /autre .cran/.test(await B.evaluate(() => document.body.innerText)), 10000,
+    await attendreQue(async () => /autre .cran/i.test(await B.evaluate(() => document.body.innerText)), 10000,
       'ancien écran prévenu');
     await attendre(4000);       // l ancien ecran ne doit pas reprendre la place
     const e = await verifierTable('après reprise');
     if (e.joueurs.find(j => j.nom === 'Bruno').parti) throw new Error('Bruno marqué parti');
-    if (/autre .cran/.test(await D.evaluate(() => document.body.innerText))) throw new Error('le nouvel écran a été éjecté');
+    if (/autre .cran/i.test(await D.evaluate(() => document.body.innerText))) throw new Error('le nouvel écran a été éjecté');
     await D.context().close();
   });
 

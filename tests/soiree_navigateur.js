@@ -36,6 +36,12 @@ async function appuyer(page, texte, delai = 15000) {
 }
 async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).json(); }
 
+// L'accueil range les jeux dans son onglet « Jeux » (caché au départ).
+async function ouvrirJeu(page, jeu) {
+  if (await page.$('#tab-jeux')) await page.click('#tab-jeux');
+  await page.click('a.jeu.' + jeu);
+}
+
 (async () => {
   const nav = await chromium.launch();
   const erreurs = [];
@@ -67,7 +73,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
 
   for (const p of [lea, max, zoe]) {
     const lien = await p.getAttribute('a.jeu.kinito', 'href');
-    await p.click('a.jeu.kinito');
+    await ouvrirJeu(p, 'kinito');
     const arrive = await attendreQue(async () => /kinito-3d-jeu\.html\?salon=/.test(p.url()), 30000);
     if (!arrive) console.log('   (lien ' + lien + ', adresse ' + p.url() + ')');
   }
@@ -90,7 +96,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await lea.goto(SITE + 'index.html');
   const enCours = await attendreQue(async () => (await lea.textContent('#soiree-contenu')).includes('Kinito'), 10000);
   verifier(!!enCours, "l'accueil affiche « En cours : Kinito »");
-  await lea.click('a.jeu.casino');
+  await ouvrirJeu(lea, 'casino');
   await lea.waitForURL(/casino-3d-jeu\.html\?salon=/);
   await appuyer(lea, 'Ouvrir le casino');
   // Confirmation dessinée dans la page (pas de boîte native qui figerait tout).
@@ -128,7 +134,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await tom.fill('input.code', code);
   await tom.click('text=Rejoindre');
   await tom.waitForSelector('.code-grand');
-  await tom.click('a.jeu.kinito');
+  await ouvrirJeu(tom, 'kinito');
   const bandeau = await attendreQue(async () =>
     (await tom.textContent('body')).includes('Ta table joue à Casino'), 25000);
   if (!bandeau) console.log('   (url ' + tom.url() + ', bandeaux : ' + JSON.stringify(await tom.evaluate(() =>
@@ -143,7 +149,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   await appuyer(tom, 'Nouvelle table');
   const ouverte = await attendreQue(async () => (await tom.textContent('#soiree-contenu')).includes('Table 2 · ta table'), 15000);
   verifier(!!ouverte, 'Tom ouvre une deuxième table');
-  await tom.click('a.jeu.kinito');
+  await ouvrirJeu(tom, 'kinito');
   await tom.waitForURL(new RegExp('kinito-3d-jeu\\.html\\?salon=' + code + '-2'));
   verifier(!!await attendreQue(async () => (await etat(code + '-2')).joueurs.some(j => j.nom === 'Tom' && !j.parti), 15000),
     '  et s\'y assoit en choisissant Kinito');
@@ -156,7 +162,7 @@ async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).jso
   }, 15000);
   verifier(!!deux, "l'accueil de Léa liste les deux tables et leurs joueurs");
   await appuyer(lea, "S'asseoir ici");
-  await lea.click('a.jeu.kinito');
+  await ouvrirJeu(lea, 'kinito');
   await lea.waitForURL(new RegExp('salon=' + code + '-2'));
   await appuyer(lea, 'Démarrer la partie', 25000);
   verifier(!!await attendreQue(async () => (await etat(code + '-2')).jeu === 'kinito', 15000), 'Léa lance Kinito à la table 2');
