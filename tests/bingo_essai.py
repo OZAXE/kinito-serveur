@@ -326,6 +326,7 @@ async def essai_couche():
     await serveur.demarrage(memoire)
     w = FauxWS()
     await serveur.abonner(code, "Max", w, "bingo")
+    await asyncio.sleep(0.05)       # la fermeture de l'ancienne part en tache de fond
     verifier(ws["Max"].ferme == 4002, "même page ouverte deux fois : l'ancienne est prévenue")
     verifier(w.de_type("bng_moi") and w.de_type("bng_moi")[-1]["grille"] == moi["Max"]["grille"],
              "après redémarrage et reconnexion, Max retrouve sa grille")

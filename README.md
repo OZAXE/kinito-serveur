@@ -227,6 +227,7 @@ python tests/non_fuite_essai.py 300         # parties au hasard : rien ne trahit
 python tests/simulation.py --partage 0.5    # équilibre : victoires du tueur, accusations, gorgées/h
 node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
 node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
+node tests/mode_test_navigateur.js          # mode test du site (pseudo Admin01) : bots dans chaque jeu
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)
