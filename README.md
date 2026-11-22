@@ -11,7 +11,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   (mots dans `undercover_mots.py` : familles « classique » et « trash »), `telephone.py` (Gribouillophone :
   chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`), `conquete.py` (Royaumes : chiffres
   dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`), `justepinte.py` (Le Juste Pinte : chiffres dans
-  `justepinte_config.json`, questions dans `justepinte_questions.py`).
+  `justepinte_config.json`, questions dans `justepinte_questions.py`), `quidenous.py` (Qui de nous ? : chiffres dans
+  `quidenous_config.json`, cartes dans `quidenous_cartes.py`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -227,6 +228,24 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   (seules ces gorgées de fin partent dans `signaler` : celles des manches sont déjà bues).
 - Secret : `jp_etat` n'a ni la bonne réponse ni les réponses des joueurs avant la révélation.
 
+## Qui de nous ? (vote social, préfixe `qn_`)
+
+- 3 à 8 joueurs, page `quidenous-3d-jeu.html`. Chaque manche tire une carte « Qui de nous… » (« …finit la
+  soirée en dansant sur une table ») ; chacun désigne en secret un autre joueur et parie sur le plus désigné.
+  Toutes les valeurs sont dans `quidenous_config.json`, les cartes dans `quidenous_cartes.py`.
+- `qn_demarrer` : `manches` (5, 10 ou 15 ; défaut 10), `paquet` (`gentil` par défaut, `epice` ou `melange`),
+  `anonyme` (par défaut ; `false` = votes à découvert). Les cartes déjà tirées ce soir dans le salon ne
+  reviennent pas tant qu'il en reste.
+- Actions : `qn_voter` (`cible` : index d'un autre joueur présent, `pari` : index de n'importe quel joueur,
+  soi compris ; modifiable jusqu'à la révélation ; réponse privée `qn_vote`), `qn_suivant`.
+- Phases (`qn_etat.phase`) : `vote` (25 s, finit dès que tous les présents ont voté ; `a_vote` dit qui a
+  voté, jamais pour qui), `revelation` (12 s, `resultat` : `compte` par joueur, `designes`, `paris` avec
+  `bon`, `sans_vote`, `boit` par joueur, et `votes` (qui pour qui) seulement à découvert), `fin` (`final` :
+  classement, gagnants, derniers, `titre` = le plus désigné de la partie). Événements `qn_revelation`, `qn_fin`.
+- Le ou les plus désignés (ex aequo) boivent 2. Bon pari +1 point, mauvais pari 1 gorgée, présent sans vote
+  1 gorgée. Fin : meilleur devin = plus de points ; le dernier au classement boit 2 (seules ces gorgées de fin
+  partent dans `signaler`).
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -242,6 +261,7 @@ python tests/undercover_essai.py             # règles, mot de Mr White (toléra
 python tests/conquete_essai.py 300          # Royaumes : cartes, règles dirigées, parties au hasard (invariants)
 python tests/casino_essai.py
 python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
+python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des votes, désignés, paris, gorgées
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py

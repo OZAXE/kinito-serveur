@@ -30,6 +30,8 @@ jobs:
           - beerbattle_kinito_essai.py
           - telephone_essai.py 300
           - conquete_essai.py 300
+          - justepinte_essai.py 300
+          - quidenous_essai.py 300
           - picolopoly_essai.py 300
           - non_fuite_essai.py 300
     steps:

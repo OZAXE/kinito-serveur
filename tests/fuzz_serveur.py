@@ -55,6 +55,8 @@ TYPES = [
     "sw_fin_conquete", "sw_redeployer", "sw_reaction",
     # Le Juste Pinte
     "jp_demarrer", "jp_repondre", "jp_suivant",
+    # Qui de nous ?
+    "qn_demarrer", "qn_voter", "qn_suivant",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -116,6 +118,7 @@ DEMARRER = {
     "telephone": {"type": "td_demarrer", "vitesse": "flash", "mode": "speedrun"},
     "conquete": {"type": "sw_demarrer", "vitesse": "flash"},
     "justepinte": {"type": "jp_demarrer", "manches": 5},
+    "quidenous": {"type": "qn_demarrer", "manches": 5},
 }
 
 

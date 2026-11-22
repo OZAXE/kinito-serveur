@@ -68,6 +68,10 @@ async def etat(code: str):
                "gorgees": e.get("gorgees"), "reponse": (e.get("tirage") or [[None] * 6])[min(e.get("manche", 0), len(e.get("tirage") or [0]) - 1)][2]
                if e.get("tirage") else None}
               if salon.get("jeu") == "justepinte" else None,
+        # Qui de nous ? : la manche, les votes deja recus, les points et gorgees.
+        "qn": {"manche": e.get("manche"), "nb_manches": e.get("nb_manches"), "votes": e.get("votes"),
+               "points": e.get("points"), "gorgees": e.get("gorgees")}
+              if salon.get("jeu") == "quidenous" else None,
     }
 
 

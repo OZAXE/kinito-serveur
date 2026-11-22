@@ -20,14 +20,15 @@ dans la même modification quand un comportement change.
 Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
 
 - **Registre des jeux** `JEUX` (`serveur.py`) : kinito, beerbattle, buckshot, picolopoly,
-  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`), conquete (Royaumes, préfixe `sw_`), justepinte (Le Juste Pinte, préfixe `jp_`). Chaque jeu y est déclaré une fois
+  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`), conquete (Royaumes, préfixe `sw_`), justepinte (Le Juste Pinte, préfixe `jp_`), quidenous (Qui de nous ?, préfixe `qn_`). Chaque jeu y est déclaré une fois
   (démarrage, actions, reprise, départ, retour, minuteurs, nombre de joueurs) : ajouter un jeu
   = ajouter une entrée.
 - **Moteurs de règles purs** à part, testables hors ligne : `picolopoly.py`, `menteur.py`,
   `casino.py`, `undercover.py` (mots dans `undercover_mots.py`), `telephone.py` (config
   `telephone_config.json`, phrases `telephone_phrases.py`), `conquete.py` (chiffres dans `conquete_config.json`, cartes
   dans `conquete_cartes.json` fabriquées par `conquete_cartes.py`), `justepinte.py` (config
-  `justepinte_config.json`, questions `justepinte_questions.py`), `enquete.py`, `bingo.py`.
+  `justepinte_config.json`, questions `justepinte_questions.py`), `quidenous.py` (config
+  `quidenous_config.json`, cartes `quidenous_cartes.py`), `enquete.py`, `bingo.py`.
 - `stockage.py` : Postgres Neon si `DATABASE_URL` est défini (variable Render, jamais dans le
   dépôt), sinon mémoire. Le serveur ne doit jamais planter à cause de la base.
 - `protection.py` : garde-fous (débit, taille, connexions par IP).
@@ -64,6 +65,7 @@ python tests/undercover_essai.py
 python tests/telephone_essai.py 300
 python tests/conquete_essai.py 300
 python tests/justepinte_essai.py 300
+python tests/quidenous_essai.py 300
 python tests/picolopoly_essai.py 300
 python tests/non_fuite_essai.py 300   # rien ne trahit le tueur de l'Enquête
 ```
