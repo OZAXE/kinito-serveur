@@ -4,7 +4,9 @@
 Après chaque modification demandée, sans redemander l'accord :
 1. commiter et pousser sur la branche de travail ;
 2. ouvrir une pull request vers `main` ;
-3. la fusionner dans `main` (fusion classique) dès que les vérifications passent.
+3. la fusionner dans `main` (fusion classique) dès que les vérifications passent : les tests
+   « Hors ligne » de GitHub Actions doivent être verts ; les tests « Navigateur » sont pour info
+   (un échec ne bloque pas, mais le signaler).
 
 Ce dépôt se fusionne AVANT le site (`table-de-jeu`), dont les pages appellent ce serveur
 publié sur Render (`render.yaml`, déploiement depuis `main`). Entre les deux fusions, le site

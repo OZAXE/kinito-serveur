@@ -1,0 +1,67 @@
+# Vérifications automatiques : lancées sur chaque pull request et à chaque arrivée sur main.
+# La fusion n'attend que ce qui est vert ici (voir CLAUDE.md, « Fusion systématique »).
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hors-ligne:
+    name: Hors ligne (${{ matrix.test }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - fondations_essai.py
+          - menteur_essai.py
+          - bingo_essai.py
+          - enquete_essai.py
+          - casino_essai.py
+          - undercover_essai.py
+          - beerbattle_kinito_essai.py
+          - telephone_essai.py 300
+          - conquete_essai.py 300
+          - picolopoly_essai.py 300
+          - non_fuite_essai.py 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python tests/${{ matrix.test }}
+
+  navigateur:
+    name: Navigateur (vraies pages du site, pour info)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Pour info le temps de vérifier leur fiabilité sur GitHub : un échec s'affiche sans bloquer.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site publié (table-de-jeu, main)
+        uses: actions/checkout@v4
+        with:
+          repository: OZAXE/table-de-jeu
+          ref: main
+          path: site
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r requirements.txt
+      - run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - run: bash tests/ci_navigateur.sh site
