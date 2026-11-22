@@ -14,7 +14,7 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   `justepinte_config.json`, questions dans `justepinte_questions.py`), `quidenous.py` (Qui de nous ? : chiffres dans
   `quidenous_config.json`, cartes dans `quidenous_cartes.py`), `tournee.py` (La Tournée : chiffres dans
   `tournee_config.json`, plateaux dans `tournee_plateaux.json` fabriqués par `tournee_plateaux.py`, mini-jeux dans
-  `tournee_minijeux.json`).
+  `tournee_minijeux.json`), `loupgarou.py` (Loup-Garou : chiffres dans `loupgarou_config.json`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -314,6 +314,43 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   `tournee_minijeux.json` (`equipes: false` s'il ne se joue jamais en équipes, `gorgees_max` s'il fait boire) et un
   module `commun/minijeux/<id>.js` sur le site.
 
+## Loup-Garou (rôles cachés, préfixe `lg_`)
+
+- 4 à 15 joueurs, page `loupgarou-3d-jeu.html`. Pas de meneur : le serveur fait le conteur, chacun joue
+  sur son téléphone. Toutes les valeurs (délais, nombre de loups, gorgées) sont dans `loupgarou_config.json`.
+- Rôles : **Loup-Garou** (`loup` : la meute choisit une victime chaque nuit, les loups se voient et voient les
+  choix de la meute en direct), **Villageois** (`villageois`), **Cartomancienne** (`cartomancienne` : découvre
+  le rôle d'un joueur par nuit), **Videur** (`videur` : protège un joueur des loups, lui compris, jamais le même
+  deux nuits de suite), **Herboriste** (`herboriste` : une potion de soin pour la victime des loups, une potion
+  de poison, chacune une fois par partie), **Braconnier** (`braconnier` : à sa mort, il emporte un joueur).
+- `lg_demarrer` : `loups` (nombre ; absent = automatique : 1 jusqu'à 6 joueurs, 2 jusqu'à 10, 3 jusqu'à 13, puis
+  4 ; jamais plus d'un loup pour deux autres joueurs), `speciaux` (liste de rôles spéciaux ; absent = selon le
+  nombre de joueurs : Cartomancienne dès 4, Videur dès 6, Herboriste dès 7, Braconnier dès 8). Les autres sont
+  Villageois. La composition est publique (`composition`), les rôles non.
+- Phases (`lg_etat.phase`) : `role` (25 s, `lg_pret`), `nuit` (45 s), `potion` (seulement si l'Herboriste est
+  dans la partie : 25 s si elle peut agir, sinon 5 à 9 s au hasard pour que la durée ne trahisse rien), `aube`
+  (morts de la nuit, `lg_suivant`), `tir` (25 s, le Braconnier mort vise), `debat` (180 s), `verdict`
+  (`lg_suivant`), `fin`.
+- La nuit, **tout le monde en vie** envoie `lg_nuit` (`cible`) pour que personne ne se trahisse à la table :
+  vote de la meute (réponse privée `lg_meute` à chaque loup), sonde de la Cartomancienne (réponse privée
+  `lg_vision` : `cible`, `role`), protection du Videur, et pour les autres un suspect (le « flair », compté en fin
+  de partie). La nuit finit quand tous ont agi et que la meute est d'accord, ou à l'échéance : la victime est le
+  choix majoritaire de la meute (égalité : le sort). `lg_potion` (`soin` : booléen, `poison` : index ou null).
+  `lg_tir` (`cible`). `lg_voter` (`cible` : index d'un autre vivant, ou null = blanc ; modifiable, réponse privée
+  `lg_vote`). Le plus désigné est éliminé s'il a plus de voix que les blancs ; égalité : personne.
+- `lg_etat` (public) : `vivants`, `roles` (seulement ceux des morts, tous à la fin), `a_vote` (qui a voté, jamais
+  pour qui), `attente` (compte des joueurs qui ont agi), `annonce` (aube ou verdict : `morts` avec rôle et
+  cause, et au verdict `votes` = qui a voté qui, `compte`, `blancs`, `elimine`, `accusateurs`), `tireur`,
+  `morts`, `gorgees`, `final` (`vainqueur`, `gagnants`, `perdants`, `roles`, `flair`, `meilleur_flair`).
+  `lg_secret` (privé, après chaque coup) : `role`, `vivant`, `loups` (pour un loup), `meute`, `action` de la
+  nuit, `vote`, `visions` (Cartomancienne), `dernier_protege` (Videur), `potions` et `victime` (Herboriste
+  pendant la potion), `tous_roles` pour un mort. Événements `lg_nuit`, `lg_aube`, `lg_tir_attente`, `lg_tir`,
+  `lg_verdict`, `lg_fin`.
+- Victoire : le village quand il n'y a plus de loup, les loups dès qu'ils sont au moins aussi nombreux que les
+  autres vivants. Gorgées : mort la nuit 2, abattu 2, éliminé au vote 2 (loup démasqué 3), chaque accusateur
+  d'un innocent éliminé 1, en fin de partie 2 pour chaque joueur du camp perdant (seules celles-ci partent dans
+  `signaler`).
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -330,6 +367,7 @@ python tests/conquete_essai.py 300          # Royaumes : cartes, règles dirigé
 python tests/casino_essai.py
 python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
 python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des votes, désignés, paris, gorgées
+python tests/loupgarou_essai.py 300      # Loup-Garou : composition, règles dirigées, non-fuite des rôles et de la nuit
 python tests/tournee_essai.py 300        # La Tournée : plateaux, chemins, retournements, équipes, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
@@ -345,6 +383,7 @@ node tests/undercover_navigateur.js [captures]  # Undercover : partie complète 
 node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 navigateurs, en touchant la carte
 node tests/justepinte_navigateur.js [captures] # Le Juste Pinte : 5 questions à 3 navigateurs, dans le mille, classement, Rejouer
 node tests/quidenous_navigateur.js [captures]  # Qui de nous ? : 5 cartes à 3 navigateurs, vote, pari, à découvert, titre, Rejouer
+node tests/loupgarou_navigateur.js [captures]  # Loup-Garou : partie complète à 6 navigateurs, chaque rôle, vote, Rejouer
 node tests/tournee_navigateur.js [captures]    # La Tournée : 5 tours à 3 navigateurs, dés, plateau, mini-jeux au doigt, classement, Rejouer
 # Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte, quidenous et mode test)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard

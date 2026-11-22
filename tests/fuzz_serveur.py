@@ -59,6 +59,8 @@ TYPES = [
     "qn_demarrer", "qn_voter", "qn_suivant",
     # La Tournee
     "tr_demarrer", "tr_lancer", "tr_chemin", "tr_score", "tr_suivant",
+    # Loup-Garou
+    "lg_demarrer", "lg_pret", "lg_nuit", "lg_potion", "lg_tir", "lg_voter", "lg_suivant",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -77,7 +79,7 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "type_attaque", "unite", "univers", "valeur", "via_carte", "vitesse", "page",
           "famille", "undercover", "white", "mot", "contenu", "auto", "actif", "emoji", "album",
           "source", "etapes", "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire",
-          "tours", "aleatoire", "vengeance"]
+          "tours", "aleatoire", "vengeance", "soin", "poison", "loups", "speciaux"]
 
 
 def valeur_bizarre(rnd):
@@ -122,6 +124,7 @@ DEMARRER = {
     "justepinte": {"type": "jp_demarrer", "manches": 5},
     "quidenous": {"type": "qn_demarrer", "manches": 5},
     "tournee": {"type": "tr_demarrer", "tours": 5},
+    "loupgarou": {"type": "lg_demarrer"},
 }
 
 
@@ -147,7 +150,8 @@ async def scenario(jeu, duree, graine):
         except Exception:
             pass
 
-    for nom in ("Alice", "Bruno", "Chloe"):
+    # Le Loup-Garou se joue a 4 au moins : un robot de plus.
+    for nom in ("Alice", "Bruno", "Chloe") + (("David",) if jeu == "loupgarou" else ()):
         ws = await websockets.connect(f"ws://127.0.0.1:{PORT}/ws/{code}/{nom}", ping_interval=None)
         connexions.append(ws)
         asyncio.ensure_future(lire(ws))
