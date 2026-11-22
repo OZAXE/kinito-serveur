@@ -92,6 +92,7 @@ async function attendreQue(test, delai, quoi) {
   const e0 = await etat(code);
   verifier(e0.jp.nb_manches === 5, '5 questions demandées, ' + e0.jp.nb_manches + ' reçues');
 
+  const valider = p => p.evaluate(() => [...document.querySelectorAll('#panneau button')].find(b => /^Valider$/.test(b.textContent.trim())).click());
   for (let m = 0; m < 5; m++) {
     const e = await attendreQue(async () => { const x = await etat(code); return x.phase === 'question' && x.jp.manche === m && x; }, 30000, 'question ' + (m + 1))
       .catch(async err => { console.log(JSON.stringify(await etat(code))); for (const p of pages) console.log('---', await p.locator('#panneau').innerText()); throw err; });
@@ -114,7 +115,7 @@ async function attendreQue(test, delai, quoi) {
       // Alice tape la bonne réponse (dans le mille), les autres s'en écartent.
       const v = k === 0 ? bonne : bonne * (1 + 0.3 * k) + k;
       await p.fill('#reponse', String(v).replace('.', ','));
-      await p.locator('button', { hasText: /^Valider$/ }).click();
+      await valider(p);
     }
     try {
       await attendreQue(async () => (await etat(code)).phase === 'revelation', 40000, 'révélation ' + (m + 1));
@@ -127,7 +128,10 @@ async function attendreQue(test, delai, quoi) {
     const panneau = await A.locator('#panneau').innerText();
     verifier(/🎯/.test(panneau) && /Alice/.test(panneau), 'manche ' + (m + 1) + ' : Alice dans le mille, classement affiché');
     if (m === 0) { await attendre(3000); await capture(A, '3-revelation'); }
-    await Promise.all(pages.map(p => p.locator('button', { hasText: /Question suivante|Voir le classement/ }).click({ timeout: 20000 }).catch(() => {})));
+    // Clics par la page : un clic Playwright attend que tout soit immobile, trop
+    // lent avec trois scènes 3D sur la machine d essai.
+    await Promise.all(pages.map(p => p.waitForFunction(() => [...document.querySelectorAll('#panneau button')].some(b => /Question suivante|Voir le classement/.test(b.textContent)), null, { timeout: 20000 })
+      .then(() => p.evaluate(() => [...document.querySelectorAll('#panneau button')].find(b => /Question suivante|Voir le classement/.test(b.textContent)).click())).catch(() => {})));
   }
   await attendreQue(async () => (await etat(code)).phase === 'fin', 30000, 'fin');
   // (le panneau final arrive après la fin des animations de la dernière manche)
