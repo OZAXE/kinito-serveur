@@ -247,7 +247,7 @@ bash tests/ci_navigateur.sh ../table-de-jeu [test ...]  # lance serveur d essai 
 `.github/workflows/tests.yml` tourne sur chaque pull request et à chaque arrivée sur `main` :
 - **Hors ligne** : les tests `*_essai.py` ci-dessus (sauf `simulation.py`), un par machine, en parallèle.
   Bloquant : une PR ne se fusionne que si tous sont verts.
-- **Navigateur** : `tests/ci_navigateur.sh` sur le site publié (`table-de-jeu`, `main`). Pour info pour
+- **Navigateur** : `tests/ci_navigateur.sh <test>`, un test par machine, sur le site publié (`table-de-jeu`, `main`). Pour info pour
   l instant (`continue-on-error`) : un échec s affiche sans bloquer la fusion.
 
 Le site (`table-de-jeu`) a la même vérification navigateur, jouée sur ses PR contre ce dépôt (`main`) :

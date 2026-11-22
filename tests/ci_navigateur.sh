@@ -37,10 +37,15 @@ jouer() {
   echo "::endgroup::"
 }
 
-demarrer DELAI_SILENCE=12
-for t in $NORMAUX; do jouer "$t"; done
-demarrer DELAI_SILENCE=30 ENQ_RAPIDE=1
-for t in $LENTS; do jouer "$t"; done
+phase() {  # phase "<tests>" VAR=valeur... : démarre le serveur seulement si un test de la phase est choisi
+  local tests=$1; shift
+  local un=""; for t in $tests; do garde "$t" && un=1; done
+  [ -z "$un" ] && return 0
+  demarrer "$@"
+  for t in $tests; do jouer "$t"; done
+}
+phase "$NORMAUX" DELAI_SILENCE=12
+phase "$LENTS" DELAI_SILENCE=30 ENQ_RAPIDE=1
 
 if [ ${#ECHECS[@]} -gt 0 ]; then echo "Échecs : ${ECHECS[*]}"; exit 1; fi
 echo "Tous les tests navigateur passent."

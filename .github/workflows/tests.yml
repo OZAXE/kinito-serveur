@@ -33,8 +33,8 @@ jobs:
           - picolopoly_essai.py 300
           - non_fuite_essai.py 300
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -42,26 +42,32 @@ jobs:
       - run: python tests/${{ matrix.test }}
 
   navigateur:
-    name: Navigateur (vraies pages du site, pour info)
+    name: Navigateur (${{ matrix.test }}, pour info)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     # Pour info le temps de vérifier leur fiabilité sur GitHub : un échec s'affiche sans bloquer.
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [presents_navigateur, mode_test_navigateur, menteur_annonces_navigateur, solo_navigateur,
+               undercover_navigateur, conquete_navigateur, telephone_navigateur, telephone_modes_navigateur,
+               navigateur, soiree_navigateur, enquete_navigateur]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Site publié (table-de-jeu, main)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: OZAXE/table-de-jeu
           ref: main
           path: site
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
       - run: pip install -r requirements.txt
       - run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
-      - run: bash tests/ci_navigateur.sh site
+      - run: bash tests/ci_navigateur.sh site ${{ matrix.test }}
