@@ -275,7 +275,8 @@ node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, V
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)
 node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 navigateurs, en touchant la carte
 node tests/justepinte_navigateur.js [captures] # Le Juste Pinte : 5 questions à 3 navigateurs, dans le mille, classement, Rejouer
-# Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte et mode test)
+node tests/quidenous_navigateur.js [captures]  # Qui de nous ? : 5 cartes à 3 navigateurs, vote, pari, à découvert, titre, Rejouer
+# Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte, quidenous et mode test)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
 python tests/securite_essai.py              # attaques : taille, debit, codes, places, origines, limites par IP

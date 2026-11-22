@@ -8,7 +8,7 @@ SITE_DIR=$(cd "${1:?dossier du site table-de-jeu}" && pwd); shift
 cd "$(dirname "$0")/.."
 
 # Tests au délai de silence normal (12 s), puis ceux qui demandent DELAI_SILENCE=30 ENQ_RAPIDE=1.
-NORMAUX="presents_navigateur mode_test_navigateur menteur_annonces_navigateur solo_navigateur undercover_navigateur conquete_navigateur telephone_navigateur telephone_modes_navigateur navigateur"
+NORMAUX="presents_navigateur mode_test_navigateur menteur_annonces_navigateur solo_navigateur undercover_navigateur conquete_navigateur telephone_navigateur telephone_modes_navigateur justepinte_navigateur quidenous_navigateur navigateur"
 LENTS="soiree_navigateur enquete_navigateur"
 if [ $# -gt 0 ]; then CHOIX=" $* "; else CHOIX=""; fi
 garde() { [ -z "$CHOIX" ] || [[ "$CHOIX" == *" $1 "* ]]; }
