@@ -10,7 +10,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
 - Moteurs de règles purs, testables hors ligne : `picolopoly.py`, `menteur.py`, `casino.py`, `undercover.py`
   (mots dans `undercover_mots.py` : familles « classique » et « trash »), `telephone.py` (Gribouillophone :
   chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`), `conquete.py` (Royaumes : chiffres
-  dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`).
+  dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`), `justepinte.py` (Le Juste Pinte : chiffres dans
+  `justepinte_config.json`, questions dans `justepinte_questions.py`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -206,6 +207,25 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 - Lien avec l'Enquête : la victoire est signalée, mais ne rapporte rien tant que `conquete` n'est pas
   dans la table des PE de `enquete_config.json` (désactivé par défaut).
 
+## Le Juste Pinte (estimation, préfixe `jp_`)
+
+- 2 à 8 joueurs, page `justepinte-3d-jeu.html`. Une question à réponse chiffrée par manche (fête, alcool,
+  ciné et musique, bouffe, jeux de bar, insolite ; jamais une ville en particulier), chacun tape un nombre
+  en secret. Toutes les valeurs sont dans `justepinte_config.json`.
+- `jp_demarrer` : `manches` (5, 10 ou 15 ; défaut 10), `categories` (liste parmi `alcool`, `fete`,
+  `culture`, `bouffe`, `jeux`, `insolite` ; vide = toutes). Les questions déjà posées ce soir dans le salon
+  ne reviennent pas tant qu'il en reste.
+- Actions : `jp_repondre` (`valeur` : nombre, ou texte « 12,5 », modifiable jusqu'à la révélation ; réponse
+  privée `jp_reponse`), `jp_suivant` (passer à la manche suivante quand tous les présents l'ont touché).
+- Phases (`jp_etat.phase`) : `question` (30 s, finit dès que tous les présents ont répondu), `revelation`
+  (12 s, `question.reponse`, `question.info`, `resultat.lignes` : valeur, écart, rang, points, gorgées),
+  `fin` (`final` : classement, gagnants, derniers). Événements `jp_revelation` et `jp_fin`.
+- Classement par écart à la bonne réponse, ex aequo au même rang. Points 3 / 2 / 1, +1 « dans le mille »
+  (5 % de la réponse, un an pour une année, ou la tolérance propre à la question).
+- Gorgées : le plus loin boit 2, l'avant-dernier 1 dès 5 répondants, un présent sans réponse boit 2 ;
+  « dans le mille » distribue 3 (jamais de gorgée pour lui) ; en fin de partie, le dernier au classement boit 3.
+- Secret : `jp_etat` n'a ni la bonne réponse ni les réponses des joueurs avant la révélation.
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -220,6 +240,7 @@ python tests/telephone_essai.py 300         # rotation, non-fuite des albums, vo
 python tests/undercover_essai.py             # règles, mot de Mr White (tolérance), égalités, non-fuite des mots
 python tests/conquete_essai.py 300          # Royaumes : cartes, règles dirigées, parties au hasard (invariants)
 python tests/casino_essai.py
+python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py

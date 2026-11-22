@@ -53,6 +53,8 @@ TYPES = [
     # Royaumes
     "sw_demarrer", "sw_choisir", "sw_declin", "sw_abandonner", "sw_conquerir", "sw_tenter", "sw_dragon",
     "sw_fin_conquete", "sw_redeployer", "sw_reaction",
+    # Le Juste Pinte
+    "jp_demarrer", "jp_repondre", "jp_suivant",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -113,6 +115,7 @@ DEMARRER = {
     "undercover": {"type": "uc_demarrer", "famille": "melange"},
     "telephone": {"type": "td_demarrer", "vitesse": "flash", "mode": "speedrun"},
     "conquete": {"type": "sw_demarrer", "vitesse": "flash"},
+    "justepinte": {"type": "jp_demarrer", "manches": 5},
 }
 
 

@@ -153,7 +153,7 @@ async def essai_changement_de_jeu():
     verifier(info["jeu"] == "kinito" and isinstance(info["depuis"], int) and info["fini"] is False,
              "/salon donne depuis quand le jeu tourne")
 
-    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "telephone", "beerbattle", "picolopoly", "casino"]
+    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "telephone", "justepinte", "beerbattle", "picolopoly", "casino"]
     for nom in ordre:
         wa.recus.clear()
         await envoyer(code, a, {"type": serveur.JEUX[nom].demarrage, "remplacer": True})

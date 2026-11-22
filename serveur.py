@@ -55,6 +55,12 @@ from conquete import (
     sw_initialiser, sw_action, sw_expirer, sw_etat_public, sw_catalogue,
     sw_prochaine_echeance, sw_joueur_parti, sw_joueur_revenu,
 )
+# Le Juste Pinte (estimation, une question chiffree par manche) : meme principe.
+from justepinte import (
+    JP_JOUEURS_MIN, JP_JOUEURS_MAX,
+    jp_initialiser, jp_action, jp_expirer, jp_etat_public, jp_reponse,
+    jp_prochaine_echeance, jp_joueur_parti, jp_joueur_revenu,
+)
 # Casino (roulette, blackjack, poker) : meme principe, moteur pur a part.
 from casino import (
     CS_JOUEURS_MIN, CS_JOUEURS_MAX,
@@ -1054,6 +1060,19 @@ async def _conquete_instantane(code_salon, joueur, complet, nouveau):
     etat = salons[code_salon]["etat"]
     await envoyer(joueur, sw_catalogue(etat))
     await envoyer(joueur, sw_etat_public(etat, time.time()))
+
+
+async def _justepinte_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    # Sa reponse reste secrete jusqu a la revelation : elle ne revient qu a
+    # lui (page rechargee). Un arrivant en pleine partie regarde.
+    if complet:
+        await envoyer(joueur, {"type": "jp_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer(joueur, jp_etat_public(etat, time.time()))
+    rep = jp_reponse(etat, joueur["index"])
+    if rep is not None:
+        await envoyer(joueur, rep)
 
 
 async def _casino_instantane(code_salon, joueur, complet, nouveau):
@@ -3021,6 +3040,116 @@ async def uc_traiter(code_salon, joueur, message):
 
 
 # =============================================================
+# LE JUSTE PINTE (estimation, prefixe jp_)
+# Les regles sont dans justepinte.py (chiffres : justepinte_config.json,
+# questions : justepinte_questions.py). Ici : le reseau et le minuteur qui
+# revele la reponse et enchaine les manches. Les questions deja posees
+# passent d une partie a la suivante dans le meme salon.
+# =============================================================
+
+async def jp_demarrer(code_salon, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if etat is not None and not (salon.get("jeu") == "justepinte" and etat.get("phase") == "fin"):
+        return
+    precedent = etat if salon.get("jeu") == "justepinte" else salon.get("jp_memoire")
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < JP_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"Le Juste Pinte demande au moins {JP_JOUEURS_MIN} joueurs."})
+        return
+    if nb > JP_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"Le Juste Pinte se joue à {JP_JOUEURS_MAX} joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    categories = message.get("categories")
+    salon["etat"] = jp_initialiser(
+        [j["nom"] for j in salon["joueurs"]], time.time(),
+        manches=message.get("manches"),
+        categories=categories if isinstance(categories, list) else None,
+        deja=(precedent or {}).get("deja"))
+    salon["jeu"] = "justepinte"
+    salon["jp_memoire"] = {"deja": salon["etat"]["deja"]}
+    await diffuser(code_salon, {"type": "jp_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer_indices(code_salon)
+    await jp_publier(code_salon, [])
+
+
+async def jp_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "justepinte" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, jp_etat_public(etat, time.time()))
+    jp_programmer(code_salon)
+    if etat.get("phase") == "fin" and not etat.get("fin_signalee"):
+        etat["fin_signalee"] = True
+        noms = [j["nom"] for j in salon["joueurs"]]
+        final = etat.get("final") or {}
+        gagnants = [noms[g] for g in final.get("gagnants", []) if g < len(noms)]
+        doses = {noms[i]: g for i, g in enumerate(etat["gorgees"]) if i < len(noms) and g}
+        await signaler(code_salon, "justepinte", "victoire", gagnants=gagnants,
+                       perdants=[n for n in noms if n not in gagnants],
+                       details={"points": dict(zip(noms, etat["points"])), "gorgees": doses})
+
+
+def jp_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("jp_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = jp_prochaine_echeance(etat) if etat and salon.get("jeu") == "justepinte" else None
+    salon["jp_minuteur"] = None if echeance is None else asyncio.create_task(
+        jp_minuteur(code_salon, salon, echeance))
+
+
+async def jp_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "justepinte":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("jp_minuteur") is not moi:
+            return
+        salon["jp_minuteur"] = None
+        etat = salon["etat"]
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = jp_expirer(etat, time.time())
+        if etat["version"] != version:
+            await jp_publier(code_salon, evenements)
+        else:
+            jp_programmer(code_salon)
+
+
+async def jp_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "justepinte" or etat is None:
+        return
+    version = etat["version"]
+    evenements = jp_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await jp_publier(code_salon, evenements)
+    else:
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+# =============================================================
 # TELEPHONE DESSINE (on ecrit, on dessine, on devine)
 # Les regles sont dans telephone.py (chiffres : telephone_config.json).
 # Ici : le reseau, la tache privee de chacun (la SEULE contribution
@@ -3279,7 +3408,7 @@ async def cs_demarrer(code_salon):
     etat = salon.get("etat")
     if etat is not None:
         jeu = salon.get("jeu")
-        fini = (jeu in ("menteur", "undercover", "telephone", "conquete") and etat.get("phase") == "fin") or \
+        fini = (jeu in ("menteur", "undercover", "telephone", "conquete", "justepinte") and etat.get("phase") == "fin") or \
                (jeu == "beerbattle" and etat.get("phase") == "fini")
         if not fini:
             return
@@ -3493,6 +3622,20 @@ async def _uc_parti(code_salon, index):
         await uc_publier(code_salon, [])
 
 
+def _jp_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        jp_joueur_revenu(etat, idx, time.time())
+        jp_programmer(code_salon)
+
+
+async def _jp_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        jp_joueur_parti(etat, index, time.time())
+        await jp_publier(code_salon, [])
+
+
 def _cs_revenu(code_salon, salon, idx):
     etat = salon["etat"]
     if idx < etat["nb_joueurs"]:
@@ -3579,6 +3722,12 @@ JEUX = {
         joueur_parti=_sw_parti, joueur_revenu=_sw_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("sw_minuteur",),
         min_joueurs=SW_JOUEURS_MIN, max_joueurs=SW_JOUEURS_MAX),
+    "justepinte": Jeu(
+        "justepinte", "Le Juste Pinte", "justepinte-3d-jeu.html", "jp_demarrer", _prefixe("jp_"),
+        jp_demarrer, jp_traiter, _justepinte_instantane,
+        joueur_parti=_jp_parti, joueur_revenu=_jp_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("jp_minuteur",),
+        min_joueurs=JP_JOUEURS_MIN, max_joueurs=JP_JOUEURS_MAX),
 }
 
 
