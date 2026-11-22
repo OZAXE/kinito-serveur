@@ -32,6 +32,7 @@ jobs:
           - conquete_essai.py 300
           - justepinte_essai.py 300
           - quidenous_essai.py 300
+          - tournee_essai.py 300
           - picolopoly_essai.py 300
           - non_fuite_essai.py 300
     steps:
@@ -54,7 +55,7 @@ jobs:
       matrix:
         test: [presents_navigateur, mode_test_navigateur, menteur_annonces_navigateur, solo_navigateur,
                undercover_navigateur, conquete_navigateur, telephone_navigateur, telephone_modes_navigateur,
-               justepinte_navigateur, quidenous_navigateur, navigateur, soiree_navigateur, enquete_navigateur]
+               justepinte_navigateur, quidenous_navigateur, tournee_navigateur, navigateur, soiree_navigateur, enquete_navigateur]
     steps:
       - uses: actions/checkout@v5
       - name: Site publié (table-de-jeu, main)

@@ -37,9 +37,19 @@ async function appuyer(page, texte, delai = 15000) {
 async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).json(); }
 
 // L'accueil range les jeux dans son onglet « Jeux » (caché au départ).
+// Clics par la page, réessayés : un clic Playwright attend que l'accueil soit
+// immobile, et sur une machine lente le premier clic pouvait se perdre.
 async function ouvrirJeu(page, jeu) {
-  if (await page.$('#tab-jeux')) await page.click('#tab-jeux');
-  await page.click('a.jeu.' + jeu);
+  const depart = page.url();
+  for (let essai = 0; essai < 3 && page.url() === depart; essai++) {
+    await page.evaluate(j => {
+      const onglet = document.getElementById('tab-jeux');
+      if (onglet) onglet.click();
+      const a = document.querySelector('a.jeu.' + j);
+      if (a) a.click();
+    }, jeu).catch(() => {});
+    await page.waitForURL(u => u.toString() !== depart, { timeout: 10000 }).catch(() => {});
+  }
 }
 
 (async () => {
@@ -48,6 +58,16 @@ async function ouvrirJeu(page, jeu) {
   const dialogues = [];
   async function joueur(nom) {
     const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });
+    // Sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm décompressés>.
+    if (process.env.CDN_LOCAL) {
+      const path = require('path');
+      await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (r) => {
+        const m = r.request().url().match(/three@[^/]+\/(.*)$/);
+        r.fulfill({ path: path.join(process.env.CDN_LOCAL, 'three/package', m[1]), contentType: 'application/javascript' });
+      });
+      await ctx.route(/qrious\.min\.js$/, (r) => r.fulfill({ path: path.join(process.env.CDN_LOCAL, 'qrious/package/dist/qrious.min.js'), contentType: 'application/javascript' }));
+      await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ body: '', contentType: 'text/css' }));
+    }
     const page = await ctx.newPage();
     page.on('pageerror', e => erreurs.push(nom + ' : ' + e.message));
     page.on('dialog', d => { dialogues.push(nom + ' : ' + d.message()); d.accept(); });

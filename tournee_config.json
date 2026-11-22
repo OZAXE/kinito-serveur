@@ -1,0 +1,42 @@
+{
+  "_note": "La Tournée (party game plateau + mini-jeux) : toutes les valeurs chiffrées. Durées en secondes.",
+  "joueurs": {"min": 2, "max": 8},
+  "tours": {"defaut": 10, "choix": [5, 10, 15]},
+  "plateau": [
+    "depart", "pieces", "pieces", "piege", "evenement", "pieces",
+    "tournee", "pieces", "piege", "pieces", "evenement", "pieces",
+    "pieces", "piege", "tournee", "pieces", "evenement", "pieces",
+    "piege", "pieces", "pieces", "evenement", "tournee", "pieces"
+  ],
+  "pieces_depart": 10,
+  "capsule": {"prix": 20, "interdites": ["depart"]},
+  "cases": {
+    "pieces": {"pieces": 3},
+    "piege": {"pieces": -3, "boit": 1},
+    "tournee": {"distribue": 2},
+    "depart_passage": {"pieces": 5}
+  },
+  "evenements": [
+    {"id": "pourboire", "texte": "Pourboire généreux : +6 pièces.", "pieces": 6},
+    {"id": "tournee_generale", "texte": "Tournée générale : tout le monde boit 1 gorgée.", "tous_boivent": 1},
+    {"id": "pickpocket", "texte": "Pickpocket : tu voles 5 pièces au plus riche.", "vol": 5},
+    {"id": "raccourci", "texte": "Raccourci : tu files 3 cases avant la capsule.", "raccourci": 3},
+    {"id": "addition", "texte": "L'addition : -5 pièces.", "pieces": -5},
+    {"id": "cul_sec", "texte": "Cul sec ! Bois 2 gorgées, gagne 4 pièces.", "pieces": 4, "boit": 2}
+  ],
+  "minijeu": {
+    "gains": [10, 6, 3],
+    "dernier_boit": 2,
+    "consignes": 6,
+    "marge": 6
+  },
+  "delais": {
+    "des": 15,
+    "deplacement_base": 2.5,
+    "deplacement_par_joueur": 1.5,
+    "resultats": 10,
+    "absent": 3,
+    "retour": 10
+  },
+  "fin": {"dernier_boit": 3}
+}

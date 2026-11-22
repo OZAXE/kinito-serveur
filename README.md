@@ -12,7 +12,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`), `conquete.py` (Royaumes : chiffres
   dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`), `justepinte.py` (Le Juste Pinte : chiffres dans
   `justepinte_config.json`, questions dans `justepinte_questions.py`), `quidenous.py` (Qui de nous ? : chiffres dans
-  `quidenous_config.json`, cartes dans `quidenous_cartes.py`).
+  `quidenous_config.json`, cartes dans `quidenous_cartes.py`), `tournee.py` (La Tournée : chiffres et plateau dans
+  `tournee_config.json`, mini-jeux dans `tournee_minijeux.json`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -246,6 +247,33 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   1 gorgée. Fin : meilleur devin = plus de points ; le dernier au classement boit 2 (seules ces gorgées de fin
   partent dans `signaler`).
 
+## La Tournée (party game plateau + mini-jeux, préfixe `tr_`)
+
+- 2 à 8 joueurs, page `tournee-3d-jeu.html`. Un plateau en boucle de 24 cases (`plateau` de
+  `tournee_config.json` : `depart`, `pieces`, `piege`, `evenement`, `tournee`), une capsule d'or posée sur une
+  case. On commence au départ avec 10 pièces. Toutes les valeurs sont dans `tournee_config.json`.
+- `tr_demarrer` : `tours` (5, 10 ou 15 ; défaut 10). Le dernier mini-jeu joué dans le salon n'ouvre pas la partie suivante.
+- Un tour, quatre phases (`tr_etat.phase`) :
+  1. `des` (15 s) : `tr_lancer`, tout le monde en même temps ; le serveur tire le dé (événement `tr_de`,
+     `des` public). À l'échéance, les présents qui n'ont pas lancé lancent d'office.
+  2. `deplacement` (2,5 s + 1,5 s par joueur, sans action) : on avance dans l'ordre des dés, du plus haut au plus bas.
+     Passer par le départ : +5 pièces. Passer ou s'arrêter sur la capsule : achetée si on a 20 pièces (elle part
+     sur une autre case, loin des pions si possible). Puis la case d'arrivée : `pieces` +3, `piege` −3 et 1 gorgée,
+     `tournee` distribue 2, `evenement` tiré au hasard (`evenements`). `deplacements.lignes` : dé, départ, chemin,
+     arrivée, effets. Événement `tr_deplacements`.
+  3. `minijeu` (consignes 6 s + durée du mini-jeu + 6 s de marge) : `minijeu` = `{id, nom, regle, duree, sens,
+     consignes, graine}`, tiré dans `tournee_minijeux.json`, jamais deux fois de suite. Chaque téléphone joue en
+     local avec la même graine, puis envoie `tr_score` (`score`, borné à `[0, max]`, une seule fois ; réponse
+     privée `tr_score_recu`). `a_joue` dit qui a joué, jamais son score. Événement `tr_minijeu`.
+  4. `resultats` (10 s, ou `tr_suivant` de tous) : `resultat_minijeu.lignes` (score, rang, pièces, gorgées) ;
+     selon `sens` (`grand` : le plus haut gagne, `petit` : le plus bas). Gains 10 / 6 / 3 pièces, le dernier
+     boit 2 ; sans score, on est dernier. Événement `tr_resultats`.
+- Fin (`final` : classement, gagnants, derniers) : classement aux capsules, puis aux pièces ; le dernier boit 3
+  (seules ces gorgées partent dans `signaler`). Événement `tr_fin`.
+- Mini-jeux actuels : Glisse-Pinte (`glisse_pinte`), Dégaine (`degaine`, temps de réaction : le plus bas gagne),
+  Remplis la pinte (`remplis_pinte`). Ajouter un mini-jeu = une entrée dans `tournee_minijeux.json` et un module
+  `commun/minijeux/<id>.js` sur le site.
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -262,6 +290,7 @@ python tests/conquete_essai.py 300          # Royaumes : cartes, règles dirigé
 python tests/casino_essai.py
 python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
 python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des votes, désignés, paris, gorgées
+python tests/tournee_essai.py 300        # La Tournée : déplacements, capsule, cases, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py
@@ -276,6 +305,7 @@ node tests/undercover_navigateur.js [captures]  # Undercover : partie complète 
 node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 navigateurs, en touchant la carte
 node tests/justepinte_navigateur.js [captures] # Le Juste Pinte : 5 questions à 3 navigateurs, dans le mille, classement, Rejouer
 node tests/quidenous_navigateur.js [captures]  # Qui de nous ? : 5 cartes à 3 navigateurs, vote, pari, à découvert, titre, Rejouer
+node tests/tournee_navigateur.js [captures]    # La Tournée : 5 tours à 3 navigateurs, dés, plateau, mini-jeux au doigt, classement, Rejouer
 # Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte, quidenous et mode test)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
