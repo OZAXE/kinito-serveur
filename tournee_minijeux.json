@@ -11,6 +11,19 @@
     {"id": "attrape_glacons", "nom": "Attrape-Glaçons", "regle": "Glisse ton verre pour attraper glaçons (+1) et citrons (+3). Un piment : -3 et 1 gorgée.", "duree": 20, "sens": "grand", "max": 300, "gorgees_max": 2},
     {"id": "chrono_mousse", "nom": "Chrono-Mousse", "regle": "Garde le doigt appuyé et relâche pile à 3, 5 puis 7 secondes. Le chrono disparaît vite : compte dans ta tête.", "duree": 38, "sens": "petit", "max": 15000},
     {"id": "bon_verre", "nom": "Le Bon Verre", "regle": "Trouve le verre que le client commande, le plus vite possible. 6 commandes. Mauvais verre : +1,5 s.", "duree": 32, "sens": "petit", "max": 60000},
-    {"id": "sol_glissant", "nom": "Sol glissant", "regle": "Glisse à gauche et à droite pour éviter flaques et bouteilles. 3 chocs et ton plateau tombe (1 gorgée).", "duree": 25, "sens": "grand", "max": 250, "gorgees_max": 1}
+    {"id": "sol_glissant", "nom": "Sol glissant", "regle": "Glisse à gauche et à droite pour éviter flaques et bouteilles. 3 chocs et ton plateau tombe (1 gorgée).", "duree": 25, "sens": "grand", "max": 250, "gorgees_max": 1},
+    {"id": "flechettes", "nom": "Fléchettes", "regle": "Le viseur tremble sur la cible : touche pour lancer au bon moment. 5 fléchettes, le centre vaut 50.", "duree": 20, "sens": "grand", "max": 250},
+    {"id": "tempo", "nom": "Le Bon Tempo", "regle": "Touche la colonne quand la capsule passe sur la ligne. Pile : 10 points, presque : 5.", "duree": 24, "sens": "grand", "max": 600},
+    {"id": "paires", "nom": "Paires de Sous-Bocks", "regle": "Retourne les sous-bocks deux par deux et retrouve les 8 paires le plus vite possible. Erreur : +1 s.", "duree": 40, "sens": "petit", "max": 200000},
+    {"id": "equilibre", "nom": "Plateau en équilibre", "regle": "Le plateau penche : glisse le doigt pour garder la pinte au centre. Si elle tombe, 1 gorgée.", "duree": 25, "sens": "grand", "max": 250, "gorgees_max": 1},
+    {"id": "tranche_citron", "nom": "Tranche-Citron", "regle": "Tranche les fruits qui sautent d'un coup de doigt. Une bouteille tranchée : -5 et 1 gorgée.", "duree": 22, "sens": "grand", "max": 300, "gorgees_max": 2},
+    {"id": "chasse_mouches", "nom": "Chasse-Mouches", "regle": "Écrase les mouches avant qu'elles s'envolent. Pas les guêpes : -3.", "duree": 22, "sens": "grand", "max": 200},
+    {"id": "addition", "nom": "L'Addition", "regle": "Trouve le bon total de la note, le plus de fois possible. Une erreur : -1 (3 erreurs : 1 gorgée).", "duree": 30, "sens": "grand", "max": 100, "gorgees_max": 1},
+    {"id": "tire_bouchon", "nom": "Tire-Bouchon", "regle": "Tourne le doigt en rond autour de la bouteille pour la déboucher. 3 bouteilles, le plus vite possible.", "duree": 30, "sens": "petit", "max": 60000},
+    {"id": "bonneteau", "nom": "Bonneteau", "regle": "Suis la capsule sous les verres qui se mélangent, puis touche le bon. 5 manches.", "duree": 45, "sens": "grand", "max": 50},
+    {"id": "saute_tabouret", "nom": "Saute-Tabouret", "regle": "Touche pour sauter par-dessus les tabourets. 3 chocs et c'est fini.", "duree": 25, "sens": "grand", "max": 100},
+    {"id": "bon_cocktail", "nom": "La Bonne Couleur", "regle": "Touche la couleur de l'ENCRE, pas le mot écrit. Bonne réponse +1, mauvaise -1.", "duree": 25, "sens": "grand", "max": 100},
+    {"id": "rond_parfait", "nom": "Le Rond Parfait", "regle": "Dessine d'un seul trait le rond le plus parfait possible. 3 essais, chacun sur 100.", "duree": 25, "sens": "grand", "max": 300},
+    {"id": "cacahuete", "nom": "Lancer de Cacahuètes", "regle": "Lance la cacahuète d'un coup de doigt vers le haut, dans la bouche qui bouge. 6 lancers.", "duree": 30, "sens": "grand", "max": 18}
   ]
 }
