@@ -1,0 +1,36 @@
+{
+  "_note": "Qui de nous ? : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Durées en secondes.",
+  "joueurs": {
+    "min": 3,
+    "max": 8
+  },
+  "manches": {
+    "defaut": 10,
+    "choix": [
+      5,
+      10,
+      15
+    ]
+  },
+  "paquets": [
+    "gentil",
+    "epice",
+    "melange"
+  ],
+  "paquet_defaut": "gentil",
+  "delais": {
+    "vote": 25,
+    "revelation": 12,
+    "absent": 3,
+    "retour": 10
+  },
+  "points": {
+    "bon_pari": 1
+  },
+  "gorgees": {
+    "designe": 2,
+    "mauvais_pari": 1,
+    "sans_vote": 1,
+    "fin_dernier": 2
+  }
+}
