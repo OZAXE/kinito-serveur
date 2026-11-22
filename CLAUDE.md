@@ -20,7 +20,7 @@ dans la même modification quand un comportement change.
 Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
 
 - **Registre des jeux** `JEUX` (`serveur.py`) : kinito, beerbattle, buckshot, picolopoly,
-  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`), conquete (Royaumes, préfixe `sw_`), justepinte (Le Juste Pinte, préfixe `jp_`), quidenous (Qui de nous ?, préfixe `qn_`), tournee (La Tournée, party game, préfixe `tr_`). Chaque jeu y est déclaré une fois
+  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`), conquete (Royaumes, préfixe `sw_`), justepinte (Le Juste Pinte, préfixe `jp_`), quidenous (Qui de nous ?, préfixe `qn_`), tournee (La Tournée, party game, préfixe `tr_`), loupgarou (Loup-Garou, rôles cachés, 4 à 15 joueurs, préfixe `lg_`). Chaque jeu y est déclaré une fois
   (démarrage, actions, reprise, départ, retour, minuteurs, nombre de joueurs) : ajouter un jeu
   = ajouter une entrée.
 - **Moteurs de règles purs** à part, testables hors ligne : `picolopoly.py`, `menteur.py`,
@@ -30,7 +30,7 @@ Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
   `justepinte_config.json`, questions `justepinte_questions.py`), `quidenous.py` (config
   `quidenous_config.json`, cartes `quidenous_cartes.py`), `tournee.py` (chiffres
   `tournee_config.json`, plateaux `tournee_plateaux.json` fabriqués par `tournee_plateaux.py`, mini-jeux
-  `tournee_minijeux.json`), `enquete.py`, `bingo.py`.
+  `tournee_minijeux.json`), `loupgarou.py` (chiffres `loupgarou_config.json`), `enquete.py`, `bingo.py`.
 - `stockage.py` : Postgres Neon si `DATABASE_URL` est défini (variable Render, jamais dans le
   dépôt), sinon mémoire. Le serveur ne doit jamais planter à cause de la base.
 - `protection.py` : garde-fous (débit, taille, connexions par IP).
@@ -69,6 +69,7 @@ python tests/conquete_essai.py 300
 python tests/justepinte_essai.py 300
 python tests/quidenous_essai.py 300
 python tests/tournee_essai.py 300
+python tests/loupgarou_essai.py 300
 python tests/picolopoly_essai.py 300
 python tests/non_fuite_essai.py 300   # rien ne trahit le tueur de l'Enquête
 ```

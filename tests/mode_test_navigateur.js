@@ -15,7 +15,10 @@ const PAGES = {
   picolopoly: 'picolopoly-3d-jeu.html', menteur: 'menteur-3d-jeu.html', casino: 'casino-3d-jeu.html',
   undercover: 'undercover-3d-jeu.html', telephone: 'telephone-jeu.html', conquete: 'conquete-3d-jeu.html',
   justepinte: 'justepinte-3d-jeu.html', quidenous: 'quidenous-3d-jeu.html', tournee: 'tournee-3d-jeu.html',
+  loupgarou: 'loupgarou-3d-jeu.html',
 };
+// Joueurs test ajoutés (le Loup-Garou se joue à 4 au moins).
+const NB_BOTS = { loupgarou: 3 };
 const JEUX = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PAGES);
 const attendre = ms => new Promise(r => setTimeout(r, ms));
 let echecs = 0;
@@ -67,9 +70,10 @@ async function tester(nav, jeu) {
   verifier(onglet, 'onglet 🧪 présent pour Admin01');
   if (!onglet) { await ctx.close(); return; }
   await p.click('#onglet-test');
-  for (let i = 0; i < 2; i++) { await cliquerTexte(p.mainFrame(), /＋ Bot/); await attendre(400); }
-  const trois = await attendreQue(async () => { const e = await etat(code); return e.joueurs && e.joueurs.filter(j => !j.parti).length === 3 && e.joueurs.map(j => j.nom); }, 60000);
-  verifier(!!trois, 'deux joueurs test rejoignent la table : ' + JSON.stringify(trois));
+  const nbBots = NB_BOTS[jeu] || 2;
+  for (let i = 0; i < nbBots; i++) { await cliquerTexte(p.mainFrame(), /＋ Bot/); await attendre(400); }
+  const trois = await attendreQue(async () => { const e = await etat(code); return e.joueurs && e.joueurs.filter(j => !j.parti).length === nbBots + 1 && e.joueurs.map(j => j.nom); }, 60000);
+  verifier(!!trois, nbBots + ' joueurs test rejoignent la table : ' + JSON.stringify(trois));
   const session = await p.evaluate(() => Object.keys(localStorage).filter(k => /session/.test(k) && !k.startsWith('siege:')).map(k => [k, localStorage.getItem(k)]));
   verifier(session.every(([, v]) => !/Bot/.test(v)), 'la session d’Admin01 n’est pas écrasée par les bots');
   verifier(await p.evaluate(() => JSON.parse(localStorage.getItem('shield.nom')) === 'Admin01'), 'le prénom d’Admin01 reste le sien');
@@ -83,7 +87,7 @@ async function tester(nav, jeu) {
     await cliquerTexte(p.mainFrame(), /^Remplacer$/);
     return false;
   }, 60000);
-  verifier(lance, 'Admin01 lance la partie à 3');
+  verifier(lance, 'Admin01 lance la partie à ' + (nbBots + 1));
   // Jouer à la place de Bot 1
   await p.click('#onglet-test');
   await cliquerTexte(p.mainFrame(), /^Bot 1$/);
@@ -99,11 +103,11 @@ async function tester(nav, jeu) {
     // La table change de jeu : la nouvelle page recrée les bots, qui la rejoignent.
     const suivant = JEUX[1];
     await p.goto(SITE + PAGES[suivant] + '?salon=' + code, { timeout: 120000 });
-    const suivent = await attendreQue(() => p.evaluate(() => document.querySelectorAll('iframe[data-siege]').length === 2), 30000);
-    verifier(suivent, 'changement de jeu (' + suivant + ') : les deux bots suivent');
+    const suivent = await attendreQue(() => p.evaluate(n => document.querySelectorAll('iframe[data-siege]').length === n, nbBots), 30000);
+    verifier(suivent, 'changement de jeu (' + suivant + ') : les ' + nbBots + ' bots suivent');
     const tous = await attendreQue(async () => {
       const ifr = p.frames().filter(f => /siege_test=/.test(f.url()));
-      return ifr.length === 2 && (await Promise.all(ifr.map(f => f.evaluate(() => !!window.Soiree).catch(() => false)))).every(Boolean);
+      return ifr.length === nbBots && (await Promise.all(ifr.map(f => f.evaluate(() => !!window.Soiree).catch(() => false)))).every(Boolean);
     }, 60000);
     verifier(tous, '  et leurs pages sont chargées');
   }

@@ -1,0 +1,43 @@
+{
+  "_note": "Loup-Garou : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Durées en secondes.",
+  "joueurs": {
+    "min": 4,
+    "max": 15
+  },
+  "loups": {
+    "_note": "Nombre de loups automatique : 1, plus un loup par seuil dépassé (7 joueurs = 2 loups, 11 = 3, 14 = 4).",
+    "seuils": [6, 10, 13]
+  },
+  "speciaux": {
+    "_note": "Rôles spéciaux proposés par défaut, avec le nombre de joueurs à partir duquel ils entrent dans la partie.",
+    "ordre": ["cartomancienne", "videur", "herboriste", "braconnier"],
+    "a_partir_de": {
+      "cartomancienne": 4,
+      "videur": 6,
+      "herboriste": 7,
+      "braconnier": 8
+    }
+  },
+  "delais": {
+    "role": 25,
+    "nuit": 45,
+    "potion": 25,
+    "potion_vide_min": 5,
+    "potion_vide_max": 9,
+    "aube": 12,
+    "tir": 25,
+    "debat": 180,
+    "verdict": 12,
+    "absent": 3,
+    "retour": 15
+  },
+  "gorgees": {
+    "devore": 2,
+    "empoisonne": 2,
+    "abattu": 2,
+    "elimine": 2,
+    "loup_demasque": 3,
+    "accusateur_innocent": 1,
+    "perdant": 2
+  }
+}

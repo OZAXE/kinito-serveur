@@ -153,8 +153,10 @@ async def essai_changement_de_jeu():
     verifier(info["jeu"] == "kinito" and isinstance(info["depuis"], int) and info["fini"] is False,
              "/salon donne depuis quand le jeu tourne")
 
-    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "telephone", "justepinte", "quidenous", "tournee", "beerbattle", "picolopoly", "casino"]
+    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "telephone", "justepinte", "quidenous", "tournee", "loupgarou", "beerbattle", "picolopoly", "casino"]
     for nom in ordre:
+        if nom == "loupgarou":
+            ugo = await entrer(code, "Ugo")      # le Loup-Garou se joue a 4 au moins
         wa.recus.clear()
         await envoyer(code, a, {"type": serveur.JEUX[nom].demarrage, "remplacer": True})
         verifier(salon["jeu"] == nom and salon["etat"] is not None, f"on passe a {nom}")
@@ -164,6 +166,8 @@ async def essai_changement_de_jeu():
                       if k != f"{serveur.JEUX[nom].minuteurs[0] if serveur.JEUX[nom].minuteurs else ''}"
                       and salon.get(k) is not None and not salon[k].done()],
                  "  aucun minuteur de l ancien jeu ne tourne encore")
+
+    await partir(code, ugo[0])             # Ugo repart : la suite compte sans lui
 
     # Une action d un autre jeu est ignoree.
     etat = salon["etat"]

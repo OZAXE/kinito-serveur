@@ -78,6 +78,11 @@ async def etat(code: str):
                "scores": e.get("scores"), "minijeu": e.get("minijeu"), "des": e.get("des"),
                "plateau": e.get("plateau"), "choix": e.get("choix")}
               if salon.get("jeu") == "tournee" else None,
+        # Loup-Garou : les roles et la nuit en cours, pour jouer chaque role depuis les pages.
+        "lg": {"roles": e.get("roles"), "vivants": e.get("vivants"), "nuit": e.get("nuit"), "jour": e.get("jour"),
+               "meute": e.get("meute"), "victime": e.get("victime"), "potions": e.get("potions"),
+               "tireur": e.get("tireur"), "gorgees": e.get("gorgees")}
+              if salon.get("jeu") == "loupgarou" else None,
     }
 
 
