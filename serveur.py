@@ -3329,9 +3329,11 @@ async def tr_demarrer(code_salon, message):
     salon["etat"] = tr_initialiser(
         [j["nom"] for j in salon["joueurs"]], time.time(),
         tours=message.get("tours"),
-        deja=precedent)
+        deja=precedent,
+        plateau=message.get("plateau"))
     salon["jeu"] = "tournee"
-    salon["tr_memoire"] = {"dernier_minijeu": salon["etat"]["dernier_minijeu"]}
+    salon["tr_memoire"] = {"dernier_minijeu": salon["etat"]["dernier_minijeu"], "plateau": salon["etat"]["plateau"],
+                           "minijeux_recents": salon["etat"].get("minijeux_recents", [])}
     await diffuser(code_salon, {"type": "tr_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
     await envoyer_indices(code_salon)
     await tr_publier(code_salon, [])

@@ -58,7 +58,7 @@ TYPES = [
     # Qui de nous ?
     "qn_demarrer", "qn_voter", "qn_suivant",
     # La Tournee
-    "tr_demarrer", "tr_lancer", "tr_score", "tr_suivant",
+    "tr_demarrer", "tr_lancer", "tr_chemin", "tr_score", "tr_suivant",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
