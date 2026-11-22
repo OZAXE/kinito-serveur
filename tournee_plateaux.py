@@ -21,13 +21,16 @@ import os
 _ICI = os.path.dirname(os.path.abspath(__file__))
 
 
-def _boucle(types, rx, rz):
+def _boucle(types, rx, rz, ondes=()):
+    """Boucle principale. ondes : (amplitude, frequence, phase) qui font serpenter
+    le chemin dans le decor (le site pose le monde 3D autour)."""
     n = len(types)
     cases = []
     for k, t in enumerate(types):
         # Le depart en bas (cote joueur), on tourne dans le sens des aiguilles.
         a = math.pi / 2 + 2 * math.pi * k / n
-        cases.append({"id": k, "type": t, "x": round(rx * math.cos(a), 3), "z": round(rz * math.sin(a), 3),
+        r = 1 + sum(amp * math.sin(f * a + ph) for amp, f, ph in ondes)
+        cases.append({"id": k, "type": t, "x": round(rx * r * math.cos(a), 3), "z": round(rz * r * math.sin(a), 3),
                       "suivants": [(k + 1) % n]})
     return cases
 
@@ -57,11 +60,11 @@ def terrasse():
     types = ["depart", "pieces", "pieces", "evenement", "pieces", "chance", "pieces", "piege",
              "pieces", "tournee", "pieces", "evenement", "pieces", "pieces", "chance", "pieces",
              "piege", "pieces", "evenement", "pieces", "pieces", "tournee", "pieces", "pieces"]
-    cases = _boucle(types, 1.0, 0.82)
+    cases = _boucle(types, 1.02, 0.84, [(0.07, 3, 0.4), (0.04, 5, 1.3)])
     _branche(cases, 4, 14, ["pieces", "piege", "pieces", "evenement"], 0.0, "la pergola")
     return {
         "id": "terrasse", "nom": "La Terrasse", "difficulte": "facile", "icone": "🌞",
-        "description": "Un tour au soleil, un raccourci par la pergola. Peu de pièges, peu de surprises, on boit peu.",
+        "description": "Un port au soleil, un raccourci par la pergola. Peu de pièges, peu de surprises, on boit peu.",
         "cases": cases,
         "videur": None,
         "prix_capsule": 20,
@@ -80,12 +83,12 @@ def pub():
              "pieces", "chance", "pieces", "pieces", "evenement", "piege", "pieces", "duel",
              "pieces", "pieces", "evenement", "pieces", "pieces", "piege", "tournee", "pieces",
              "pieces", "chance", "pieces", "evenement"]
-    cases = _boucle(types, 1.12, 0.88)
+    cases = _boucle(types, 1.1, 0.88, [(0.08, 4, 0.2), (0.05, 3, 2.1)])
     _branche(cases, 3, 11, ["evenement", "chance", "pieces", "duel", "pieces"], 0.3, "l'arrière-salle")
     _branche(cases, 17, 24, ["piege", "pieces", "piege"], 0.4, "le fumoir")
     return {
         "id": "pub", "nom": "Le Pub", "difficulte": "moyen", "icone": "🍺",
-        "description": "Deux embranchements, des duels et des vols de pièces. Une surprise du patron tous les 3 tours.",
+        "description": "La ville de nuit : deux embranchements, des duels et des vols de pièces. Une surprise du patron tous les 3 tours.",
         "cases": cases,
         "videur": None,
         "prix_capsule": 20,
@@ -104,14 +107,14 @@ def cave():
              "duel", "pieces", "piege", "pieces", "pieces", "evenement", "piege", "pieces",
              "tournee", "pieces", "chance", "pieces", "piege", "pieces", "pieces", "evenement",
              "pieces", "duel", "pieces", "piege", "pieces", "tournee"]
-    cases = _boucle(types, 1.18, 0.92)
+    cases = _boucle(types, 1.14, 0.9, [(0.09, 5, 0.9), (0.05, 2, 0.3)])
     _trappes(cases, 7, 22)
     _branche(cases, 2, 9, ["pieces", "evenement", "pieces", "chance"], 0.35, "le couloir des fûts")
     _branche(cases, 12, 21, ["piege", "chance", "duel", "pieces", "piege"], 0.25, "les catacombes")
     _branche(cases, 24, 28, ["pieces", "pieces"], 1.75, "l'escalier")
     return {
         "id": "cave", "nom": "La Cave", "difficulte": "difficile", "icone": "💀",
-        "description": "Trois chemins, deux trappes, un videur qui rôde, des capsules qui se volent : tout peut basculer.",
+        "description": "Des caves volcaniques : trois chemins, deux trappes, un videur qui rôde, des capsules qui se volent : tout peut basculer.",
         "cases": cases,
         "videur": {"depart": 16, "pas_min": 1, "pas_max": 3, "fouille": -2},
         "prix_capsule": 20,

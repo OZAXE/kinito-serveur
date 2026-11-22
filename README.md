@@ -254,7 +254,9 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   `tournee_plateaux.py`, ne pas le modifier à la main) : **La Terrasse** (`terrasse`, facile), **Le Pub** (`pub`,
   moyen, défaut), **La Cave** (`cave`, difficile). Un plateau = une boucle et des branches ; chaque case a un
   `type` (`depart`, `pieces`, `piege`, `evenement`, `tournee`, `chance`, `duel`, `trappe`), des `suivants` (deux =
-  embranchement), une `zone` (nom de la branche) et des coordonnées `x`, `z` pour le site. Chaque plateau a ses
+  embranchement), une `zone` (nom de la branche) et des coordonnées `x`, `z` pour le site, qui pose autour un
+  monde 3D (`commun/mondes3d.js` : port ensoleillé, ville de nuit, caves volcaniques ; la boucle serpente pour lui
+  laisser de la place). Chaque plateau a ses
   gains (`pieces`), ses gorgées (`boire`), ses événements de case, ses cartes chance et ses événements de plateau.
   La difficulté, c'est surtout les **retournements** : rien à la Terrasse ; vols de pièces, échanges de place,
   duels et coup de pouce au dernier au Pub ; à la Cave en plus, vol de capsule, duels pour une capsule, partage
