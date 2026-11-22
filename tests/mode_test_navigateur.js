@@ -14,7 +14,7 @@ const PAGES = {
   kinito: 'kinito-3d-jeu.html', beerbattle: 'beerbattle-3d-jeu.html', buckshot: 'buckshot-3d-jeu.html',
   picolopoly: 'picolopoly-3d-jeu.html', menteur: 'menteur-3d-jeu.html', casino: 'casino-3d-jeu.html',
   undercover: 'undercover-3d-jeu.html', telephone: 'telephone-jeu.html', conquete: 'conquete-3d-jeu.html',
-  justepinte: 'justepinte-3d-jeu.html',
+  justepinte: 'justepinte-3d-jeu.html', quidenous: 'quidenous-3d-jeu.html',
 };
 const JEUX = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PAGES);
 const attendre = ms => new Promise(r => setTimeout(r, ms));
