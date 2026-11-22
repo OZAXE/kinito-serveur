@@ -1,8 +1,16 @@
 {
-  "_note": "Mini-jeux de La Tournée. Chaque mini-jeu se joue en local sur chaque téléphone (même graine pour tous) ; le score part au serveur. sens : grand = le plus haut gagne, petit = le plus bas gagne. Le site a un module commun/minijeux/<id>.js par mini-jeu.",
+  "_note": "Mini-jeux de La Tournée. Chaque mini-jeu se joue en local sur chaque téléphone (même graine pour tous) ; le score part au serveur. sens : grand = le plus haut gagne, petit = le plus bas gagne. Le site a un module commun/minijeux/<id>.js par mini-jeu. equipes : false si le mini-jeu ne se joue jamais en équipes. gorgees_max : gorgées qu'on peut boire pendant ce mini-jeu (petites gorgées, jamais de cul sec).",
   "minijeux": [
     {"id": "glisse_pinte", "nom": "Glisse-Pinte", "regle": "Fais glisser la pinte sur le comptoir : elle doit s'arrêter dans la zone dorée. 3 lancers.", "duree": 20, "sens": "grand", "max": 300},
-    {"id": "degaine", "nom": "Dégaine", "regle": "Touche l'écran dès que « TCHIN ! » s'affiche. Trop tôt, c'est raté. 3 manches.", "duree": 20, "sens": "petit", "max": 9000},
-    {"id": "remplis_pinte", "nom": "Remplis la pinte", "regle": "Appuie pour tirer la bière, relâche pile sur le trait. 3 pintes.", "duree": 22, "sens": "grand", "max": 300}
+    {"id": "degaine", "nom": "Dégaine", "regle": "Touche l'écran dès que « TCHIN ! » s'affiche. Trop tôt, c'est raté (2 faux départs : 1 gorgée). 3 manches.", "duree": 20, "sens": "petit", "max": 9000, "gorgees_max": 1},
+    {"id": "remplis_pinte", "nom": "Remplis la pinte", "regle": "Appuie pour tirer la bière, relâche pile sur le trait. 3 pintes.", "duree": 22, "sens": "grand", "max": 300},
+    {"id": "tape_tonneau", "nom": "Tape-Tonneau", "regle": "Tape le tonneau le plus vite possible pendant 8 secondes pour remplir ta chope.", "duree": 14, "sens": "grand", "max": 200},
+    {"id": "bon_compte", "nom": "Le Bon Compte", "regle": "Des verres défilent sur le comptoir : compte seulement ceux qu'on te demande. Écart de 3 ou plus : 1 gorgée.", "duree": 26, "sens": "petit", "max": 99, "gorgees_max": 1},
+    {"id": "memo_cocktail", "nom": "Mémo-Cocktail", "regle": "Regarde la recette du barman et refais-la dans l'ordre. Elle s'allonge à chaque fois. Une erreur et c'est fini.", "duree": 45, "sens": "grand", "max": 40},
+    {"id": "sous_bocks", "nom": "Pile de Sous-Bocks", "regle": "Touche pour lâcher le sous-bock sur la pile. Ce qui dépasse tombe. Monte la plus haute pile.", "duree": 30, "sens": "grand", "max": 80},
+    {"id": "attrape_glacons", "nom": "Attrape-Glaçons", "regle": "Glisse ton verre pour attraper glaçons (+1) et citrons (+3). Un piment : -3 et 1 gorgée.", "duree": 20, "sens": "grand", "max": 300, "gorgees_max": 2},
+    {"id": "chrono_mousse", "nom": "Chrono-Mousse", "regle": "Garde le doigt appuyé et relâche pile à 3, 5 puis 7 secondes. Le chrono disparaît vite : compte dans ta tête.", "duree": 38, "sens": "petit", "max": 15000},
+    {"id": "bon_verre", "nom": "Le Bon Verre", "regle": "Trouve le verre que le client commande, le plus vite possible. 6 commandes. Mauvais verre : +1,5 s.", "duree": 32, "sens": "petit", "max": 60000},
+    {"id": "sol_glissant", "nom": "Sol glissant", "regle": "Glisse à gauche et à droite pour éviter flaques et bouteilles. 3 chocs et ton plateau tombe (1 gorgée).", "duree": 25, "sens": "grand", "max": 250, "gorgees_max": 1}
   ]
 }

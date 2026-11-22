@@ -1,0 +1,1135 @@
+{
+ "_note": "Plateaux de La Tournée, fabriqués par tournee_plateaux.py (ne pas modifier à la main).",
+ "defaut": "pub",
+ "plateaux": [
+  {
+   "id": "terrasse",
+   "nom": "La Terrasse",
+   "difficulte": "facile",
+   "icone": "🌞",
+   "description": "Un tour au soleil, un raccourci par la pergola. Peu de pièges, peu de surprises, on boit peu.",
+   "cases": [
+    {
+     "id": 0,
+     "type": "depart",
+     "x": 0.0,
+     "z": 0.82,
+     "suivants": [
+      1
+     ]
+    },
+    {
+     "id": 1,
+     "type": "pieces",
+     "x": -0.259,
+     "z": 0.792,
+     "suivants": [
+      2
+     ]
+    },
+    {
+     "id": 2,
+     "type": "pieces",
+     "x": -0.5,
+     "z": 0.71,
+     "suivants": [
+      3
+     ]
+    },
+    {
+     "id": 3,
+     "type": "evenement",
+     "x": -0.707,
+     "z": 0.58,
+     "suivants": [
+      4
+     ]
+    },
+    {
+     "id": 4,
+     "type": "pieces",
+     "x": -0.866,
+     "z": 0.41,
+     "suivants": [
+      5,
+      24
+     ]
+    },
+    {
+     "id": 5,
+     "type": "chance",
+     "x": -0.966,
+     "z": 0.212,
+     "suivants": [
+      6
+     ]
+    },
+    {
+     "id": 6,
+     "type": "pieces",
+     "x": -1.0,
+     "z": 0.0,
+     "suivants": [
+      7
+     ]
+    },
+    {
+     "id": 7,
+     "type": "piege",
+     "x": -0.966,
+     "z": -0.212,
+     "suivants": [
+      8
+     ]
+    },
+    {
+     "id": 8,
+     "type": "pieces",
+     "x": -0.866,
+     "z": -0.41,
+     "suivants": [
+      9
+     ]
+    },
+    {
+     "id": 9,
+     "type": "tournee",
+     "x": -0.707,
+     "z": -0.58,
+     "suivants": [
+      10
+     ]
+    },
+    {
+     "id": 10,
+     "type": "pieces",
+     "x": -0.5,
+     "z": -0.71,
+     "suivants": [
+      11
+     ]
+    },
+    {
+     "id": 11,
+     "type": "evenement",
+     "x": -0.259,
+     "z": -0.792,
+     "suivants": [
+      12
+     ]
+    },
+    {
+     "id": 12,
+     "type": "pieces",
+     "x": -0.0,
+     "z": -0.82,
+     "suivants": [
+      13
+     ]
+    },
+    {
+     "id": 13,
+     "type": "pieces",
+     "x": 0.259,
+     "z": -0.792,
+     "suivants": [
+      14
+     ]
+    },
+    {
+     "id": 14,
+     "type": "chance",
+     "x": 0.5,
+     "z": -0.71,
+     "suivants": [
+      15
+     ]
+    },
+    {
+     "id": 15,
+     "type": "pieces",
+     "x": 0.707,
+     "z": -0.58,
+     "suivants": [
+      16
+     ]
+    },
+    {
+     "id": 16,
+     "type": "piege",
+     "x": 0.866,
+     "z": -0.41,
+     "suivants": [
+      17
+     ]
+    },
+    {
+     "id": 17,
+     "type": "pieces",
+     "x": 0.966,
+     "z": -0.212,
+     "suivants": [
+      18
+     ]
+    },
+    {
+     "id": 18,
+     "type": "evenement",
+     "x": 1.0,
+     "z": -0.0,
+     "suivants": [
+      19
+     ]
+    },
+    {
+     "id": 19,
+     "type": "pieces",
+     "x": 0.966,
+     "z": 0.212,
+     "suivants": [
+      20
+     ]
+    },
+    {
+     "id": 20,
+     "type": "pieces",
+     "x": 0.866,
+     "z": 0.41,
+     "suivants": [
+      21
+     ]
+    },
+    {
+     "id": 21,
+     "type": "tournee",
+     "x": 0.707,
+     "z": 0.58,
+     "suivants": [
+      22
+     ]
+    },
+    {
+     "id": 22,
+     "type": "pieces",
+     "x": 0.5,
+     "z": 0.71,
+     "suivants": [
+      23
+     ]
+    },
+    {
+     "id": 23,
+     "type": "pieces",
+     "x": 0.259,
+     "z": 0.792,
+     "suivants": [
+      0
+     ]
+    },
+    {
+     "id": 24,
+     "type": "pieces",
+     "x": -0.534,
+     "z": 0.234,
+     "suivants": [
+      25
+     ],
+     "zone": "la pergola"
+    },
+    {
+     "id": 25,
+     "type": "piege",
+     "x": -0.232,
+     "z": 0.034,
+     "suivants": [
+      26
+     ],
+     "zone": "la pergola"
+    },
+    {
+     "id": 26,
+     "type": "pieces",
+     "x": 0.041,
+     "z": -0.19,
+     "suivants": [
+      27
+     ],
+     "zone": "la pergola"
+    },
+    {
+     "id": 27,
+     "type": "evenement",
+     "x": 0.285,
+     "z": -0.438,
+     "suivants": [
+      14
+     ],
+     "zone": "la pergola"
+    }
+   ],
+   "videur": null,
+   "prix_capsule": 20,
+   "pieces": {
+    "pieces": 3,
+    "piege": -2,
+    "depart": 5
+   },
+   "boire": {
+    "piege": 1,
+    "tournee": 1,
+    "duel": 1,
+    "minijeu_dernier": 1,
+    "fin_dernier": 2,
+    "videur": 0
+   },
+   "evenements": [
+    "pourboire",
+    "raccourci",
+    "addition",
+    "chanson"
+   ],
+   "chance": [
+    "jackpot",
+    "poche_trouee",
+    "elan"
+   ],
+   "duel_capsule": false,
+   "evenements_plateau": {
+    "tous_les": 4,
+    "liste": [
+     "soleil",
+     "apero",
+     "promo_capsule"
+    ]
+   }
+  },
+  {
+   "id": "pub",
+   "nom": "Le Pub",
+   "difficulte": "moyen",
+   "icone": "🍺",
+   "description": "Deux embranchements, des duels et des vols de pièces. Une surprise du patron tous les 3 tours.",
+   "cases": [
+    {
+     "id": 0,
+     "type": "depart",
+     "x": 0.0,
+     "z": 0.88,
+     "suivants": [
+      1
+     ]
+    },
+    {
+     "id": 1,
+     "type": "pieces",
+     "x": -0.249,
+     "z": 0.858,
+     "suivants": [
+      2
+     ]
+    },
+    {
+     "id": 2,
+     "type": "pieces",
+     "x": -0.486,
+     "z": 0.793,
+     "suivants": [
+      3
+     ]
+    },
+    {
+     "id": 3,
+     "type": "pieces",
+     "x": -0.698,
+     "z": 0.688,
+     "suivants": [
+      4,
+      28
+     ]
+    },
+    {
+     "id": 4,
+     "type": "evenement",
+     "x": -0.876,
+     "z": 0.549,
+     "suivants": [
+      5
+     ]
+    },
+    {
+     "id": 5,
+     "type": "piege",
+     "x": -1.009,
+     "z": 0.382,
+     "suivants": [
+      6
+     ]
+    },
+    {
+     "id": 6,
+     "type": "pieces",
+     "x": -1.092,
+     "z": 0.196,
+     "suivants": [
+      7
+     ]
+    },
+    {
+     "id": 7,
+     "type": "tournee",
+     "x": -1.12,
+     "z": 0.0,
+     "suivants": [
+      8
+     ]
+    },
+    {
+     "id": 8,
+     "type": "pieces",
+     "x": -1.092,
+     "z": -0.196,
+     "suivants": [
+      9
+     ]
+    },
+    {
+     "id": 9,
+     "type": "chance",
+     "x": -1.009,
+     "z": -0.382,
+     "suivants": [
+      10
+     ]
+    },
+    {
+     "id": 10,
+     "type": "pieces",
+     "x": -0.876,
+     "z": -0.549,
+     "suivants": [
+      11
+     ]
+    },
+    {
+     "id": 11,
+     "type": "pieces",
+     "x": -0.698,
+     "z": -0.688,
+     "suivants": [
+      12
+     ]
+    },
+    {
+     "id": 12,
+     "type": "evenement",
+     "x": -0.486,
+     "z": -0.793,
+     "suivants": [
+      13
+     ]
+    },
+    {
+     "id": 13,
+     "type": "piege",
+     "x": -0.249,
+     "z": -0.858,
+     "suivants": [
+      14
+     ]
+    },
+    {
+     "id": 14,
+     "type": "pieces",
+     "x": -0.0,
+     "z": -0.88,
+     "suivants": [
+      15
+     ]
+    },
+    {
+     "id": 15,
+     "type": "duel",
+     "x": 0.249,
+     "z": -0.858,
+     "suivants": [
+      16
+     ]
+    },
+    {
+     "id": 16,
+     "type": "pieces",
+     "x": 0.486,
+     "z": -0.793,
+     "suivants": [
+      17
+     ]
+    },
+    {
+     "id": 17,
+     "type": "pieces",
+     "x": 0.698,
+     "z": -0.688,
+     "suivants": [
+      18,
+      33
+     ]
+    },
+    {
+     "id": 18,
+     "type": "evenement",
+     "x": 0.876,
+     "z": -0.549,
+     "suivants": [
+      19
+     ]
+    },
+    {
+     "id": 19,
+     "type": "pieces",
+     "x": 1.009,
+     "z": -0.382,
+     "suivants": [
+      20
+     ]
+    },
+    {
+     "id": 20,
+     "type": "pieces",
+     "x": 1.092,
+     "z": -0.196,
+     "suivants": [
+      21
+     ]
+    },
+    {
+     "id": 21,
+     "type": "piege",
+     "x": 1.12,
+     "z": -0.0,
+     "suivants": [
+      22
+     ]
+    },
+    {
+     "id": 22,
+     "type": "tournee",
+     "x": 1.092,
+     "z": 0.196,
+     "suivants": [
+      23
+     ]
+    },
+    {
+     "id": 23,
+     "type": "pieces",
+     "x": 1.009,
+     "z": 0.382,
+     "suivants": [
+      24
+     ]
+    },
+    {
+     "id": 24,
+     "type": "pieces",
+     "x": 0.876,
+     "z": 0.549,
+     "suivants": [
+      25
+     ]
+    },
+    {
+     "id": 25,
+     "type": "chance",
+     "x": 0.698,
+     "z": 0.688,
+     "suivants": [
+      26
+     ]
+    },
+    {
+     "id": 26,
+     "type": "pieces",
+     "x": 0.486,
+     "z": 0.793,
+     "suivants": [
+      27
+     ]
+    },
+    {
+     "id": 27,
+     "type": "evenement",
+     "x": 0.249,
+     "z": 0.858,
+     "suivants": [
+      0
+     ]
+    },
+    {
+     "id": 28,
+     "type": "evenement",
+     "x": -0.562,
+     "z": 0.459,
+     "suivants": [
+      29
+     ],
+     "zone": "l'arrière-salle"
+    },
+    {
+     "id": 29,
+     "type": "chance",
+     "x": -0.481,
+     "z": 0.229,
+     "suivants": [
+      30
+     ],
+     "zone": "l'arrière-salle"
+    },
+    {
+     "id": 30,
+     "type": "pieces",
+     "x": -0.454,
+     "z": 0.0,
+     "suivants": [
+      31
+     ],
+     "zone": "l'arrière-salle"
+    },
+    {
+     "id": 31,
+     "type": "duel",
+     "x": -0.481,
+     "z": -0.229,
+     "suivants": [
+      32
+     ],
+     "zone": "l'arrière-salle"
+    },
+    {
+     "id": 32,
+     "type": "pieces",
+     "x": -0.562,
+     "z": -0.459,
+     "suivants": [
+      11
+     ],
+     "zone": "l'arrière-salle"
+    },
+    {
+     "id": 33,
+     "type": "piege",
+     "x": 0.565,
+     "z": -0.363,
+     "suivants": [
+      34
+     ],
+     "zone": "le fumoir"
+    },
+    {
+     "id": 34,
+     "type": "pieces",
+     "x": 0.551,
+     "z": -0.049,
+     "suivants": [
+      35
+     ],
+     "zone": "le fumoir"
+    },
+    {
+     "id": 35,
+     "type": "piege",
+     "x": 0.654,
+     "z": 0.255,
+     "suivants": [
+      24
+     ],
+     "zone": "le fumoir"
+    }
+   ],
+   "videur": null,
+   "prix_capsule": 20,
+   "pieces": {
+    "pieces": 3,
+    "piege": -3,
+    "depart": 5
+   },
+   "boire": {
+    "piege": 1,
+    "tournee": 2,
+    "duel": 2,
+    "minijeu_dernier": 2,
+    "fin_dernier": 3,
+    "videur": 0
+   },
+   "evenements": [
+    "pourboire",
+    "tournee_generale",
+    "pickpocket",
+    "raccourci",
+    "addition",
+    "courage",
+    "chanson"
+   ],
+   "chance": [
+    "jackpot",
+    "poche_trouee",
+    "echange",
+    "elan"
+   ],
+   "duel_capsule": false,
+   "evenements_plateau": {
+    "tous_les": 3,
+    "liste": [
+     "happy_hour",
+     "tournee_patron",
+     "capsule_bouge",
+     "addition_salee",
+     "coup_de_pouce"
+    ]
+   }
+  },
+  {
+   "id": "cave",
+   "nom": "La Cave",
+   "difficulte": "difficile",
+   "icone": "💀",
+   "description": "Trois chemins, deux trappes, un videur qui rôde, des capsules qui se volent : tout peut basculer.",
+   "cases": [
+    {
+     "id": 0,
+     "type": "depart",
+     "x": 0.0,
+     "z": 0.92,
+     "suivants": [
+      1
+     ]
+    },
+    {
+     "id": 1,
+     "type": "pieces",
+     "x": -0.245,
+     "z": 0.9,
+     "suivants": [
+      2
+     ]
+    },
+    {
+     "id": 2,
+     "type": "pieces",
+     "x": -0.48,
+     "z": 0.84,
+     "suivants": [
+      3,
+      30
+     ]
+    },
+    {
+     "id": 3,
+     "type": "piege",
+     "x": -0.694,
+     "z": 0.744,
+     "suivants": [
+      4
+     ]
+    },
+    {
+     "id": 4,
+     "type": "pieces",
+     "x": -0.877,
+     "z": 0.616,
+     "suivants": [
+      5
+     ]
+    },
+    {
+     "id": 5,
+     "type": "evenement",
+     "x": -1.022,
+     "z": 0.46,
+     "suivants": [
+      6
+     ]
+    },
+    {
+     "id": 6,
+     "type": "pieces",
+     "x": -1.122,
+     "z": 0.284,
+     "suivants": [
+      7
+     ]
+    },
+    {
+     "id": 7,
+     "type": "trappe",
+     "x": -1.174,
+     "z": 0.096,
+     "suivants": [
+      8
+     ],
+     "vers": 22
+    },
+    {
+     "id": 8,
+     "type": "duel",
+     "x": -1.174,
+     "z": -0.096,
+     "suivants": [
+      9
+     ]
+    },
+    {
+     "id": 9,
+     "type": "pieces",
+     "x": -1.122,
+     "z": -0.284,
+     "suivants": [
+      10
+     ]
+    },
+    {
+     "id": 10,
+     "type": "piege",
+     "x": -1.022,
+     "z": -0.46,
+     "suivants": [
+      11
+     ]
+    },
+    {
+     "id": 11,
+     "type": "pieces",
+     "x": -0.877,
+     "z": -0.616,
+     "suivants": [
+      12
+     ]
+    },
+    {
+     "id": 12,
+     "type": "pieces",
+     "x": -0.694,
+     "z": -0.744,
+     "suivants": [
+      13,
+      34
+     ]
+    },
+    {
+     "id": 13,
+     "type": "evenement",
+     "x": -0.48,
+     "z": -0.84,
+     "suivants": [
+      14
+     ]
+    },
+    {
+     "id": 14,
+     "type": "piege",
+     "x": -0.245,
+     "z": -0.9,
+     "suivants": [
+      15
+     ]
+    },
+    {
+     "id": 15,
+     "type": "pieces",
+     "x": -0.0,
+     "z": -0.92,
+     "suivants": [
+      16
+     ]
+    },
+    {
+     "id": 16,
+     "type": "tournee",
+     "x": 0.245,
+     "z": -0.9,
+     "suivants": [
+      17
+     ]
+    },
+    {
+     "id": 17,
+     "type": "pieces",
+     "x": 0.48,
+     "z": -0.84,
+     "suivants": [
+      18
+     ]
+    },
+    {
+     "id": 18,
+     "type": "chance",
+     "x": 0.694,
+     "z": -0.744,
+     "suivants": [
+      19
+     ]
+    },
+    {
+     "id": 19,
+     "type": "pieces",
+     "x": 0.877,
+     "z": -0.616,
+     "suivants": [
+      20
+     ]
+    },
+    {
+     "id": 20,
+     "type": "piege",
+     "x": 1.022,
+     "z": -0.46,
+     "suivants": [
+      21
+     ]
+    },
+    {
+     "id": 21,
+     "type": "pieces",
+     "x": 1.122,
+     "z": -0.284,
+     "suivants": [
+      22
+     ]
+    },
+    {
+     "id": 22,
+     "type": "trappe",
+     "x": 1.174,
+     "z": -0.096,
+     "suivants": [
+      23
+     ],
+     "vers": 7
+    },
+    {
+     "id": 23,
+     "type": "evenement",
+     "x": 1.174,
+     "z": 0.096,
+     "suivants": [
+      24
+     ]
+    },
+    {
+     "id": 24,
+     "type": "pieces",
+     "x": 1.122,
+     "z": 0.284,
+     "suivants": [
+      25,
+      39
+     ]
+    },
+    {
+     "id": 25,
+     "type": "duel",
+     "x": 1.022,
+     "z": 0.46,
+     "suivants": [
+      26
+     ]
+    },
+    {
+     "id": 26,
+     "type": "pieces",
+     "x": 0.877,
+     "z": 0.616,
+     "suivants": [
+      27
+     ]
+    },
+    {
+     "id": 27,
+     "type": "piege",
+     "x": 0.694,
+     "z": 0.744,
+     "suivants": [
+      28
+     ]
+    },
+    {
+     "id": 28,
+     "type": "pieces",
+     "x": 0.48,
+     "z": 0.84,
+     "suivants": [
+      29
+     ]
+    },
+    {
+     "id": 29,
+     "type": "tournee",
+     "x": 0.245,
+     "z": 0.9,
+     "suivants": [
+      0
+     ]
+    },
+    {
+     "id": 30,
+     "type": "pieces",
+     "x": -0.442,
+     "z": 0.557,
+     "suivants": [
+      31
+     ],
+     "zone": "le couloir des fûts"
+    },
+    {
+     "id": 31,
+     "type": "evenement",
+     "x": -0.487,
+     "z": 0.304,
+     "suivants": [
+      32
+     ],
+     "zone": "le couloir des fûts"
+    },
+    {
+     "id": 32,
+     "type": "pieces",
+     "x": -0.615,
+     "z": 0.079,
+     "suivants": [
+      33
+     ],
+     "zone": "le couloir des fûts"
+    },
+    {
+     "id": 33,
+     "type": "chance",
+     "x": -0.827,
+     "z": -0.117,
+     "suivants": [
+      9
+     ],
+     "zone": "le couloir des fûts"
+    },
+    {
+     "id": 34,
+     "type": "piege",
+     "x": -0.436,
+     "z": -0.56,
+     "suivants": [
+      35
+     ],
+     "zone": "les catacombes"
+    },
+    {
+     "id": 35,
+     "type": "chance",
+     "x": -0.16,
+     "z": -0.419,
+     "suivants": [
+      36
+     ],
+     "zone": "les catacombes"
+    },
+    {
+     "id": 36,
+     "type": "duel",
+     "x": 0.134,
+     "z": -0.321,
+     "suivants": [
+      37
+     ],
+     "zone": "les catacombes"
+    },
+    {
+     "id": 37,
+     "type": "pieces",
+     "x": 0.445,
+     "z": -0.266,
+     "suivants": [
+      38
+     ],
+     "zone": "les catacombes"
+    },
+    {
+     "id": 38,
+     "type": "piege",
+     "x": 0.775,
+     "z": -0.254,
+     "suivants": [
+      21
+     ],
+     "zone": "les catacombes"
+    },
+    {
+     "id": 39,
+     "type": "pieces",
+     "x": 1.175,
+     "z": 0.657,
+     "suivants": [
+      40
+     ],
+     "zone": "l'escalier"
+    },
+    {
+     "id": 40,
+     "type": "pieces",
+     "x": 0.961,
+     "z": 0.842,
+     "suivants": [
+      28
+     ],
+     "zone": "l'escalier"
+    }
+   ],
+   "videur": {
+    "depart": 16,
+    "pas_min": 1,
+    "pas_max": 3,
+    "fouille": -2
+   },
+   "prix_capsule": 20,
+   "pieces": {
+    "pieces": 3,
+    "piege": -4,
+    "depart": 5
+   },
+   "boire": {
+    "piege": 2,
+    "tournee": 3,
+    "duel": 3,
+    "minijeu_dernier": 3,
+    "fin_dernier": 5,
+    "videur": 2
+   },
+   "evenements": [
+    "pourboire",
+    "tournee_generale",
+    "pickpocket",
+    "raccourci",
+    "addition",
+    "courage",
+    "double_peine",
+    "vol_capsule"
+   ],
+   "chance": [
+    "jackpot",
+    "poche_trouee",
+    "echange",
+    "elan",
+    "vol_capsule"
+   ],
+   "duel_capsule": true,
+   "evenements_plateau": {
+    "tous_les": 2,
+    "liste": [
+     "tournee_patron",
+     "capsule_bouge",
+     "videur_enerve",
+     "melange",
+     "grosse_tournee",
+     "partage",
+     "coup_de_pouce"
+    ]
+   }
+  }
+ ]
+}

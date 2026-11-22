@@ -12,8 +12,9 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   chiffres dans `telephone_config.json`, phrases de départ dans `telephone_phrases.py`), `conquete.py` (Royaumes : chiffres
   dans `conquete_config.json`, cartes dans `conquete_cartes.json`, fabriquées par `conquete_cartes.py`), `justepinte.py` (Le Juste Pinte : chiffres dans
   `justepinte_config.json`, questions dans `justepinte_questions.py`), `quidenous.py` (Qui de nous ? : chiffres dans
-  `quidenous_config.json`, cartes dans `quidenous_cartes.py`), `tournee.py` (La Tournée : chiffres et plateau dans
-  `tournee_config.json`, mini-jeux dans `tournee_minijeux.json`).
+  `quidenous_config.json`, cartes dans `quidenous_cartes.py`), `tournee.py` (La Tournée : chiffres dans
+  `tournee_config.json`, plateaux dans `tournee_plateaux.json` fabriqués par `tournee_plateaux.py`, mini-jeux dans
+  `tournee_minijeux.json`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -249,30 +250,58 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 
 ## La Tournée (party game plateau + mini-jeux, préfixe `tr_`)
 
-- 2 à 8 joueurs, page `tournee-3d-jeu.html`. Un plateau en boucle de 24 cases (`plateau` de
-  `tournee_config.json` : `depart`, `pieces`, `piege`, `evenement`, `tournee`), une capsule d'or posée sur une
-  case. On commence au départ avec 10 pièces. Toutes les valeurs sont dans `tournee_config.json`.
-- `tr_demarrer` : `tours` (5, 10 ou 15 ; défaut 10). Le dernier mini-jeu joué dans le salon n'ouvre pas la partie suivante.
+- 2 à 8 joueurs, page `tournee-3d-jeu.html`. Trois plateaux dans `tournee_plateaux.json` (fabriqué par
+  `tournee_plateaux.py`, ne pas le modifier à la main) : **La Terrasse** (`terrasse`, facile), **Le Pub** (`pub`,
+  moyen, défaut), **La Cave** (`cave`, difficile). Un plateau = une boucle et des branches ; chaque case a un
+  `type` (`depart`, `pieces`, `piege`, `evenement`, `tournee`, `chance`, `duel`, `trappe`), des `suivants` (deux =
+  embranchement), une `zone` (nom de la branche) et des coordonnées `x`, `z` pour le site. Chaque plateau a ses
+  gains (`pieces`), ses gorgées (`boire`), ses événements de case, ses cartes chance et ses événements de plateau.
+  La difficulté, c'est surtout les **retournements** : rien à la Terrasse ; vols de pièces, échanges de place,
+  duels et coup de pouce au dernier au Pub ; à la Cave en plus, vol de capsule, duels pour une capsule, partage
+  de toutes les pièces, trappes et videur. Valeurs communes dans `tournee_config.json`.
+- `tr_demarrer` : `tours` (5, 10 ou 15 ; défaut 10), `plateau` (défaut : celui de la partie précédente du salon,
+  sinon `pub`). Le dernier mini-jeu joué dans le salon n'ouvre pas la partie suivante.
+- `tr_etat` : `carte` (le plateau complet : `id`, `nom`, `difficulte`, `cases`, `boire`...), `plateau` (liste des
+  types, ancien format), `positions`, `pieces`, `capsules`, `gorgees`, `capsule_case`, `prix_capsule`, `videur`
+  (case du videur ou `null`), `bonus`, `evenement_plateau`, `des`, `options`, `choix`...
+- Début de chaque tour (sauf le premier) : à la Cave, le videur avance de 1 à 3 cases ; tous les `tous_les` tours,
+  un événement de plateau (`evenement_plateau`, événement `tr_evenement_plateau`) : happy hour (pièces doublées),
+  promo sur la capsule, tournée du patron, capsule qui bouge, partage des pièces...
 - Un tour, quatre phases (`tr_etat.phase`) :
-  1. `des` (15 s) : `tr_lancer`, tout le monde en même temps ; le serveur tire le dé (événement `tr_de`,
-     `des` public). À l'échéance, les présents qui n'ont pas lancé lancent d'office.
+  1. `des` (20 s) : `tr_lancer`, tout le monde en même temps ; le serveur tire le dé (événement `tr_de`, `des`
+     public). Si plusieurs chemins sont possibles, `options[joueur]` les liste (`chemin`, `arrivee`, `libelle`,
+     `type_arrivee`) et le joueur choisit par `tr_chemin` (`choix` = indice). À l'échéance, dé et chemin au hasard.
   2. `deplacement` (2,5 s + 1,5 s par joueur, sans action) : on avance dans l'ordre des dés, du plus haut au plus bas.
-     Passer par le départ : +5 pièces. Passer ou s'arrêter sur la capsule : achetée si on a 20 pièces (elle part
-     sur une autre case, loin des pions si possible). Puis la case d'arrivée : `pieces` +3, `piege` −3 et 1 gorgée,
-     `tournee` distribue 2, `evenement` tiré au hasard (`evenements`). `deplacements.lignes` : dé, départ, chemin,
-     arrivée, effets. Événement `tr_deplacements`.
-  3. `minijeu` (consignes 6 s + durée du mini-jeu + 6 s de marge) : `minijeu` = `{id, nom, regle, duree, sens,
-     consignes, graine}`, tiré dans `tournee_minijeux.json`, jamais deux fois de suite. Chaque téléphone joue en
-     local avec la même graine, puis envoie `tr_score` (`score`, borné à `[0, max]`, une seule fois ; réponse
-     privée `tr_score_recu`). `a_joue` dit qui a joué, jamais son score. Événement `tr_minijeu`.
-  4. `resultats` (10 s, ou `tr_suivant` de tous) : `resultat_minijeu.lignes` (score, rang, pièces, gorgées) ;
-     selon `sens` (`grand` : le plus haut gagne, `petit` : le plus bas). Gains 10 / 6 / 3 pièces, le dernier
-     boit 2 ; sans score, on est dernier. Événement `tr_resultats`.
-- Fin (`final` : classement, gagnants, derniers) : classement aux capsules, puis aux pièces ; le dernier boit 3
-  (seules ces gorgées partent dans `signaler`). Événement `tr_fin`.
-- Mini-jeux actuels : Glisse-Pinte (`glisse_pinte`), Dégaine (`degaine`, temps de réaction : le plus bas gagne),
-  Remplis la pinte (`remplis_pinte`). Ajouter un mini-jeu = une entrée dans `tournee_minijeux.json` et un module
-  `commun/minijeux/<id>.js` sur le site.
+     Passer par le départ : +5 pièces. Passer ou s'arrêter sur la capsule : achetée si on a de quoi (elle part
+     ailleurs, pas juste devant un pion). Passer devant le videur : fouille (−2 pièces) ; s'arrêter sur lui :
+     retour au départ et gorgées. Puis la case d'arrivée : `pieces`, `piege` (pièces perdues et gorgées),
+     `tournee` (gorgées à distribuer), `evenement`, `chance`, `duel` (contre un joueur au hasard : 5 pièces, ou une
+     capsule à la Cave ; le perdant boit), `trappe` (on ressort par l'autre). `deplacements.lignes` : dé, départ,
+     chemin, arrivée, effets ; `deplacements.positions` : les positions finales. Événement `tr_deplacements`.
+  3. `minijeu` (consignes 7 s + durée du mini-jeu + 6 s de marge) : `minijeu` = `{id, nom, regle, duree, sens,
+     consignes, graine, equipes, gorgees_max}`, tiré dans `tournee_minijeux.json`, ni le dernier ni un de la moitié du catalogue la plus
+     récemment jouée (`minijeux_recents`, gardé d'une partie à l'autre). Dès
+     3 joueurs, 35 % des mini-jeux se jouent en équipes (`equipes` = deux listes : 2 contre 2, 1 contre 3, 3 contre
+     5...). Chaque téléphone joue en local avec la même graine, puis envoie `tr_score` (`score`, borné à
+     `[0, max]`, une seule fois ; `gorgees` bues pendant le jeu, bornées à `gorgees_max`, jamais de cul sec ;
+     réponse privée `tr_score_recu`). `a_joue` dit qui a joué, jamais son score. Événement `tr_minijeu`.
+  4. `resultats` (10 s, ou `tr_suivant` de tous) : `resultat_minijeu.lignes` (score, rang, pièces, gorgées du
+     classement `boit`, gorgées du jeu `boit_jeu`, `equipe`) ; selon `sens` (`grand` : le plus haut gagne,
+     `petit` : le plus bas). Chacun pour soi : 10 / 6 / 3 pièces, le dernier boit (`boire.minijeu_dernier`) ;
+     sans score, on est dernier. En équipes : score d'équipe = moyenne de ceux qui ont joué
+     (`bilan_equipes.moyennes`), l'équipe gagnante se partage 16 pièces, l'autre boit ; égalité : 3 pièces
+     chacun. Événement `tr_resultats`.
+- Fin (`final` : classement, gagnants, derniers) : classement aux capsules, puis aux pièces ; le dernier boit
+  (`boire.fin_dernier` ; seules ces gorgées partent dans `signaler`). Événement `tr_fin`.
+- Mini-jeux actuels (11, objectif 24) : Glisse-Pinte (`glisse_pinte`), Dégaine (`degaine`, réflexe, le plus bas
+  gagne, 2 faux départs = 1 gorgée), Remplis la pinte (`remplis_pinte`), Tape-Tonneau (`tape_tonneau`, tapes
+  rapides), Le Bon Compte (`bon_compte`, compter des verres, écart le plus bas, écart de 3 = 1 gorgée),
+  Mémo-Cocktail (`memo_cocktail`, mémoire de suites), Pile de Sous-Bocks (`sous_bocks`, empilage), Attrape-Glaçons
+  (`attrape_glacons`, attraper, piment = 1 gorgée, 2 au plus), Chrono-Mousse (`chrono_mousse`, compter 3, 5 et 7 s
+  à l'aveugle, écart le plus bas), Le Bon Verre (`bon_verre`, trouver l'intrus le plus vite) et Sol glissant
+  (`sol_glissant`, esquive, plateau renversé = 1 gorgée). Ajouter un mini-jeu = une entrée dans
+  `tournee_minijeux.json` (`equipes: false` s'il ne se joue jamais en équipes, `gorgees_max` s'il fait boire) et un
+  module `commun/minijeux/<id>.js` sur le site.
 
 ## Base de données
 
@@ -290,7 +319,7 @@ python tests/conquete_essai.py 300          # Royaumes : cartes, règles dirigé
 python tests/casino_essai.py
 python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
 python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des votes, désignés, paris, gorgées
-python tests/tournee_essai.py 300        # La Tournée : déplacements, capsule, cases, mini-jeux, non-fuite des scores
+python tests/tournee_essai.py 300        # La Tournée : plateaux, chemins, retournements, équipes, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py

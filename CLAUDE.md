@@ -28,8 +28,9 @@ Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
   `telephone_config.json`, phrases `telephone_phrases.py`), `conquete.py` (chiffres dans `conquete_config.json`, cartes
   dans `conquete_cartes.json` fabriquées par `conquete_cartes.py`), `justepinte.py` (config
   `justepinte_config.json`, questions `justepinte_questions.py`), `quidenous.py` (config
-  `quidenous_config.json`, cartes `quidenous_cartes.py`), `tournee.py` (plateau et chiffres
-  `tournee_config.json`, mini-jeux `tournee_minijeux.json`), `enquete.py`, `bingo.py`.
+  `quidenous_config.json`, cartes `quidenous_cartes.py`), `tournee.py` (chiffres
+  `tournee_config.json`, plateaux `tournee_plateaux.json` fabriqués par `tournee_plateaux.py`, mini-jeux
+  `tournee_minijeux.json`), `enquete.py`, `bingo.py`.
 - `stockage.py` : Postgres Neon si `DATABASE_URL` est défini (variable Render, jamais dans le
   dépôt), sinon mémoire. Le serveur ne doit jamais planter à cause de la base.
 - `protection.py` : garde-fous (débit, taille, connexions par IP).

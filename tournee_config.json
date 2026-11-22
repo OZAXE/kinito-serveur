@@ -1,42 +1,183 @@
 {
-  "_note": "La Tournée (party game plateau + mini-jeux) : toutes les valeurs chiffrées. Durées en secondes.",
-  "joueurs": {"min": 2, "max": 8},
-  "tours": {"defaut": 10, "choix": [5, 10, 15]},
-  "plateau": [
-    "depart", "pieces", "pieces", "piege", "evenement", "pieces",
-    "tournee", "pieces", "piege", "pieces", "evenement", "pieces",
-    "pieces", "piege", "tournee", "pieces", "evenement", "pieces",
-    "piege", "pieces", "pieces", "evenement", "tournee", "pieces"
-  ],
+  "_note": "La Tournée (party game plateau + mini-jeux) : valeurs chiffrées communes. Chaque plateau (tournee_plateaux.json) a ses propres gains, gorgées et événements. Durées en secondes.",
+  "joueurs": {
+    "min": 2,
+    "max": 8
+  },
+  "tours": {
+    "defaut": 10,
+    "choix": [
+      5,
+      10,
+      15
+    ]
+  },
   "pieces_depart": 10,
-  "capsule": {"prix": 20, "interdites": ["depart"]},
-  "cases": {
-    "pieces": {"pieces": 3},
-    "piege": {"pieces": -3, "boit": 1},
-    "tournee": {"distribue": 2},
-    "depart_passage": {"pieces": 5}
+  "capsule": {
+    "interdites": [
+      "depart",
+      "trappe"
+    ]
+  },
+  "duel": {
+    "pieces": 5
   },
   "evenements": [
-    {"id": "pourboire", "texte": "Pourboire généreux : +6 pièces.", "pieces": 6},
-    {"id": "tournee_generale", "texte": "Tournée générale : tout le monde boit 1 gorgée.", "tous_boivent": 1},
-    {"id": "pickpocket", "texte": "Pickpocket : tu voles 5 pièces au plus riche.", "vol": 5},
-    {"id": "raccourci", "texte": "Raccourci : tu files 3 cases avant la capsule.", "raccourci": 3},
-    {"id": "addition", "texte": "L'addition : -5 pièces.", "pieces": -5},
-    {"id": "cul_sec", "texte": "Cul sec ! Bois 2 gorgées, gagne 4 pièces.", "pieces": 4, "boit": 2}
+    {
+      "id": "pourboire",
+      "texte": "Pourboire généreux : +6 pièces.",
+      "pieces": 6
+    },
+    {
+      "id": "tournee_generale",
+      "texte": "Tournée générale : tout le monde boit 1 gorgée.",
+      "tous_boivent": 1
+    },
+    {
+      "id": "pickpocket",
+      "texte": "Pickpocket : tu voles 5 pièces au plus riche.",
+      "vol": 5
+    },
+    {
+      "id": "raccourci",
+      "texte": "Raccourci : tu files juste avant la capsule.",
+      "raccourci": 3
+    },
+    {
+      "id": "addition",
+      "texte": "L'addition : -5 pièces.",
+      "pieces": -5
+    },
+    {
+      "id": "courage",
+      "texte": "Gorgée de courage : bois 2 gorgées, gagne 4 pièces.",
+      "pieces": 4,
+      "boit": 2
+    },
+    {
+      "id": "chanson",
+      "texte": "Le juke-box passe ta chanson : +4 pièces.",
+      "pieces": 4
+    },
+    {
+      "id": "double_peine",
+      "texte": "Double peine : -4 pièces et bois 2 gorgées.",
+      "pieces": -4,
+      "boit": 2
+    },
+    {
+      "id": "vol_capsule",
+      "texte": "Main baladeuse : tu chipes une capsule au leader !",
+      "vol_capsule": 1
+    }
+  ],
+  "chance": [
+    {
+      "id": "jackpot",
+      "texte": "Jackpot : +8 pièces !",
+      "pieces": 8
+    },
+    {
+      "id": "poche_trouee",
+      "texte": "Poche trouée : -5 pièces.",
+      "pieces": -5
+    },
+    {
+      "id": "echange",
+      "texte": "Échange de place avec un autre joueur !",
+      "echange": true
+    },
+    {
+      "id": "elan",
+      "texte": "Sur ta lancée : avance de 3 cases.",
+      "avance": 3
+    },
+    {
+      "id": "vol_capsule",
+      "texte": "Coup de chance : tu chipes une capsule au leader !",
+      "vol_capsule": 1
+    }
+  ],
+  "evenements_plateau": [
+    {
+      "id": "soleil",
+      "texte": "Grand soleil : +3 pièces pour tout le monde.",
+      "pieces_tous": 3
+    },
+    {
+      "id": "apero",
+      "texte": "L'apéro est servi : tout le monde boit 1 gorgée.",
+      "tous_boivent": 1
+    },
+    {
+      "id": "promo_capsule",
+      "texte": "Promo : la capsule coûte 15 pièces ce tour.",
+      "prix_capsule": 15
+    },
+    {
+      "id": "happy_hour",
+      "texte": "Happy hour : les cases pièces rapportent double ce tour.",
+      "multiplicateur": 2
+    },
+    {
+      "id": "tournee_patron",
+      "texte": "Le patron offre sa tournée : tout le monde boit 1 gorgée.",
+      "tous_boivent": 1
+    },
+    {
+      "id": "capsule_bouge",
+      "texte": "La capsule d'or change de place !",
+      "capsule_bouge": true
+    },
+    {
+      "id": "addition_salee",
+      "texte": "Addition salée : -3 pièces pour tout le monde.",
+      "pieces_tous": -3
+    },
+    {
+      "id": "videur_enerve",
+      "texte": "Le videur s'énerve et traverse la cave !",
+      "videur_pas": 5
+    },
+    {
+      "id": "melange",
+      "texte": "Coupure de courant : deux joueurs échangent leur place.",
+      "echange": true
+    },
+    {
+      "id": "grosse_tournee",
+      "texte": "Grosse tournée : tout le monde boit 2 gorgées.",
+      "tous_boivent": 2
+    },
+    {
+      "id": "partage",
+      "texte": "Le patron fait les comptes : toutes les pièces sont mises en commun et partagées !",
+      "partage": true
+    },
+    {
+      "id": "coup_de_pouce",
+      "texte": "Coup de pouce : le dernier du classement gagne 10 pièces.",
+      "coup_de_pouce": 10
+    }
   ],
   "minijeu": {
-    "gains": [10, 6, 3],
-    "dernier_boit": 2,
-    "consignes": 6,
+    "gains": [
+      10,
+      6,
+      3
+    ],
+    "proba_equipes": 0.35,
+    "cagnotte_equipe": 16,
+    "egalite_equipes": 3,
+    "consignes": 7,
     "marge": 6
   },
   "delais": {
-    "des": 15,
+    "des": 20,
     "deplacement_base": 2.5,
     "deplacement_par_joueur": 1.5,
     "resultats": 10,
     "absent": 3,
     "retour": 10
-  },
-  "fin": {"dernier_boit": 3}
+  }
 }

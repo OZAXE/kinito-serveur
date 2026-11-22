@@ -4,10 +4,12 @@
 //   - serveur d essai :  python tests/serveur_essai.py   (127.0.0.1:8000)
 //   - pages du site servies sur http://localhost:8765 (dossier table-de-jeu)
 // Usage : node tests/tournee_navigateur.js [dossier_captures]
+//         PLATEAU=terrasse|pub|cave (défaut cave, le plus chargé)
 //
 // On vérifie :
-//   1. le réglage (5 tours) part avec le lancement ;
-//   2. chacun lance son dé, les pions avancent, le journal du tour s'affiche ;
+//   1. le réglage (5 tours, le plateau) part avec le lancement ;
+//   2. chacun lance son dé, choisit son chemin aux embranchements, les pions
+//      avancent, le journal du tour s'affiche ;
 //   3. le mini-jeu s'ouvre en plein écran sur chaque téléphone (consignes, puis
 //      le jeu), se joue au doigt, et le score part au serveur ;
 //   4. les résultats du mini-jeu et le classement, « Tour suivant » jusqu'à la
@@ -20,6 +22,7 @@ const path = require('path');
 const SITE = 'http://localhost:8765/';
 const API = 'http://127.0.0.1:8000';
 const CAPTURES = process.argv[2] || '';
+const PLATEAU = process.env.PLATEAU || 'cave';
 const attendre = ms => new Promise(r => setTimeout(r, ms));
 async function etat(code) { return (await fetch(`${API}/test/etat/${code}`)).json(); }
 
@@ -84,12 +87,17 @@ async function attendreQue(test, delai, quoi) {
   await attendreQue(async () => (await etat(code)).joueurs?.length === noms.length, 20000, 'joueurs dans le salon');
   await attendre(800);
 
-  // 1. Réglage : 5 tours.
+  // 1. Réglage : 5 tours et le plateau.
   await A.locator('button', { hasText: /^5$/ }).click();
+  await A.evaluate(pl => document.querySelector('[data-plateau="' + pl + '"]').click(), PLATEAU);
   await capture(A, '1-attente');
   await A.locator('button', { hasText: /D.marrer la partie/ }).first().click();
   await attendreQue(async () => (await etat(code)).phase === 'des', 15000, 'phase des');
   verifier((await etat(code)).tr.nb_tours === 5, '5 tours demandés');
+  verifier((await etat(code)).tr.plateau === PLATEAU, 'plateau ' + PLATEAU + ' demandé');
+  await A.waitForTimeout(2500);
+  await capture(A, '1b-plateau-' + PLATEAU);
+  let cheminsVus = 0;
 
   // Joue le mini-jeu au doigt, quel qu'il soit, jusqu'à ce que le calque se ferme.
   const jouerMinijeu = async (p, id) => {
@@ -130,6 +138,13 @@ async function attendreQue(test, delai, quoi) {
     await Promise.all(pages.map(async p => {
       await p.waitForFunction(() => [...document.querySelectorAll('#panneau button')].some(b => /Lancer le d/.test(b.textContent)), null, { timeout: 30000 }).catch(() => {});
       await p.evaluate(() => { const b = [...document.querySelectorAll('#panneau button')].find(b => /Lancer le d/.test(b.textContent)); if (b) b.click(); });
+      // À un embranchement, des boutons de chemin apparaissent : on prend le dernier.
+      const vu = await p.waitForSelector('#panneau [data-choix]', { timeout: 4000 }).then(() => true).catch(() => false);
+      if (vu) {
+        cheminsVus++;
+        if (cheminsVus === 1) await capture(p, '2a-chemins');
+        await p.evaluate(() => { const b = [...document.querySelectorAll('#panneau [data-choix]')]; b[b.length - 1].click(); });
+      }
     }));
     await attendreQue(async () => (await etat(code)).phase !== 'des', 30000, 'déplacement ' + tour);
     if (tour === 1) {
@@ -160,6 +175,7 @@ async function attendreQue(test, delai, quoi) {
     await attendreQue(async () => (await etat(code)).phase !== 'minijeu', 60000, 'résultats ' + tour);
     jeu = false;
     await guet;
+    { const x = await etat(code); if (x.phase !== 'des') scoresRecus = Math.max(scoresRecus, Object.keys(x.tr.scores || {}).length); }
     if (!resultatsVus && (await etat(code)).phase === 'resultats') {
       const pan = await attendreQue(async () => { const t = await A.locator('#panneau').innerText(); return /Classement/.test(t) && t; }, 20000, 'panneau des résultats').catch(() => '');
       if (/🥇/.test(pan)) { resultatsVus = true; await capture(A, '4-resultats'); }
@@ -169,6 +185,7 @@ async function attendreQue(test, delai, quoi) {
   }
   verifier(scoresRecus > 0, 'les scores des mini-jeux arrivent au serveur (' + scoresRecus + ' au mieux sur un mini-jeu)');
   verifier(resultatsVus, 'les résultats du mini-jeu et le classement s’affichent');
+  console.log('choix de chemin proposés : ' + cheminsVus);
   verifier(minijeuxVus.size >= 2, 'mini-jeux joués : ' + [...minijeuxVus].join(', '));
   await attendreQue(async () => (await etat(code)).phase === 'fin', 40000, 'fin');
   await A.waitForFunction(() => /gagne/.test(document.getElementById('panneau').innerText), null, { timeout: 60000 }).catch(() => {});
