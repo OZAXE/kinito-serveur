@@ -3096,7 +3096,8 @@ async def jp_publier(code_salon, evenements):
         noms = [j["nom"] for j in salon["joueurs"]]
         final = etat.get("final") or {}
         gagnants = [noms[g] for g in final.get("gagnants", []) if g < len(noms)]
-        doses = {noms[i]: g for i, g in enumerate(etat["gorgees"]) if i < len(noms) and g}
+        # Les gorgees de la fin seulement (celles des manches ont deja ete bues).
+        doses = {noms[d["joueur"]]: d["boit"] for d in final.get("derniers", []) if d["joueur"] < len(noms)}
         await signaler(code_salon, "justepinte", "victoire", gagnants=gagnants,
                        perdants=[n for n in noms if n not in gagnants],
                        details={"points": dict(zip(noms, etat["points"])), "gorgees": doses})

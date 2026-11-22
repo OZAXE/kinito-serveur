@@ -63,6 +63,11 @@ async def etat(code: str):
               if salon.get("jeu") == "undercover" else None,
         # Gribouillophone : les albums, pour verifier ce que les pages ont envoye.
         "td": {"albums": e.get("albums")} if salon.get("jeu") == "telephone" else None,
+        # Le Juste Pinte : la question en cours et sa reponse, pour jouer « dans le mille ».
+        "jp": {"manche": e.get("manche"), "nb_manches": e.get("nb_manches"), "points": e.get("points"),
+               "gorgees": e.get("gorgees"), "reponse": (e.get("tirage") or [[None] * 6])[min(e.get("manche", 0), len(e.get("tirage") or [0]) - 1)][2]
+               if e.get("tirage") else None}
+              if salon.get("jeu") == "justepinte" else None,
     }
 
 

@@ -14,6 +14,7 @@ const PAGES = {
   kinito: 'kinito-3d-jeu.html', beerbattle: 'beerbattle-3d-jeu.html', buckshot: 'buckshot-3d-jeu.html',
   picolopoly: 'picolopoly-3d-jeu.html', menteur: 'menteur-3d-jeu.html', casino: 'casino-3d-jeu.html',
   undercover: 'undercover-3d-jeu.html', telephone: 'telephone-jeu.html', conquete: 'conquete-3d-jeu.html',
+  justepinte: 'justepinte-3d-jeu.html',
 };
 const JEUX = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PAGES);
 const attendre = ms => new Promise(r => setTimeout(r, ms));
@@ -34,6 +35,14 @@ const cliquerTexte = (cadre, re) => cadre.evaluate((src) => {
 
 async function contexte(nav, nom, code) {
   const ctx = await nav.newContext({ viewport: { width: 900, height: 800 } });
+  // Sans accès aux CDN : CDN_LOCAL=<dossier> (paquets npm three et qrious décompressés).
+  if (process.env.CDN_LOCAL) {
+    const path = require('path');
+    await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (r) => r.fulfill({
+      path: path.join(process.env.CDN_LOCAL, 'three/package', r.request().url().match(/three@[^/]+\/(.*)$/)[1]), contentType: 'application/javascript' }));
+    await ctx.route(/qrious\.min\.js$/, (r) => r.fulfill({ path: path.join(process.env.CDN_LOCAL, 'qrious/package/dist/qrious.min.js'), contentType: 'application/javascript' }));
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ body: '', contentType: 'text/css' }));
+  }
   await ctx.addInitScript(([n, c]) => {
     if (!sessionStorage.getItem('init')) {
       sessionStorage.setItem('init', '1');
@@ -69,7 +78,7 @@ async function tester(nav, jeu) {
   verifier(await p.evaluate(() => document.getElementById('mode-test').style.visibility === 'hidden'), '« Moi » montre sa propre partie');
   const lance = await attendreQue(async () => {
     if ((await etat(code)).en_partie) return true;
-    await cliquerTexte(p.mainFrame(), /D.marrer la partie|Ouvrir le casino|Lancer la partie/);
+    await cliquerTexte(p.mainFrame(), /D.marrer la partie|D.marrer le quiz|Ouvrir le casino|Lancer la partie/);
     await attendre(1500);
     await cliquerTexte(p.mainFrame(), /^Remplacer$/);
     return false;

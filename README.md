@@ -223,7 +223,8 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 - Classement par écart à la bonne réponse, ex aequo au même rang. Points 3 / 2 / 1, +1 « dans le mille »
   (5 % de la réponse, un an pour une année, ou la tolérance propre à la question).
 - Gorgées : le plus loin boit 2, l'avant-dernier 1 dès 5 répondants, un présent sans réponse boit 2 ;
-  « dans le mille » distribue 3 (jamais de gorgée pour lui) ; en fin de partie, le dernier au classement boit 3.
+  « dans le mille » distribue 3 (jamais de gorgée pour lui) ; en fin de partie, le dernier au classement boit 3
+  (seules ces gorgées de fin partent dans `signaler` : celles des manches sont déjà bues).
 - Secret : `jp_etat` n'a ni la bonne réponse ni les réponses des joueurs avant la révélation.
 
 ## Base de données
@@ -253,6 +254,8 @@ node tests/presents_navigateur.js           # accueil : qui est dans la soirée,
 node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)
 node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 navigateurs, en touchant la carte
+node tests/justepinte_navigateur.js [captures] # Le Juste Pinte : 5 questions à 3 navigateurs, dans le mille, classement, Rejouer
+# Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte et mode test)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
 python tests/fuzz_serveur.py --duree 8      # messages de travers a chaque jeu : aucune exception serveur
 python tests/securite_essai.py              # attaques : taille, debit, codes, places, origines, limites par IP
