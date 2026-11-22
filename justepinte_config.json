@@ -1,0 +1,33 @@
+{
+  "_note": "Le Juste Pinte : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Durées en secondes.",
+  "joueurs": {
+    "min": 2,
+    "max": 8
+  },
+  "manches": {
+    "defaut": 10,
+    "choix": [5, 10, 15]
+  },
+  "delais": {
+    "question": 30,
+    "revelation": 12,
+    "absent": 3,
+    "retour": 10
+  },
+  "points": [3, 2, 1],
+  "points_mille": 1,
+  "mille": {
+    "_note": "Dans le mille : à moins de 'pourcent' % de la réponse, ou à 'annee' an près pour une année.",
+    "pourcent": 5,
+    "annee": 1
+  },
+  "gorgees": {
+    "dernier": 2,
+    "avant_dernier": 1,
+    "avant_dernier_des": 5,
+    "sans_reponse": 2,
+    "mille_distribue": 3,
+    "fin_dernier": 3
+  },
+  "valeur_max": 1000000000000
+}
