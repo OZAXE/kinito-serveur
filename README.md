@@ -293,13 +293,22 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
      chacun. Événement `tr_resultats`.
 - Fin (`final` : classement, gagnants, derniers) : classement aux capsules, puis aux pièces ; le dernier boit
   (`boire.fin_dernier` ; seules ces gorgées partent dans `signaler`). Événement `tr_fin`.
-- Mini-jeux actuels (11, objectif 24) : Glisse-Pinte (`glisse_pinte`), Dégaine (`degaine`, réflexe, le plus bas
-  gagne, 2 faux départs = 1 gorgée), Remplis la pinte (`remplis_pinte`), Tape-Tonneau (`tape_tonneau`, tapes
-  rapides), Le Bon Compte (`bon_compte`, compter des verres, écart le plus bas, écart de 3 = 1 gorgée),
-  Mémo-Cocktail (`memo_cocktail`, mémoire de suites), Pile de Sous-Bocks (`sous_bocks`, empilage), Attrape-Glaçons
-  (`attrape_glacons`, attraper, piment = 1 gorgée, 2 au plus), Chrono-Mousse (`chrono_mousse`, compter 3, 5 et 7 s
-  à l'aveugle, écart le plus bas), Le Bon Verre (`bon_verre`, trouver l'intrus le plus vite) et Sol glissant
-  (`sol_glissant`, esquive, plateau renversé = 1 gorgée). Ajouter un mini-jeu = une entrée dans
+- Les 24 mini-jeux (un module `commun/minijeux/<id>.js` chacun sur le site) :
+  - adresse et réflexes : Glisse-Pinte (`glisse_pinte`), Dégaine (`degaine`, le plus bas gagne, 2 faux départs
+    = 1 gorgée), Remplis la pinte (`remplis_pinte`), Fléchettes (`flechettes`), Lancer de Cacahuètes
+    (`cacahuete`), Pile de Sous-Bocks (`sous_bocks`), Le Rond Parfait (`rond_parfait`) ;
+  - rapidité : Tape-Tonneau (`tape_tonneau`), Tire-Bouchon (`tire_bouchon`, temps, le plus bas gagne),
+    Chasse-Mouches (`chasse_mouches`), Tranche-Citron (`tranche_citron`, bouteille = 1 gorgée, 2 au plus),
+    Attrape-Glaçons (`attrape_glacons`, piment = 1 gorgée, 2 au plus) ;
+  - esquive et survie : Sol glissant (`sol_glissant`), Saute-Tabouret (`saute_tabouret`), Plateau en équilibre
+    (`equilibre`) ; les deux qui font tomber le plateau ou la pinte = 1 gorgée ;
+  - mémoire et observation : Mémo-Cocktail (`memo_cocktail`), Paires de Sous-Bocks (`paires`, temps),
+    Bonneteau (`bonneteau`), Le Bon Compte (`bon_compte`, écart, 3 ou plus = 1 gorgée), Le Bon Verre
+    (`bon_verre`, temps) ;
+  - tête et rythme : L'Addition (`addition`, 3 erreurs = 1 gorgée), La Bonne Couleur (`bon_cocktail`), Le Bon
+    Tempo (`tempo`), Chrono-Mousse (`chrono_mousse`, compter 3, 5 et 7 s à l'aveugle, écart).
+
+  Ajouter un mini-jeu = une entrée dans
   `tournee_minijeux.json` (`equipes: false` s'il ne se joue jamais en équipes, `gorgees_max` s'il fait boire) et un
   module `commun/minijeux/<id>.js` sur le site.
 
