@@ -1,0 +1,8 @@
+{
+  "_note": "Mini-jeux de La Tournée. Chaque mini-jeu se joue en local sur chaque téléphone (même graine pour tous) ; le score part au serveur. sens : grand = le plus haut gagne, petit = le plus bas gagne. Le site a un module commun/minijeux/<id>.js par mini-jeu.",
+  "minijeux": [
+    {"id": "glisse_pinte", "nom": "Glisse-Pinte", "regle": "Fais glisser la pinte sur le comptoir : elle doit s'arrêter dans la zone dorée. 3 lancers.", "duree": 20, "sens": "grand", "max": 300},
+    {"id": "degaine", "nom": "Dégaine", "regle": "Touche l'écran dès que « TCHIN ! » s'affiche. Trop tôt, c'est raté. 3 manches.", "duree": 20, "sens": "petit", "max": 9000},
+    {"id": "remplis_pinte", "nom": "Remplis la pinte", "regle": "Appuie pour tirer la bière, relâche pile sur le trait. 3 pintes.", "duree": 22, "sens": "grand", "max": 300}
+  ]
+}

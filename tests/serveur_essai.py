@@ -72,6 +72,11 @@ async def etat(code: str):
         "qn": {"manche": e.get("manche"), "nb_manches": e.get("nb_manches"), "votes": e.get("votes"),
                "points": e.get("points"), "gorgees": e.get("gorgees")}
               if salon.get("jeu") == "quidenous" else None,
+        # La Tournee : le tour, le plateau, les scores du mini-jeu en cours.
+        "tr": {"tour": e.get("tour"), "nb_tours": e.get("nb_tours"), "positions": e.get("positions"),
+               "pieces": e.get("pieces"), "capsules": e.get("capsules"), "gorgees": e.get("gorgees"),
+               "scores": e.get("scores"), "minijeu": e.get("minijeu"), "des": e.get("des")}
+              if salon.get("jeu") == "tournee" else None,
     }
 
 

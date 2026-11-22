@@ -67,6 +67,12 @@ from quidenous import (
     qn_initialiser, qn_action, qn_expirer, qn_etat_public, qn_vote,
     qn_prochaine_echeance, qn_joueur_parti, qn_joueur_revenu,
 )
+# La Tournee (party game plateau + mini-jeux) : meme principe.
+from tournee import (
+    TR_JOUEURS_MIN, TR_JOUEURS_MAX,
+    tr_initialiser, tr_action, tr_expirer, tr_etat_public, tr_score,
+    tr_prochaine_echeance, tr_joueur_parti, tr_joueur_revenu,
+)
 # Casino (roulette, blackjack, poker) : meme principe, moteur pur a part.
 from casino import (
     CS_JOUEURS_MIN, CS_JOUEURS_MAX,
@@ -1092,6 +1098,19 @@ async def _quidenous_instantane(code_salon, joueur, complet, nouveau):
     vote = qn_vote(etat, joueur["index"])
     if vote is not None:
         await envoyer(joueur, vote)
+
+
+async def _tournee_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    # Son score de mini-jeu reste secret jusqu aux resultats : il ne revient
+    # qu a lui (page rechargee). Un arrivant en pleine partie regarde.
+    if complet:
+        await envoyer(joueur, {"type": "tr_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer(joueur, tr_etat_public(etat, time.time()))
+    sc = tr_score(etat, joueur["index"])
+    if sc is not None:
+        await envoyer(joueur, sc)
 
 
 async def _casino_instantane(code_salon, joueur, complet, nouveau):
@@ -3282,6 +3301,116 @@ async def qn_traiter(code_salon, joueur, message):
 
 
 # =============================================================
+# LA TOURNEE (party game plateau + mini-jeux, prefixe tr_)
+# Les regles sont dans tournee.py (chiffres : tournee_config.json, mini-jeux :
+# tournee_minijeux.json). Ici : le reseau et le minuteur qui enchaine des,
+# deplacements, mini-jeu et resultats. Les mini-jeux se jouent sur les
+# telephones : le serveur ne recoit que les scores.
+# =============================================================
+
+async def tr_demarrer(code_salon, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if etat is not None and not (salon.get("jeu") == "tournee" and etat.get("phase") == "fin"):
+        return
+    precedent = etat if salon.get("jeu") == "tournee" else salon.get("tr_memoire")
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < TR_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"La Tournée demande au moins {TR_JOUEURS_MIN} joueurs."})
+        return
+    if nb > TR_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"La Tournée se joue à {TR_JOUEURS_MAX} joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    salon["etat"] = tr_initialiser(
+        [j["nom"] for j in salon["joueurs"]], time.time(),
+        tours=message.get("tours"),
+        deja=precedent)
+    salon["jeu"] = "tournee"
+    salon["tr_memoire"] = {"dernier_minijeu": salon["etat"]["dernier_minijeu"]}
+    await diffuser(code_salon, {"type": "tr_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer_indices(code_salon)
+    await tr_publier(code_salon, [])
+
+
+async def tr_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "tournee" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, tr_etat_public(etat, time.time()))
+    tr_programmer(code_salon)
+    if etat.get("phase") == "fin" and not etat.get("fin_signalee"):
+        etat["fin_signalee"] = True
+        noms = [j["nom"] for j in salon["joueurs"]]
+        final = etat.get("final") or {}
+        gagnants = [noms[g] for g in final.get("gagnants", []) if g < len(noms)]
+        # Les gorgees de la fin seulement (celles des manches ont deja ete bues).
+        doses = {noms[d["joueur"]]: d["boit"] for d in final.get("derniers", []) if d["joueur"] < len(noms)}
+        await signaler(code_salon, "tournee", "victoire", gagnants=gagnants,
+                       perdants=[n for n in noms if n not in gagnants],
+                       details={"capsules": dict(zip(noms, etat["capsules"])), "pieces": dict(zip(noms, etat["pieces"])),
+                                "gorgees": doses})
+
+
+def tr_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("tr_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = tr_prochaine_echeance(etat) if etat and salon.get("jeu") == "tournee" else None
+    salon["tr_minuteur"] = None if echeance is None else asyncio.create_task(
+        tr_minuteur(code_salon, salon, echeance))
+
+
+async def tr_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "tournee":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("tr_minuteur") is not moi:
+            return
+        salon["tr_minuteur"] = None
+        etat = salon["etat"]
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = tr_expirer(etat, time.time())
+        if etat["version"] != version:
+            await tr_publier(code_salon, evenements)
+        else:
+            tr_programmer(code_salon)
+
+
+async def tr_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "tournee" or etat is None:
+        return
+    version = etat["version"]
+    evenements = tr_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await tr_publier(code_salon, evenements)
+    else:
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+# =============================================================
 # TELEPHONE DESSINE (on ecrit, on dessine, on devine)
 # Les regles sont dans telephone.py (chiffres : telephone_config.json).
 # Ici : le reseau, la tache privee de chacun (la SEULE contribution
@@ -3540,7 +3669,7 @@ async def cs_demarrer(code_salon):
     etat = salon.get("etat")
     if etat is not None:
         jeu = salon.get("jeu")
-        fini = (jeu in ("menteur", "undercover", "telephone", "conquete", "justepinte", "quidenous") and etat.get("phase") == "fin") or \
+        fini = (jeu in ("menteur", "undercover", "telephone", "conquete", "justepinte", "quidenous", "tournee") and etat.get("phase") == "fin") or \
                (jeu == "beerbattle" and etat.get("phase") == "fini")
         if not fini:
             return
@@ -3782,6 +3911,20 @@ async def _qn_parti(code_salon, index):
         await qn_publier(code_salon, [])
 
 
+def _tr_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        tr_joueur_revenu(etat, idx, time.time())
+        tr_programmer(code_salon)
+
+
+async def _tr_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        tr_joueur_parti(etat, index, time.time())
+        await tr_publier(code_salon, [])
+
+
 def _cs_revenu(code_salon, salon, idx):
     etat = salon["etat"]
     if idx < etat["nb_joueurs"]:
@@ -3880,6 +4023,12 @@ JEUX = {
         joueur_parti=_qn_parti, joueur_revenu=_qn_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("qn_minuteur",),
         min_joueurs=QN_JOUEURS_MIN, max_joueurs=QN_JOUEURS_MAX),
+    "tournee": Jeu(
+        "tournee", "La Tournée", "tournee-3d-jeu.html", "tr_demarrer", _prefixe("tr_"),
+        tr_demarrer, tr_traiter, _tournee_instantane,
+        joueur_parti=_tr_parti, joueur_revenu=_tr_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("tr_minuteur",),
+        min_joueurs=TR_JOUEURS_MIN, max_joueurs=TR_JOUEURS_MAX),
 }
 
 

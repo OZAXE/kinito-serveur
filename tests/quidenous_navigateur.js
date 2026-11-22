@@ -117,11 +117,11 @@ async function attendreQue(test, delai, quoi) {
   for (let m = 0; m < 5; m++) {
     await attendreQue(async () => { const x = await etat(code); return x.phase === 'vote' && x.qn.manche === m && x; }, 30000, 'carte ' + (m + 1))
       .catch(async err => { console.log(JSON.stringify(await etat(code))); for (const p of pages) console.log('---', await p.locator('#panneau').innerText()); throw err; });
-    for (let k = 0; k < noms.length; k++) {
-      const p = pages[k];
-      await p.waitForSelector('.tuile.cible', { timeout: 30000 });
-      if (m === 0) verifier(await p.locator(`.tuile.cible[data-joueur="${k}"]`).count() === 0, noms[k] + ' ne peut pas se désigner soi-même');
-      if (k === 0 && m === 0) {
+    await Promise.all(pages.map(p => p.waitForSelector('.tuile.cible', { timeout: 30000 })));
+    if (m === 0) {
+      for (let k = 0; k < noms.length; k++) verifier(await pages[k].locator(`.tuile.cible[data-joueur="${k}"]`).count() === 0, noms[k] + ' ne peut pas se désigner soi-même');
+      const p = pages[0];
+      {
         // 2. Alice vote Bruno, voit son vote, puis change d'avis.
         await voter(p, 1, 2);
         await p.waitForSelector('.mon-vote', { timeout: 15000 });
@@ -132,9 +132,13 @@ async function attendreQue(test, delai, quoi) {
         verifier(await p.locator('.tuile.cible.choisi[data-joueur="1"]').count() === 1, 'en changeant, son ancien choix est déjà coché');
         const ailleurs = await pages[1].evaluate(() => document.body.innerText);
         verifier(!/Tu désignes|A voté/.test(ailleurs), 'le vote d’Alice n’apparaît pas chez Bruno');
+        // Son nouveau vote part avant ceux des autres (le dernier vote révèle tout de suite).
+        await voter(p, cibles[0], paris[0]);
       }
-      await voter(p, cibles[k], paris[k]);
     }
+    // Les autres votent en même temps (la machine d essai est lente : un par un,
+    // le dernier pouvait arriver après les 25 s du vote).
+    await Promise.all(pages.map((p, k) => (m === 0 && k === 0) ? null : voter(p, cibles[k], paris[k])));
     try {
       await attendreQue(async () => (await etat(code)).phase === 'revelation', 40000, 'révélation ' + (m + 1));
     } catch (err) {
