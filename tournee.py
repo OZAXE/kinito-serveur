@@ -857,10 +857,11 @@ def _pret_a_partir(etat):
     return all(str(j) in etat["des"] and not etat["options"].get(str(j)) for j in _presents(etat))
 
 
-def _rouler(etat, j, rng=random):
-    """Le lancer du joueur j : un de de 10, ou plus avec un objet."""
+def _rouler(etat, j, rng=random, base=1):
+    """Le lancer du joueur j : un ou deux des de 10 (au choix, a chaque tour), plus ceux d un objet."""
     m = etat.setdefault("modif_de", {}).get(str(j), {})
-    detail = [rng.randint(1, _FACES) for _ in range(m.get("des", 1))]
+    nombre = base + m.get("des", 1) - 1      # Double shot : un de de plus, Triple shot : deux de plus
+    detail = [rng.randint(1, _FACES) for _ in range(nombre)]
     return sum(detail) + m.get("bonus", 0), detail
 
 
@@ -877,7 +878,10 @@ def _lancer(etat, ev, i, message, maintenant):
         return []
     if str(i) in etat["des"]:
         return []
-    total, detail = _rouler(etat, i)
+    # 1 ou 2 des, au choix du joueur a chaque tour ; une page d avant n envoie rien : un de.
+    base = message.get("des")
+    base = base if base in (1, 2) and not isinstance(base, bool) else 1
+    total, detail = _rouler(etat, i, base=base)
     _poser_de(etat, ev, i, total, detail)
     if _pret_a_partir(etat):
         _deplacer(etat, ev, maintenant)

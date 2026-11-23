@@ -289,8 +289,9 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 - Un tour, quatre phases (`tr_etat.phase`), plus la boutique :
   1. `des` (20 s) : d'abord, si on veut, un objet : `tr_objet` (`objet`, `cible` = indice d'un autre joueur pour
      les objets qui visent quelqu'un, `valeur` de 1 à 10 pour le dé pipé), un seul par tour, avant son dé
-     (événement `tr_objet_utilise`). Puis `tr_lancer`, tout le monde en même temps ; le serveur tire le dé
-     (événement `tr_de` avec `valeur` et `detail`). Le joueur avance jusqu'au premier embranchement de sa route :
+     (événement `tr_objet_utilise`). Puis `tr_lancer` (`des` = 1 ou 2, au choix à chaque tour ; absent : 1),
+     tout le monde en même temps ; le serveur tire les dés de 10, plus un avec le Double shot, deux avec le
+     Triple shot (événement `tr_de` avec `valeur` et `detail`). Le joueur avance jusqu'au premier embranchement de sa route :
      `options[joueur]` liste alors les routes (`chemin` jusqu'au prochain embranchement ou au bout du dé,
      `arrivee`, `libelle`, `type_arrivee`, `peage`) et il choisit par `tr_chemin` (`choix` = indice) ; un
      embranchement plus loin repose la question. Un péage trop cher n'est pas proposé. À l'échéance, dé et

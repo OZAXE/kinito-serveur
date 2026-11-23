@@ -105,7 +105,7 @@ def verifier_deplacements(etat, avant):
     for l in res["lignes"]:
         j = str(l["joueur"])
         detail = avant["des_detail"].get(j) or etat["des_detail"].get(j)
-        assert 1 <= l["de"] <= 3 * T._FACES + 3 and len(l["chemin"]) == l["de"]
+        assert 1 <= l["de"] <= 4 * T._FACES + 3 and len(l["chemin"]) == l["de"]
         assert detail and all(1 <= d <= T._FACES for d in detail) and sum(detail) <= l["de"] <= sum(detail) + 3
         prec = l["depart"]
         for c in l["chemin"]:
@@ -195,7 +195,7 @@ def partie(n, graine):
                 T.tr_action(etat, i, {"type": "tr_objet", "objet": o, "cible": random.choice([0, 1, 2, i, -1, 9, None, "a"]),
                                       "valeur": random.choice([1, 5, 10, 0, 11, "a", True])}, t)
             else:
-                T.tr_action(etat, i, {"type": "tr_lancer"}, t)
+                T.tr_action(etat, i, {"type": "tr_lancer", "des": random.choice([1, 2, 2, None])}, t)
         elif phase == "boutique":
             offre = etat["boutiques"].get(str(i))
             o = random.choice(([s["id"] for s in offre["stock"]] if offre else []) + [None, "taxi", "x", 4])
@@ -453,6 +453,21 @@ def scenario_retournements():
     assert e["positions"][2] == t["vers"] and effets[0]["type"] == "trappe"
 
 
+def scenario_deux_des():
+    """1 ou 2 des au choix a chaque lancer ; le Double shot ajoute un de ; sans precision, un de."""
+    e = T.tr_initialiser(["A", "B", "C", "D"], 0, tours=5, plateau="pub")
+    e["objets"] = [["double"], [], [], []]
+    T.tr_action(e, 0, {"type": "tr_objet", "objet": "double"}, 1)
+    T.tr_action(e, 0, {"type": "tr_lancer", "des": 2}, 1)
+    assert len(e["des_detail"]["0"]) == 3 and e["des"]["0"] == sum(e["des_detail"]["0"])
+    T.tr_action(e, 1, {"type": "tr_lancer", "des": 2}, 1)
+    assert len(e["des_detail"]["1"]) == 2
+    T.tr_action(e, 2, {"type": "tr_lancer"}, 1)
+    assert len(e["des_detail"]["2"]) == 1
+    T.tr_action(e, 3, {"type": "tr_lancer", "des": 9}, 1)
+    assert e["phase"] != "des" or len(e["des_detail"]["3"]) == 1
+
+
 def main():
     nb = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     verifier_config()
@@ -460,6 +475,7 @@ def main():
     scenario_chemins()
     scenario_peage()
     scenario_objets()
+    scenario_deux_des()
     scenario_boutique()
     scenario_retournements()
     scenario_variete()

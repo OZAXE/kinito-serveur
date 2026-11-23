@@ -24,7 +24,7 @@
       "id": "double",
       "nom": "Double shot",
       "icone": "🎲",
-      "texte": "Tu lances 2 dés.",
+      "texte": "Un dé de plus à ton lancer.",
       "prix": 8,
       "des": 2
     },
@@ -32,7 +32,7 @@
       "id": "triple",
       "nom": "Triple shot",
       "icone": "🎰",
-      "texte": "Tu lances 3 dés.",
+      "texte": "Deux dés de plus à ton lancer.",
       "prix": 14,
       "des": 3
     },
