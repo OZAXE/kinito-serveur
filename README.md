@@ -441,6 +441,7 @@ python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des
 python tests/loupgarou_essai.py 300      # Loup-Garou : composition, règles dirigées, non-fuite des rôles et de la nuit
 python tests/tournee_essai.py 300        # La Tournée : plateaux, chemins, retournements, équipes, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
+python tests/picolopoly_rythme.py          # Picopoly : gorgées par heure selon la difficulté (cibles 100 / 40 / 30)
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py
 python tests/non_fuite_essai.py 300         # parties au hasard : rien ne trahit le tueur, à chaque étape

@@ -57,10 +57,15 @@ PP_RETOUR_DEFAUT = 2          # "Retour de baton" sans penalite precedente
 # La cagnotte et la roulette ne bougent pas : ce sont des choix, pas des
 # penalites. "difficile" est la partie d origine, et le defaut quand un
 # client n envoie rien.
+# Rythme vise sur une partie d 1 h (total de la table, simule par
+# tests/picolopoly_rythme.py) : difficile ~100 gorgees (1 toutes les 0,6 min),
+# normal ~40 (1 toutes les 1,5 min), facile ~30 (1 toutes les 2 min).
+# Le gros vient des loyers (au moins 1 gorgee chacun) : c est le Depart,
+# le proprio qui distribue et la tranche qui font la difference.
 PP_DIFFICULTES = {
-    "facile": {"tranche": 100, "plafond": 3, "depart": "personne", "miroir": 0,
-               "prison": 1, "echange": 0, "duel": 2, "cadeau": 2, "sommelier": 4},
-    "normal": {"tranche": 50, "plafond": 4, "depart": "joueur", "miroir": 0,
+    "facile": {"tranche": 150, "plafond": 3, "depart": "personne", "miroir": 0,
+               "prison": 0, "echange": 0, "duel": 2, "cadeau": 2, "sommelier": 3},
+    "normal": {"tranche": 50, "plafond": 3, "depart": "personne", "miroir": 0,
                "prison": 1, "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 5},
     "difficile": {"tranche": 50, "plafond": 5, "depart": "tous", "miroir": 1,
                   "prison": 1, "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 6},
