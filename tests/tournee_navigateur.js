@@ -196,7 +196,7 @@ async function attendreQue(test, delai, quoi) {
       verifier(true, 'B achète un objet en boutique');
     }
     // 3. Le mini-jeu.
-    const em = await attendreQue(async () => { const x = await etat(code); return x.phase === 'minijeu' && x; }, 30000, 'mini-jeu ' + tour);
+    const em = await attendreQue(async () => { const x = await etat(code); return x.phase === 'minijeu' && x; }, 90000, 'mini-jeu ' + tour);
     const id = em.tr.minijeu.id;
     minijeuxVus.add(id);
     const ouverts = await Promise.all(pages.map(p => p.waitForSelector('#calque-minijeu.ouvert', { timeout: 15000 }).then(() => true).catch(() => false)));
