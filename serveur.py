@@ -3459,7 +3459,8 @@ async def lg_demarrer(code_salon, message):
     salon["etat"] = lg_initialiser(
         [j["nom"] for j in salon["joueurs"]], time.time(),
         loups=message.get("loups"),
-        speciaux=message.get("speciaux"))
+        speciaux=message.get("speciaux"),
+        capitaine=message.get("capitaine") if isinstance(message.get("capitaine"), bool) else None)
     salon["jeu"] = "loupgarou"
     await diffuser(code_salon, {"type": "lg_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
     await envoyer_indices(code_salon)

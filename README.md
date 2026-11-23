@@ -316,40 +316,74 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 
 ## Loup-Garou (rôles cachés, préfixe `lg_`)
 
-- 4 à 15 joueurs, page `loupgarou-3d-jeu.html`. Pas de meneur : le serveur fait le conteur, chacun joue
-  sur son téléphone. Toutes les valeurs (délais, nombre de loups, gorgées) sont dans `loupgarou_config.json`.
-- Rôles : **Loup-Garou** (`loup` : la meute choisit une victime chaque nuit, les loups se voient et voient les
-  choix de la meute en direct), **Villageois** (`villageois`), **Cartomancienne** (`cartomancienne` : découvre
-  le rôle d'un joueur par nuit), **Videur** (`videur` : protège un joueur des loups, lui compris, jamais le même
-  deux nuits de suite), **Herboriste** (`herboriste` : une potion de soin pour la victime des loups, une potion
-  de poison, chacune une fois par partie), **Braconnier** (`braconnier` : à sa mort, il emporte un joueur).
-- `lg_demarrer` : `loups` (nombre ; absent = automatique : 1 jusqu'à 6 joueurs, 2 jusqu'à 10, 3 jusqu'à 13, puis
-  4 ; jamais plus d'un loup pour deux autres joueurs), `speciaux` (liste de rôles spéciaux ; absent = selon le
-  nombre de joueurs : Cartomancienne dès 4, Videur dès 6, Herboriste dès 7, Braconnier dès 8). Les autres sont
-  Villageois. La composition est publique (`composition`), les rôles non.
-- Phases (`lg_etat.phase`) : `role` (25 s, `lg_pret`), `nuit` (45 s), `potion` (seulement si l'Herboriste est
-  dans la partie : 25 s si elle peut agir, sinon 5 à 9 s au hasard pour que la durée ne trahisse rien), `aube`
-  (morts de la nuit, `lg_suivant`), `tir` (25 s, le Braconnier mort vise), `debat` (180 s), `verdict`
-  (`lg_suivant`), `fin`.
-- La nuit, **tout le monde en vie** envoie `lg_nuit` (`cible`) pour que personne ne se trahisse à la table :
-  vote de la meute (réponse privée `lg_meute` à chaque loup), sonde de la Cartomancienne (réponse privée
-  `lg_vision` : `cible`, `role`), protection du Videur, et pour les autres un suspect (le « flair », compté en fin
-  de partie). La nuit finit quand tous ont agi et que la meute est d'accord, ou à l'échéance : la victime est le
-  choix majoritaire de la meute (égalité : le sort). `lg_potion` (`soin` : booléen, `poison` : index ou null).
-  `lg_tir` (`cible`). `lg_voter` (`cible` : index d'un autre vivant, ou null = blanc ; modifiable, réponse privée
-  `lg_vote`). Le plus désigné est éliminé s'il a plus de voix que les blancs ; égalité : personne.
-- `lg_etat` (public) : `vivants`, `roles` (seulement ceux des morts, tous à la fin), `a_vote` (qui a voté, jamais
-  pour qui), `attente` (compte des joueurs qui ont agi), `annonce` (aube ou verdict : `morts` avec rôle et
-  cause, et au verdict `votes` = qui a voté qui, `compte`, `blancs`, `elimine`, `accusateurs`), `tireur`,
-  `morts`, `gorgees`, `final` (`vainqueur`, `gagnants`, `perdants`, `roles`, `flair`, `meilleur_flair`).
-  `lg_secret` (privé, après chaque coup) : `role`, `vivant`, `loups` (pour un loup), `meute`, `action` de la
-  nuit, `vote`, `visions` (Cartomancienne), `dernier_protege` (Videur), `potions` et `victime` (Herboriste
-  pendant la potion), `tous_roles` pour un mort. Événements `lg_nuit`, `lg_aube`, `lg_tir_attente`, `lg_tir`,
-  `lg_verdict`, `lg_fin`.
-- Victoire : le village quand il n'y a plus de loup, les loups dès qu'ils sont au moins aussi nombreux que les
-  autres vivants. Gorgées : mort la nuit 2, abattu 2, éliminé au vote 2 (loup démasqué 3), chaque accusateur
-  d'un innocent éliminé 1, en fin de partie 2 pour chaque joueur du camp perdant (seules celles-ci partent dans
-  `signaler`).
+- 4 à 20 joueurs, page `loupgarou-3d-jeu.html`. Pas de meneur : le serveur fait le conteur, chacun joue
+  sur son téléphone. Toutes les valeurs (délais, nombre de loups, gorgées, rôles automatiques) sont dans
+  `loupgarou_config.json`.
+- Les rôles portent leurs noms officiels (`LG_NOMS_ROLES`). Quatre identifiants datent de la première version et
+  sont gardés : `cartomancienne` = **Voyante**, `videur` = **Salvateur**, `herboriste` = **Sorcière**,
+  `braconnier` = **Chasseur**.
+  - Camp des loups (la meute vote une victime chaque nuit, les loups se voient) : **Loup-Garou** (`loup`),
+    **Infect Père des Loups** (`infect` : une fois par partie, `infecter: true` dans son `lg_nuit` ; la victime
+    rejoint la meute au lieu de mourir, garde sa carte et le sait par `lg_converti`), **Loup Blanc**
+    (`loup_blanc` : chasse avec la meute mais gagne seul ; les nuits paires, ou chaque nuit quand il ne reste que
+    des loups, `solo` = un loup à dévorer).
+  - Village : **Simple Villageois** (`villageois`), **Voyante** (voit la carte d'un joueur par nuit, `lg_vision`),
+    **Salvateur** (protège un joueur des loups, lui compris, jamais le même deux nuits de suite), **Sorcière**
+    (potion de vie pour la victime des loups, potion de mort, une fois chacune), **Chasseur** (à sa mort, il abat
+    un joueur), **Cupidon** (`cupidon` : nuit 1, `cible` + `cible2` = les amoureux, prévenus par `lg_amoureux` ;
+    si l'un meurt, l'autre meurt de chagrin ; un couple loup + village forme son propre camp), **Petite Fille**
+    (`petite_fille` : voit en direct les cibles de la meute, sans savoir qui vote ; chaque nuit 20 % de risque
+    que les loups la repèrent, `lg_petite_fille`), **Ancien** (`ancien` : résiste à la première attaque des loups ;
+    tué par le village, vote, Chasseur ou Sorcière, le village perd ses pouvoirs : `pouvoirs_perdus`),
+    **Idiot du Village** (`idiot` : éliminé au vote, il est épargné, dévoilé, `idiot_revele`, et ne vote plus),
+    **Corbeau** (`corbeau` : désigne un joueur qui aura 2 voix de plus contre lui au vote du lendemain, annoncé à
+    l'aube), **Renard** (`renard` : flaire un joueur et ses deux voisins vivants, `lg_renard` dit s'il y a un loup ;
+    sinon il perd son flair), **Enfant Sauvage** (`enfant_sauvage` : nuit 1, choisit un modèle ; si le modèle
+    meurt, il devient loup), **Montreur d'Ours** (`montreur` : à l'aube, `grogne` si un voisin vivant est loup),
+    **Chevalier à l'Épée Rouillée** (`chevalier` : dévoré, le premier loup vivant à sa gauche, index suivants,
+    meurt à l'aube d'après, cause `rouille`), **Bouc Émissaire** (`bouc` : en cas d'égalité, c'est lui qui part),
+    **Ange** (`ange` : gagne seul s'il meurt avant la fin du premier vote), **Chien-Loup** (`chien_loup` : choisit
+    son camp avec `lg_pret` + `camp: "loups"|"village"`, village par défaut), **Sœurs** (`soeur`, 2 cartes) et
+    **Frères** (`frere`, 3 cartes) qui se connaissent (`famille`).
+  - **Capitaine** (option `capitaine` de `lg_demarrer`, automatique dès 9 joueurs) : élu au premier jour (phase
+    `election`, `lg_voter`, on peut voter pour soi), sa voix compte double, il nomme son successeur en mourant
+    (phase `succession`, `lg_tir` avec `cible` ; au hasard sinon).
+- `lg_demarrer` : `loups` (nombre ; absent = automatique : 1 jusqu'à 6 joueurs, 2 jusqu'à 10, 3 jusqu'à 13, 4
+  jusqu'à 16, puis 5 ; jamais plus d'un loup pour deux autres joueurs), `speciaux` (liste ; absent = selon le
+  nombre de joueurs : Voyante dès 4, Salvateur 6, Sorcière 7, Chasseur 8, Cupidon 9, Petite Fille 10, Ancien 11,
+  Infect 12, Idiot 13, Corbeau 14, Renard 15, Enfant Sauvage 16, Loup Blanc 17, Montreur 18, Chevalier 19,
+  Bouc 20 ; Ange, Chien-Loup, Sœurs et Frères seulement sur demande), `capitaine` (booléen). Infect et Loup Blanc
+  prennent une place de loup (Loup Blanc : 2 loups au moins). Les autres sont Simples Villageois. La composition
+  est publique (`composition`), les rôles non.
+- Phases (`lg_etat.phase`) : `role` (30 s, `lg_pret`), `nuit` (50 s), `potion` (seulement si la Sorcière est dans la
+  partie : 25 s si elle peut agir, sinon 5 à 9 s au hasard pour que la durée ne trahisse rien), `aube` (morts de la
+  nuit, `lg_suivant`), `tir` (25 s, le Chasseur mort vise), `succession` (25 s), `election` (90 s, premier jour),
+  `debat` (180 s), `verdict` (`lg_suivant`), `fin`.
+- La nuit, **tout le monde en vie** envoie `lg_nuit` (`cible`) pour que personne ne se trahisse à la table ;
+  `lg_secret.type_nuit` dit quoi faire : `meute` (réponse privée `lg_meute` à chaque loup), `vision`, `protection`,
+  `renard`, `corbeau`, `cupidon`, `modele`, ou `suspect` (le « flair », compté en fin de partie). La nuit finit
+  quand tous ont agi et que la meute est d'accord, ou à l'échéance : la victime est le choix majoritaire de la
+  meute (égalité : le sort ; Cupidon et l'Enfant Sauvage absents : au hasard). `lg_potion` (`soin` : booléen,
+  `poison` : index ou null). `lg_tir` (`cible`). `lg_voter` (`cible` : index d'un autre vivant, ou null = blanc ;
+  modifiable, réponse privée `lg_vote`). Le plus désigné est éliminé s'il a plus de voix que les blancs ; égalité :
+  personne, sauf le Bouc Émissaire.
+- `lg_etat` (public) : `vivants`, `roles` (ceux des morts et de l'Idiot dévoilé, tous à la fin), `a_vote`, `attente`,
+  `annonce` (aube : `morts` avec rôle, cause et `converti`, `corbeau`, `grogne` ; verdict : `votes` avec `poids`,
+  `compte`, `blancs`, `elimine`, `accusateurs`, `idiot`, `bouc`, `corbeau` ; `tir`, `succession`), `tireur`,
+  `capitaine`, `capitaine_option`, `idiot_revele`, `pouvoirs_perdus`, `corbeau`, `morts`, `gorgees`, `final`
+  (`vainqueur` : `village`, `loups`, `loup_blanc`, `amoureux`, `ange` ou `personne` ; `gagnants`, `perdants`,
+  `roles`, `convertis`, `amoureux`, `flair`, `meilleur_flair`).
+  `lg_secret` (privé, après chaque coup) : `role`, `vivant`, `converti`, `type_nuit`, `loups` (pour un loup),
+  `meute`, `espion` (Petite Fille), `petite_fille` (loups, si repérée), `action`, `couple` (Cupidon), `vote`,
+  `visions`, `flairs` et `renard_actif`, `dernier_protege`, `potions` et `victime` (Sorcière pendant la potion),
+  `infection` et `infecter` (Infect), `solo_possible` et `solo` (Loup Blanc), `amoureux`, `famille`, `modele`,
+  `chien`, `tous_roles` et `tous_convertis` pour un mort. Événements `lg_nuit`, `lg_aube`, `lg_tir_attente`,
+  `lg_tir`, `lg_succession_attente`, `lg_capitaine`, `lg_verdict`, `lg_fin`.
+- Victoire : le village quand il n'y a plus de loup ; les loups dès qu'ils sont au moins aussi nombreux que les
+  autres vivants (s'il n'y a en vie ni Loup Blanc ni couple mixte ; sinon il faut un seul camp en vie) ; le Loup
+  Blanc seul ; le couple mixte seul ; l'Ange s'il meurt au premier tour. Gorgées : mort la nuit 2, abattu 2,
+  éliminé au vote 2 (loup démasqué 3), mort de chagrin 2, chaque accusateur d'un innocent éliminé 1, en fin de
+  partie 2 pour chaque joueur du camp perdant (seules celles-ci partent dans `signaler`).
 
 ## Base de données
 

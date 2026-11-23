@@ -56,7 +56,7 @@ jobs:
       matrix:
         test: [presents_navigateur, mode_test_navigateur, menteur_annonces_navigateur, solo_navigateur,
                undercover_navigateur, conquete_navigateur, telephone_navigateur, telephone_modes_navigateur,
-               justepinte_navigateur, quidenous_navigateur, tournee_navigateur, loupgarou_navigateur, navigateur, soiree_navigateur, enquete_navigateur]
+               justepinte_navigateur, quidenous_navigateur, tournee_navigateur, loupgarou_navigateur, loupgarou_roles_navigateur, navigateur, soiree_navigateur, enquete_navigateur]
     steps:
       - uses: actions/checkout@v5
       - name: Site publié (table-de-jeu, main)

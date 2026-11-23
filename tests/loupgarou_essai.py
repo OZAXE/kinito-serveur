@@ -19,23 +19,36 @@ import loupgarou as L
 ROLES_SECRETS = set(L.LG_ROLES)
 
 
+def nb_loups(roles):
+    return sum(1 for r in roles if r in L.LG_ROLES_LOUPS)
+
+
 def verifier_composition():
     for n in range(L.LG_JOUEURS_MIN, L.LG_JOUEURS_MAX + 1):
         roles = L.lg_composition(n)
         assert len(roles) == n
-        loups = roles.count("loup")
+        loups = nb_loups(roles)
         assert 1 <= loups <= L.lg_loups_max(n) and loups < n - loups, (n, roles)
         for r in L.LG_SPECIAUX:
-            assert roles.count(r) <= 1
+            assert roles.count(r) <= L.LG_GROUPES.get(r, 1)
         # Valeurs absurdes : toujours jouable.
         for loups_demandes in (0, -3, 99, "x", None, True, 2.7):
             for speciaux in (None, [], ["herboriste", "inconnu"], L.LG_SPECIAUX * 3, "videur"):
                 r2 = L.lg_composition(n, loups_demandes, speciaux)
-                assert len(r2) == n and 1 <= r2.count("loup") <= L.lg_loups_max(n), (n, loups_demandes, speciaux, r2)
+                assert len(r2) == n and 1 <= nb_loups(r2) <= L.lg_loups_max(n), (n, loups_demandes, speciaux, r2)
+                for r in L.LG_GROUPES:
+                    assert r2.count(r) in (0, L.LG_GROUPES[r])
+                if "loup_blanc" in r2:
+                    assert nb_loups(r2) >= 2
     assert L.lg_composition(8).count("loup") == 2
     assert L.lg_composition(6).count("loup") == 1
     assert set(L.lg_composition(8)) == {"loup", "villageois", "cartomancienne", "videur", "herboriste", "braconnier"}
     assert L.lg_composition(5, 1, []) == ["loup"] + ["villageois"] * 4
+    assert len(L.lg_composition(20)) == 20 and nb_loups(L.lg_composition(20)) == 5
+    assert "loup_blanc" not in L.lg_composition(5, 1, ["loup_blanc"])
+    assert L.lg_composition(6, 1, ["soeur", "frere"]).count("frere") == 3
+    assert L.lg_composition(5, 1, ["frere", "soeur"]).count("soeur") == 2 and "frere" not in L.lg_composition(5, 1, ["frere", "soeur"])
+    assert L.LG_NOMS_ROLES["cartomancienne"] == "Voyante" and L.LG_NOMS_ROLES["herboriste"] == "Sorcière"
 
 
 def verifier_public(etat):
@@ -43,14 +56,17 @@ def verifier_public(etat):
     json.dumps(pub)
     n = etat["nb_joueurs"]
     for i in range(n):
-        if etat["vivants"][i] and etat["phase"] != "fin":
+        if etat["vivants"][i] and etat["phase"] != "fin" and etat["idiot_revele"] != i:
             assert pub["roles"][i] is None, "le role d un vivant fuit"
         else:
             assert pub["roles"][i] == etat["roles"][i]
     texte = json.dumps(pub)
-    for cle in ("meute", "visions", "protege", "potions", "victime", "\"actions\"", "suspects"):
+    for cle in ("meute", "visions", "protege", "potions", "victime", '"actions"', "suspects", '"convertis"',
+                "amoureux", "flairs", "couple", "modele", "solo"):
+        if cle in ("amoureux", "\"convertis\"") and etat["phase"] == "fin":
+            continue
         assert cle not in texte, f"{cle} fuit dans l etat public"
-    if etat["phase"] == "debat":
+    if etat["phase"] in ("debat", "election"):
         assert "cible" not in json.dumps(pub["a_vote"])
     if etat["phase"] == "fin":
         assert etat["echeance"] is None and etat["final"]
@@ -66,32 +82,39 @@ def verifier_vues(etat):
         v = L.lg_vue(etat, i)
         json.dumps(v)
         assert v["role"] == etat["roles"][i]
+        role = etat["roles"][i]
         fantome = not etat["vivants"][i] or etat["phase"] == "fin"
         if fantome:
             assert v["tous_roles"] == etat["roles"]
         else:
             assert v["tous_roles"] is None, "un vivant voit tous les roles"
-            if etat["roles"][i] != "loup":
+            if not L._est_loup(etat, i):
                 assert v["loups"] is None and v["meute"] is None, "un villageois voit la meute"
-            if etat["roles"][i] != "cartomancienne":
+            if role != "cartomancienne":
                 assert v["visions"] is None
-            if etat["roles"][i] != "herboriste":
+            if role != "herboriste":
                 assert v["potions"] is None and v["victime"] is None
+            if role != "renard":
+                assert v["flairs"] is None
+            if v["amoureux"] is not None:
+                assert i in etat["amoureux"] or role == "cupidon", "un tiers voit les amoureux"
+            if role not in L.LG_GROUPES:
+                assert v["famille"] is None
     assert L.lg_vue(etat, n) is None
 
 
 def jouer(rnd, n):
     noms = [f"J{k}" for k in range(n)]
     loups = rnd.choice([None, None, 1, 2, 3, 9])
-    speciaux = rnd.choice([None, None, [], list(L.LG_SPECIAUX), rnd.sample(L.LG_SPECIAUX, rnd.randint(0, 4))])
+    speciaux = rnd.choice([None, None, None, [], list(L.LG_SPECIAUX), rnd.sample(L.LG_SPECIAUX, rnd.randint(0, 10))])
     t = 1000.0
-    etat = L.lg_initialiser(noms, t, loups=loups, speciaux=speciaux, alea=rnd)
+    etat = L.lg_initialiser(noms, t, loups=loups, speciaux=speciaux, alea=rnd, capitaine=rnd.choice([None, True, False]))
     roles0 = list(etat["roles"])
     pas = 0
     vus = set()
     while etat["phase"] != "fin":
         pas += 1
-        assert pas < 4000, "partie figee"
+        assert pas < 6000, "partie figee"
         verifier_public(etat)
         if pas % 5 == 0:
             verifier_vues(etat)
@@ -113,29 +136,37 @@ def jouer(rnd, n):
         r = rnd.random()
         if r < 0.05:
             msg = {"type": rnd.choice(list(L.LG_ACTIONS)), "cible": rnd.choice([None, -1, n, "x", 1.5, True, rnd.randrange(n)]),
+                   "cible2": rnd.choice([None, -1, rnd.randrange(n)]), "solo": rnd.choice([None, -1, rnd.randrange(n)]),
+                   "infecter": rnd.choice([True, False, "oui"]), "camp": rnd.choice(["loups", "village", 3]),
                    "soin": rnd.choice([True, False, "oui"]), "poison": rnd.choice([None, -1, n, rnd.randrange(n)])}
             L.lg_action(etat, i, msg, t, rnd)
         elif ph == "role":
-            L.lg_action(etat, i, {"type": "lg_pret"}, t, rnd)
+            L.lg_action(etat, i, {"type": "lg_pret", "camp": rnd.choice(["loups", "village"])}, t, rnd)
         elif ph == "nuit":
             avant = {k: v for k, v in etat["actions"].items()}
-            role = etat["roles"][i]
-            if role == "loup":
+            genre = L._type_nuit(etat, i) if etat["vivants"][i] else None
+            msg = {"type": "lg_nuit"}
+            if genre == "meute":
                 # La meute finit souvent par s entendre.
-                proies = [k for k in vivants if etat["roles"][k] != "loup"]
+                proies = [k for k in vivants if not L._est_loup(etat, k)]
                 choix = etat["meute"].get(str(rnd.choice(L._loups_vivants(etat)))) if rnd.random() < 0.6 else None
-                cible = choix if choix is not None else rnd.choice(proies or vivants)
+                msg["cible"] = choix if choix is not None else rnd.choice(proies or vivants)
+                if etat["roles"][i] == "loup_blanc" and rnd.random() < 0.5:
+                    msg["solo"] = rnd.choice([None] + L._loups_vivants(etat))
+                if etat["roles"][i] == "infect":
+                    msg["infecter"] = rnd.random() < 0.4
             else:
-                cible = rnd.choice(vivants)
-            ev = L.lg_action(etat, i, {"type": "lg_nuit", "cible": cible}, t, rnd)
-            if role == "cartomancienne" and etat["vivants"][i] and str(i) not in avant and any(e["msg"]["type"] == "lg_vision" for e in ev):
+                msg["cible"] = rnd.choice(vivants)
+                msg["cible2"] = rnd.choice(vivants)
+            ev = L.lg_action(etat, i, msg, t, rnd)
+            if genre == "vision" and str(i) not in avant and any(e["msg"]["type"] == "lg_vision" for e in ev):
                 vision = [e for e in ev if e["msg"]["type"] == "lg_vision"][0]
-                assert vision["a"] == i and vision["msg"]["role"] == roles0[cible]
+                assert vision["a"] == i and vision["msg"]["role"] == roles0[msg["cible"]]
             for e in ev:
-                if e["msg"]["type"] in ("lg_meute", "lg_vision"):
+                if e["msg"]["type"] in ("lg_meute", "lg_vision", "lg_renard", "lg_amoureux", "lg_converti", "lg_petite_fille"):
                     assert e["a"] is not None, "une action de nuit part a tout le monde"
-                    if e["msg"]["type"] == "lg_meute":
-                        assert roles0[e["a"]] == "loup", "un non-loup recoit la meute"
+                    if e["msg"]["type"] in ("lg_meute", "lg_petite_fille"):
+                        assert L._est_loup(etat, e["a"]), "un non-loup recoit la meute"
         elif ph == "potion":
             h = L._role_vivant(etat, "herboriste")
             if h is not None:
@@ -145,15 +176,17 @@ def jouer(rnd, n):
             else:
                 t = etat["echeance"] + 0.1
                 L.lg_expirer(etat, t, rnd)
-        elif ph == "tir":
+        elif ph in ("tir", "succession"):
             tireur = etat["tireur"]
-            assert roles0[tireur] == "braconnier" and not etat["vivants"][tireur]
+            assert not etat["vivants"][tireur]
+            if ph == "tir":
+                assert roles0[tireur] == "braconnier"
             if rnd.random() < 0.8:
                 L.lg_action(etat, tireur, {"type": "lg_tir", "cible": rnd.choice(vivants)}, t, rnd)
             else:
                 t = etat["echeance"] + 0.1
                 L.lg_expirer(etat, t, rnd)
-        elif ph == "debat":
+        elif ph in ("debat", "election"):
             cible = rnd.choice(vivants + [None])
             L.lg_action(etat, i, {"type": "lg_voter", "cible": cible}, t, rnd)
         elif ph in ("aube", "verdict"):
@@ -163,17 +196,26 @@ def jouer(rnd, n):
     verifier_public(etat)
     verifier_vues(etat)
     f = etat["final"]
-    assert etat["roles"] == roles0, "les roles ont change en cours de partie"
-    loups_vivants = [k for k in range(n) if etat["vivants"][k] and roles0[k] == "loup"]
-    autres = [k for k in range(n) if etat["vivants"][k] and roles0[k] != "loup"]
-    if f["vainqueur"] == "village":
-        assert not loups_vivants
-        assert set(f["gagnants"]) == {k for k in range(n) if roles0[k] != "loup"}
+    assert etat["roles"] == roles0, "les cartes ont change en cours de partie"
+    gagnants = set(f["gagnants"])
+    vivants = [k for k in range(n) if etat["vivants"][k]]
+    loups_v = [k for k in vivants if L._est_loup(etat, k)]
+    v = f["vainqueur"]
+    if v == "village":
+        assert not loups_v and gagnants and all(not L._est_loup(etat, g) for g in gagnants)
+    elif v == "loups":
+        assert loups_v and len(loups_v) >= len(vivants) - len(loups_v)
+        assert all(L._est_loup(etat, g) and roles0[g] != "loup_blanc" for g in gagnants)
+    elif v == "loup_blanc":
+        assert vivants == [roles0.index("loup_blanc")] and gagnants == set(vivants)
+    elif v == "amoureux":
+        assert set(vivants) <= set(etat["amoureux"]) and gagnants == set(etat["amoureux"])
+    elif v == "ange":
+        assert gagnants == {roles0.index("ange")} and not etat["vivants"][roles0.index("ange")]
     else:
-        assert len(loups_vivants) >= len(autres) and loups_vivants
-        assert set(f["gagnants"]) == {k for k in range(n) if roles0[k] == "loup"}
-    assert {p["joueur"] for p in f["perdants"]} == set(range(n)) - set(f["gagnants"])
-    return f["vainqueur"], vus
+        assert v == "personne" and not vivants and not gagnants
+    assert {p["joueur"] for p in f["perdants"]} == set(range(n)) - gagnants
+    return v, vus
 
 
 def scenario_regles():
@@ -297,22 +339,253 @@ def scenario_egalite_et_absents():
     assert etat["annonce"]["sans_vote"] == []
 
 
+# =============================================================
+# ROLES AJOUTES : un petit scenario dirige par role
+# =============================================================
+def partie(roles, capitaine=False, graine=7):
+    noms = [f"P{k}" for k in range(len(roles))]
+    etat = L.lg_initialiser(noms, 0, loups=1, speciaux=[], alea=random.Random(graine), capitaine=capitaine)
+    etat["roles"] = list(roles)
+    etat["composition"] = L._compte_roles(etat["roles"])
+    etat["infection"] = "infect" in roles
+    return etat
+
+
+def tous_prets(etat, camps=None):
+    for i in range(etat["nb_joueurs"]):
+        msg = {"type": "lg_pret"}
+        if camps and i in camps:
+            msg["camp"] = camps[i]
+        L.lg_action(etat, i, msg, 0)
+    assert etat["phase"] == "nuit"
+
+
+def faire_nuit(etat, choix, rnd=None):
+    """choix : index -> cible ou message lg_nuit. Les autres vivants designent un suspect quelconque."""
+    rnd = rnd or random.Random(0)
+    n = etat["nb_joueurs"]
+    for i in range(n):
+        if not etat["vivants"][i] or etat["phase"] != "nuit":
+            continue
+        c = choix.get(i)
+        if c is None:
+            assert L._type_nuit(etat, i) not in ("meute",), f"loup {i} sans consigne"
+            autres = [k for k in range(n) if etat["vivants"][k] and k != i]
+            c = autres[0]
+        msg = dict(c) if isinstance(c, dict) else {"cible": c}
+        msg["type"] = "lg_nuit"
+        ev = L.lg_action(etat, i, msg, 0, rnd)
+        assert not (ev and ev[0]["msg"]["type"] == "erreur"), (i, msg, ev)
+    if etat["phase"] == "potion":
+        h = L._role_vivant(etat, "herboriste")
+        if h is not None:
+            L.lg_action(etat, h, {"type": "lg_potion", "soin": False, "poison": None}, 0)
+        else:
+            L.lg_expirer(etat, etat["echeance"] + 1, rnd)
+    assert etat["phase"] in ("aube", "fin"), etat["phase"]
+
+
+def suite(etat):
+    for i in range(etat["nb_joueurs"]):
+        L.lg_action(etat, i, {"type": "lg_suivant"}, 0)
+
+
+def voter(etat, votes):
+    for i in range(etat["nb_joueurs"]):
+        if etat["vivants"][i] and etat["phase"] in ("debat", "election") and etat["idiot_revele"] != i:
+            L.lg_action(etat, i, {"type": "lg_voter", "cible": votes.get(i)}, 0)
+
+
+def scenario_cupidon_et_couple_mixte():
+    # 0 loup, 1 cupidon, 2..5 villageois
+    etat = partie(["loup", "cupidon", "villageois", "villageois", "villageois", "villageois"])
+    tous_prets(etat)
+    assert L.lg_vue(etat, 1)["type_nuit"] == "cupidon"
+    assert L.lg_action(etat, 1, {"type": "lg_nuit", "cible": 0, "cible2": 0}, 0)[0]["msg"]["type"] == "erreur"
+    faire_nuit(etat, {0: 4, 1: {"cible": 0, "cible2": 2}})
+    assert etat["amoureux"] == [0, 2]
+    assert L.lg_vue(etat, 2)["amoureux"] == [0, 2] and L.lg_vue(etat, 3)["amoureux"] is None
+    assert L._camp(etat, 0) == "amoureux" and L._camp(etat, 2) == "amoureux"
+    assert not etat["vivants"][4]
+    suite(etat)
+    # Le village elimine l amoureux villageois : le loup meurt de chagrin, le village gagne.
+    voter(etat, {0: 3, 1: 2, 3: 2, 5: 2, 2: 3})
+    a = etat["annonce"]
+    assert a["elimine"] == 2 and not etat["vivants"][0]
+    assert any(m["joueur"] == 0 and m["cause"] == "chagrin" for m in a["morts"])
+    suite(etat)
+    assert etat["phase"] == "fin" and etat["final"]["vainqueur"] == "village"
+    # Couple mixte seul en vie : il gagne.
+    etat = partie(["loup", "cupidon", "villageois", "villageois", "villageois"])
+    tous_prets(etat)
+    faire_nuit(etat, {0: 3, 1: {"cible": 0, "cible2": 2}})
+    for k in (1, 4):
+        etat["vivants"][k] = False
+        etat["morts"].append({"joueur": k, "role": etat["roles"][k], "cause": "devore", "boit": 0})
+    suite(etat)
+    assert etat["phase"] == "fin" and etat["final"]["vainqueur"] == "amoureux" and etat["final"]["gagnants"] == [0, 2]
+
+
+def scenario_ancien_et_pouvoirs():
+    # 0 loup, 1 ancien, 2 voyante, 3 chasseur, 4..6 villageois
+    etat = partie(["loup", "ancien", "cartomancienne", "braconnier", "villageois", "villageois", "villageois"])
+    tous_prets(etat)
+    faire_nuit(etat, {0: 1, 2: 0})
+    assert etat["vivants"][1] and not etat["ancien_vie"], "l Ancien resiste a la premiere attaque"
+    assert etat["annonce"]["morts"] == []
+    suite(etat)
+    voter(etat, {0: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 1: 0})
+    assert not etat["vivants"][1] and etat["pouvoirs_perdus"]
+    suite(etat)
+    assert etat["phase"] == "nuit" and L._type_nuit(etat, 2) == "suspect", "la Voyante a perdu son don"
+    faire_nuit(etat, {0: 3})
+    assert not etat["vivants"][3]
+    suite(etat)
+    assert etat["phase"] == "debat", "le Chasseur sans pouvoir ne tire pas"
+
+
+def scenario_idiot_bouc_corbeau():
+    # 0 loup, 1 idiot, 2 bouc, 3 corbeau, 4..6 villageois
+    etat = partie(["loup", "idiot", "bouc", "corbeau", "villageois", "villageois", "villageois"])
+    tous_prets(etat)
+    assert L._type_nuit(etat, 3) == "corbeau"
+    faire_nuit(etat, {0: 6, 3: 5})
+    assert etat["annonce"]["corbeau"] == 5 and L.lg_etat_public(etat, 0)["corbeau"] == 5
+    suite(etat)
+    # Une seule voix contre P5, plus les 2 du Corbeau : 3, contre 2 pour P0.
+    voter(etat, {0: 1, 1: 0, 2: 4, 3: 0, 4: 5, 5: 2})
+    a = etat["annonce"]
+    assert a["compte"][5] == 3 and a["compte"][0] == 2 and a["elimine"] == 5 and not etat["vivants"][5]
+    suite(etat)
+    faire_nuit(etat, {0: 4, 3: 4})        # le Corbeau designe la victime : sans effet
+    assert etat["corbeau_jour"] is None
+    suite(etat)
+    # L Idiot elimine : epargne, devoile, il ne vote plus.
+    voter(etat, {0: 1, 2: 1, 3: 1, 1: 0})
+    a = etat["annonce"]
+    assert a["idiot"] == 1 and etat["vivants"][1] and etat["idiot_revele"] == 1
+    assert L.lg_etat_public(etat, 0)["roles"][1] == "idiot"
+    suite(etat)
+    faire_nuit(etat, {0: 3, 3: 1})
+    etat["corbeau_jour"] = None           # on isole la regle du Bouc
+    suite(etat)
+    assert L.lg_action(etat, 1, {"type": "lg_voter", "cible": 0}, 0)[0]["msg"]["type"] == "erreur"
+    # Egalite 1-1 (P0 et P2 se visent) : le Bouc Emissaire part.
+    voter(etat, {0: 2, 2: 0})
+    a = etat["annonce"]
+    assert a["egalite"] and a["bouc"] == 2 and not etat["vivants"][2]
+
+
+def scenario_renard_montreur_chevalier():
+    # Sieges : 0 loup, 1 montreur, 2 renard, 3 chevalier, 4 loup, 5..8 villageois
+    etat = partie(["loup", "montreur", "renard", "chevalier", "loup", "villageois", "villageois", "villageois", "villageois"])
+    tous_prets(etat)
+    ev = []
+    faire_nuit(etat, {0: 3, 4: 3, 2: 6})
+    # Le renard a flaire P6 et ses voisins (5 et 7) : pas de loup, il perd son flair.
+    assert etat["flairs"][-1]["groupe"] == [6, 7, 5] and etat["flairs"][-1]["loup"] is False
+    assert not etat["renard_actif"]
+    # Le Chevalier devore : le premier loup a sa gauche (P4) mourra a l aube suivante.
+    assert not etat["vivants"][3] and etat["rouille"] == 4
+    assert etat["annonce"]["grogne"] is True, "le montreur est assis a cote de P0"
+    suite(etat)
+    voter(etat, {})
+    suite(etat)
+    assert L._type_nuit(etat, 2) == "suspect"
+    faire_nuit(etat, {0: 8, 4: 8})
+    assert not etat["vivants"][4] and any(m["cause"] == "rouille" for m in etat["annonce"]["morts"])
+
+
+def scenario_infect_enfant_loup_blanc():
+    # 0 infect, 1 loup blanc, 2 enfant sauvage, 3 voyante, 4..8 villageois
+    etat = partie(["infect", "loup_blanc", "enfant_sauvage", "cartomancienne", "villageois", "villageois", "villageois",
+                   "villageois", "villageois"])
+    tous_prets(etat)
+    assert L._type_nuit(etat, 2) == "modele"
+    assert L.lg_action(etat, 1, {"type": "lg_nuit", "cible": 4, "solo": 0}, 0)[0]["msg"]["type"] == "erreur", "nuit impaire"
+    faire_nuit(etat, {0: {"cible": 4, "infecter": True}, 1: 4, 2: 5, 3: 0})
+    assert etat["vivants"][4] and etat["convertis"][4] and not etat["infection"]
+    assert L.lg_vue(etat, 4)["loups"] == [0, 1, 4] and L._type_nuit(etat, 4) == "meute"
+    assert etat["modele"] == 5
+    suite(etat)
+    voter(etat, {0: 5, 1: 5, 4: 5, 2: 5, 3: 5})
+    assert not etat["vivants"][5] and etat["convertis"][2], "l Enfant Sauvage devient loup"
+    suite(etat)
+    assert L.lg_vue(etat, 1)["solo_possible"] is True
+    faire_nuit(etat, {0: 6, 1: {"cible": 6, "solo": 0}, 2: 6, 4: 6})
+    morts = {m["joueur"] for m in etat["annonce"]["morts"]}
+    assert morts == {0, 6}, morts
+    # Le Loup Blanc empeche la victoire anticipee de la meute.
+    assert L._camp(etat, 1) == "loup_blanc"
+
+
+def scenario_ange_chien_capitaine():
+    # Ange elimine au premier vote : il gagne seul.
+    etat = partie(["loup", "ange", "villageois", "villageois", "villageois"])
+    tous_prets(etat)
+    faire_nuit(etat, {0: 4})
+    suite(etat)
+    voter(etat, {0: 1, 2: 1, 3: 1})
+    suite(etat)
+    assert etat["phase"] == "fin" and etat["final"]["vainqueur"] == "ange" and etat["final"]["gagnants"] == [1]
+    # Chien-Loup qui choisit les loups.
+    etat = partie(["loup", "chien_loup", "villageois", "villageois", "villageois", "villageois"])
+    tous_prets(etat, camps={1: "loups"})
+    assert etat["convertis"][1] and L._type_nuit(etat, 1) == "meute" and L.lg_vue(etat, 0)["loups"] == [0, 1]
+    # Capitaine : election au premier jour, voix double, succession.
+    etat = partie(["loup", "cartomancienne", "villageois", "villageois", "villageois", "villageois", "villageois"], capitaine=True)
+    tous_prets(etat)
+    faire_nuit(etat, {0: 6})
+    suite(etat)
+    assert etat["phase"] == "election"
+    voter(etat, {0: 2, 1: 2, 2: 2, 3: 1, 4: 1, 5: 3})
+    assert etat["capitaine"] == 2 and etat["phase"] == "debat"
+    # P2 (capitaine, 2 voix) + P1 contre P3 ; P0, P4, P5 contre P5... 3 voix contre P3, 2 contre P1.
+    voter(etat, {2: 3, 1: 3, 0: 1, 4: 1, 5: 0, 3: 0})
+    a = etat["annonce"]
+    assert a["compte"][3] == 3 and a["compte"][1] == 2 and a["elimine"] == 3
+    suite(etat)
+    faire_nuit(etat, {0: 2})
+    suite(etat)
+    assert etat["phase"] == "succession" and etat["tireur"] == 2
+    L.lg_action(etat, 2, {"type": "lg_tir", "cible": 4}, 0)
+    assert etat["capitaine"] == 4 and etat["phase"] == "aube"
+
+
+def scenario_petite_fille_et_famille():
+    etat = partie(["loup", "loup", "petite_fille", "soeur", "soeur", "villageois", "villageois"])
+    tous_prets(etat)
+    L.lg_action(etat, 0, {"type": "lg_nuit", "cible": 5}, 0)
+    v = L.lg_vue(etat, 2)
+    assert v["espion"] == {"5": 1} and v["loups"] is None
+    assert L.lg_vue(etat, 3)["famille"] == [3, 4] and L.lg_vue(etat, 5)["famille"] is None
+    etat["pf_reperee"] = True
+    assert L.lg_vue(etat, 0)["petite_fille"] == 2 and L.lg_vue(etat, 5)["petite_fille"] is None
+
+
 def main():
     nb = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     verifier_composition()
     scenario_regles()
     scenario_loups_gagnent()
     scenario_egalite_et_absents()
+    scenario_cupidon_et_couple_mixte()
+    scenario_ancien_et_pouvoirs()
+    scenario_idiot_bouc_corbeau()
+    scenario_renard_montreur_chevalier()
+    scenario_infect_enfant_loup_blanc()
+    scenario_ange_chien_capitaine()
+    scenario_petite_fille_et_famille()
     rnd = random.Random(2026)
-    bilan = {"village": 0, "loups": 0}
+    bilan = {}
     phases = set()
     for k in range(nb):
         n = rnd.randint(L.LG_JOUEURS_MIN, L.LG_JOUEURS_MAX)
         vainqueur, vus = jouer(rnd, n)
-        bilan[vainqueur] += 1
+        bilan[vainqueur] = bilan.get(vainqueur, 0) + 1
         phases |= vus
-    assert phases >= {"role", "nuit", "potion", "aube", "tir", "debat", "verdict"}, phases
-    print(f"OK : {nb} parties, village {bilan['village']}, loups {bilan['loups']}, phases {sorted(phases)}")
+    assert phases >= {"role", "nuit", "potion", "aube", "tir", "debat", "verdict", "election", "succession"}, phases
+    print(f"OK : {nb} parties, vainqueurs {bilan}, phases {sorted(phases)}")
 
 
 if __name__ == "__main__":

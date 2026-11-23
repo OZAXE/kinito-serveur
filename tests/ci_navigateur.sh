@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 # Tests au délai de silence normal (12 s), puis ceux qui demandent DELAI_SILENCE=30 ENQ_RAPIDE=1.
 NORMAUX="presents_navigateur mode_test_navigateur menteur_annonces_navigateur solo_navigateur undercover_navigateur conquete_navigateur telephone_navigateur telephone_modes_navigateur justepinte_navigateur quidenous_navigateur tournee_navigateur loupgarou_navigateur navigateur"
 LENTS="soiree_navigateur enquete_navigateur"
+LG_LENT="loupgarou_roles_navigateur"
 if [ $# -gt 0 ]; then CHOIX=" $* "; else CHOIX=""; fi
 garde() { [ -z "$CHOIX" ] || [[ "$CHOIX" == *" $1 "* ]]; }
 
@@ -46,6 +47,7 @@ phase() {  # phase "<tests>" VAR=valeur... : démarre le serveur seulement si un
 }
 phase "$NORMAUX" DELAI_SILENCE=12
 phase "$LENTS" DELAI_SILENCE=30 ENQ_RAPIDE=1
+phase "$LG_LENT" DELAI_SILENCE=30 LG_NUIT=240
 
 if [ ${#ECHECS[@]} -gt 0 ]; then echo "Échecs : ${ECHECS[*]}"; exit 1; fi
 echo "Tous les tests navigateur passent."

@@ -9,9 +9,9 @@
 //   1. le réglage (1 loup, les quatre rôles spéciaux) part avec le lancement ;
 //   2. chacun découvre SON rôle (carte cachée tant qu'on ne la touche pas), et
 //      rien ne trahit le loup sur la page des autres ;
-//   3. la nuit : la meute vote, la Cartomancienne voit le rôle sondé, le Videur
-//      protège, les autres soupçonnent ; l'Herboriste voit la victime et passe ;
-//   4. l'aube annonce le Braconnier mort, qui tire depuis sa page ;
+//   3. la nuit : la meute vote, la Voyante voit le rôle sondé, le Salvateur
+//      protège, les autres soupçonnent ; la Sorcière voit la victime et passe ;
+//   4. l'aube annonce le Chasseur mort, qui tire depuis sa page ;
 //   5. le débat : votes, verdict (qui a voté quoi), le loup éliminé, la victoire
 //      du village et les gorgées ; « Rejouer » relance ;
 //   6. aucune erreur JavaScript.
@@ -102,14 +102,14 @@ async function attendreQue(test, delai, quoi) {
   await attendreQue(async () => (await etat(code)).joueurs?.length === noms.length, 30000, 'joueurs dans le salon');
   await attendre(1000);
 
-  // 1. Réglage : 1 loup, et les quatre rôles spéciaux (à 6, l'Herboriste et le Braconnier sont absents d'office).
+  // 1. Réglage : 1 loup, et les quatre rôles spéciaux (à 6, la Sorcière et le Chasseur sont absents d'office).
   await attendreQue(() => A.evaluate(() => /À 6/.test(document.getElementById('panneau').innerText)), 20000, 'aperçu de la composition');
   await A.evaluate(() => [...document.querySelectorAll('#panneau button')].find(b => b.textContent === '1').click());
-  for (const r of ['Herboriste', 'Braconnier']) {
+  for (const r of ['Sorcière', 'Chasseur']) {
     await A.evaluate(r => [...document.querySelectorAll('#panneau .mode')].find(m => m.textContent.includes(r)).click(), r);
   }
   const compo = await A.evaluate(() => document.querySelector('.compo').textContent);
-  verifier(/🐺 Loup-Garou/.test(compo) && /🌿/.test(compo) && /🏹/.test(compo) && /🧑‍🌾 Villageois/.test(compo), 'aperçu : ' + compo);
+  verifier(/🐺 Loup-Garou/.test(compo) && /🧙‍♀️ Sorcière/.test(compo) && /🏹 Chasseur/.test(compo) && /🔮 Voyante/.test(compo) && /Simple Villageois/.test(compo), 'aperçu : ' + compo);
   await capture(A, '1-attente');
   await cliquer(A, /D.marrer la partie/);
   await attendreQue(async () => (await etat(code)).phase === 'role', 20000, 'phase des rôles');
@@ -121,7 +121,7 @@ async function attendreQue(test, delai, quoi) {
   const L = qui('loup'), C = qui('cartomancienne'), V = qui('videur'), H = qui('herboriste'), B = qui('braconnier'), U = qui('villageois');
 
   // 2. Chacun découvre son rôle, caché par défaut.
-  const NOMS_ROLES = { loup: 'Loup-Garou', villageois: 'Villageois', cartomancienne: 'Cartomancienne', videur: 'Videur', herboriste: 'Herboriste', braconnier: 'Braconnier' };
+  const NOMS_ROLES = { loup: 'Loup-Garou', villageois: 'Simple Villageois', cartomancienne: 'Voyante', videur: 'Salvateur', herboriste: 'Sorcière', braconnier: 'Chasseur' };
   await Promise.all(pages.map(p => p.waitForSelector('.carte-role', { timeout: 60000 })));
   // En parallèle : la phase des rôles ne dure que 25 s.
   await Promise.all(pages.map(async (p, k) => {
@@ -144,7 +144,7 @@ async function attendreQue(test, delai, quoi) {
   const nuit = async k => {
     const p = pages[k];
     if (k === L) { await tuile(p, B); await cliquer(p, /^Valider$/); }
-    else if (k === C) { await tuile(p, L); await cliquer(p, /R.v.ler son r.le/); }
+    else if (k === C) { await tuile(p, L); await cliquer(p, /R.v.ler sa carte/); }
     else if (k === V) { await tuile(p, V); await cliquer(p, /Prot.ger/); }
     else { await tuile(p, L); await cliquer(p, /Je le soup.onne/); }
   };
@@ -163,7 +163,7 @@ async function attendreQue(test, delai, quoi) {
   // L'Herboriste voit la victime ; les autres « la nuit continue ».
   await attendreQue(() => pages[H].evaluate(() => /Les loups ont attaqu/.test(document.getElementById('panneau').innerText)), 30000, 'l’Herboriste voit la victime');
   verifier((await panneau(pages[H])).includes(noms[B]), 'l’Herboriste voit que ' + noms[B] + ' est attaqué');
-  verifier(/La nuit continue/.test(await panneau(pages[U])), 'les autres attendent sans rien voir');
+  verifier(!!(await attendreQue(async () => /La nuit continue/.test(await panneau(pages[U])), 15000, 'nuit continue').catch(() => false)), 'les autres attendent sans rien voir');
   await capture(pages[H], '3-herboriste');
   await cliquer(pages[H], /Ne rien faire/, 15000).catch(() => console.log('(potion expirée avant le clic : machine lente)'));
   await attendreQue(async () => ['aube', 'tir'].includes((await etat(code)).phase), 40000, 'aube 1');
@@ -172,11 +172,11 @@ async function attendreQue(test, delai, quoi) {
   // Un témoin qui reste en vie jusqu'au bout : la Cartomancienne.
   const O = pages[C];
   await attendreQue(() => O.evaluate(n => document.getElementById('panneau').innerText.includes(n), noms[B]), 30000, 'annonce du mort');
-  verifier(/Braconnier/.test(await panneau(O)), 'l’aube annonce le Braconnier mort, avec son rôle');
+  verifier(/Chasseur/.test(await panneau(O)), 'l’aube annonce le Chasseur mort, avec son rôle');
   await capture(O, '4-aube');
   if ((await etat(code)).phase === 'aube') await Promise.all(pages.map(p => cliquer(p, /Au d.bat/, 15000).catch(() => {})));
   await attendreQue(async () => (await etat(code)).phase === 'tir', 30000, 'tir du Braconnier');
-  await attendreQue(() => pages[B].evaluate(() => /Tu es mort, Braconnier/.test(document.getElementById('panneau').innerText)), 30000, 'le Braconnier peut tirer');
+  await attendreQue(() => pages[B].evaluate(() => /Tu es mort, Chasseur/.test(document.getElementById('panneau').innerText)), 30000, 'le Braconnier peut tirer');
   await capture(pages[B], '5-tir');
   await tuile(pages[B], U);
   await cliquer(pages[B], /^Tirer$/);
