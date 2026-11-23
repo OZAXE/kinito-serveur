@@ -11,21 +11,29 @@ tournee_plateaux.json (fabrique par tournee_plateaux.py), mini-jeux :
 tournee_minijeux.json.
 
 Regles :
-  - Trois plateaux (La Terrasse facile, Le Pub moyen, La Cave difficile) :
-    une boucle et des branches. A un embranchement, le joueur choisit son
-    chemin. Chaque plateau a ses gains, ses gorgees et ses evenements.
-    Chacun commence au depart avec 10 pieces.
+  - Trois plateaux (La Terrasse facile, Le Pub moyen, La Cave difficile),
+    construits comme les cartes de Mario Party : une grande boucle en
+    quartiers, des embranchements (le joueur choisit sa route en y arrivant),
+    un peage, un gadget (bateau, tram, geyser, trappes), deux boutiques, des
+    cases objet. Chaque plateau a ses gains, ses gorgees et ses evenements.
+    Chacun commence au depart avec 10 pieces et les poches vides (3 objets
+    au plus).
   - Une partie = N tours (5, 10 ou 15). Un tour :
       0. selon le plateau, un evenement de plateau (happy hour, tournee du
          patron...) ; dans la Cave, le videur se deplace.
-      1. « des » : tout le monde lance son de EN MEME TEMPS (le serveur tire
-         la valeur). Si plusieurs chemins sont possibles, le joueur choisit
-         le sien (« tr_chemin »). A l echeance, de et chemin au hasard.
+      1. « des » : chacun peut d abord utiliser un objet (« tr_objet » :
+         double ou triple de, cafe +3, de pipe, taxi, echange, vol...), puis
+         tout le monde lance son de de 10 EN MEME TEMPS (le serveur tire la
+         valeur). A chaque embranchement sur sa route, le joueur choisit
+         (« tr_chemin »). A l echeance, de et chemins au hasard.
       2. « deplacement » : on avance dans l ordre des des (le plus haut
          d abord). Passer par le depart rapporte des pieces. Passer ou
          s arreter sur la capsule d or l achete si on a de quoi (elle part
          alors ailleurs). Passer devant le videur coute des pieces, s arreter
-         sur lui renvoie au depart. Puis l effet de la case d arrivee.
+         sur lui renvoie au depart. Passer un peage coute des pieces. Puis
+         l effet de la case d arrivee (objet, transport, piege pose...).
+      2 bis. « boutique » : ceux qui sont passes devant une boutique peuvent
+         acheter un objet (« tr_acheter »).
       3. « minijeu » : un mini-jeu tire au hasard (jamais deux fois de suite),
          joue en local sur chaque telephone avec la meme graine ; chacun
          envoie son score. Gains 10 / 6 / 3 pieces aux trois premiers rangs,
@@ -55,6 +63,9 @@ _M = TR_CONFIG["minijeu"]
 _EVENEMENTS = {e["id"]: e for e in TR_CONFIG["evenements"]}
 _EV_PLATEAU = {e["id"]: e for e in TR_CONFIG["evenements_plateau"]}
 _CHANCE = {e["id"]: e for e in TR_CONFIG["chance"]}
+_OBJETS = {o["id"]: o for o in TR_CONFIG["objets"]}
+_FACES = TR_CONFIG["de"]["faces"]
+_POCHE = TR_CONFIG["poche_max"]
 
 
 # =============================================================
@@ -114,41 +125,51 @@ def _distances(cases, depart, limite):
 
 
 def _nouvelle_case_capsule(etat, rng):
-    """Une case pour la capsule : pas le depart ni une trappe, pas la case actuelle, pas juste devant un pion."""
+    """Une case pour la capsule : un de ses emplacements (comme les etoiles de Mario Party),
+    pas la case actuelle, pas juste devant un pion."""
     cases = _cases(etat)
     interdites = set(TR_CONFIG["capsule"]["interdites"])
-    candidates = [c["id"] for c in cases if c["type"] not in interdites and c["id"] != etat.get("capsule_case")]
-    proches = set()
+    possibles = _plateau(etat).get("capsule_possibles") or [c["id"] for c in cases if c["type"] not in interdites]
+    candidates = [c for c in possibles if c != etat.get("capsule_case")]
+    # Ni sous le nez d un joueur, ni hors d atteinte : a 1 a 3 tours de de du plus proche.
+    dist = {}
     for p in etat["positions"]:
-        proches |= set(_distances(cases, p, 3))
-    loin = [c for c in candidates if c not in proches]
-    return rng.choice(loin or candidates)
+        for c, d in _distances(cases, p, 24).items():
+            dist[c] = min(d, dist.get(c, 99))
+    bien = [c for c in candidates if 7 <= dist.get(c, 99) <= 18]
+    loin = [c for c in candidates if dist.get(c, 99) > 5]
+    return rng.choice(bien or loin or candidates)
 
 
-def _chemins(cases, depart, de):
-    """Tous les chemins possibles de de pas depuis depart (un par suite de choix aux embranchements)."""
-    chemins = [[]]
+def _chemin_hasard(cases, depart, de, rng):
+    pos, ch = depart, []
     for _ in range(de):
-        chemins = [ch + [s] for ch in chemins for s in cases[ch[-1] if ch else depart]["suivants"]]
-    return chemins
+        pos = rng.choice(cases[pos]["suivants"])
+        ch.append(pos)
+    return ch
 
 
-def _options(etat, j, de):
-    """Les chemins proposes au joueur j (vide s il n y a qu un chemin)."""
+def _options_carrefour(etat, j, pos, reste):
+    """A l embranchement pos, les routes proposees au joueur j : chacune jusqu au prochain
+    embranchement ou jusqu au bout du de. Un peage trop cher n est pas propose."""
     cases = _cases(etat)
-    chemins = _chemins(cases, etat["positions"][j], de)
-    if len(chemins) < 2:
-        return []
+    prix_peage = _plateau(etat).get("peage", 0)
+    ici = cases[pos].get("zone")
     options = []
-    for ch in chemins:
-        zones = []
-        for c in ch:
-            z = cases[c].get("zone")
-            if z and z not in zones:
-                zones.append(z)
-        libelle = ("par " + " puis ".join(zones)) if zones else "tout droit"
-        options.append({"chemin": ch, "arrivee": ch[-1], "libelle": libelle,
-                        "type_arrivee": cases[ch[-1]]["type"]})
+    for s in cases[pos]["suivants"]:
+        seg, p = [s], s
+        while len(seg) < reste and len(cases[p]["suivants"]) == 1:
+            p = cases[p]["suivants"][0]
+            seg.append(p)
+        zone = cases[s].get("zone")
+        libelle = "tout droit" if not zone or zone == ici else "par " + zone
+        o = {"chemin": seg, "arrivee": seg[-1], "libelle": libelle, "type_arrivee": cases[seg[-1]]["type"]}
+        if cases[s]["type"] == "peage" and prix_peage:
+            o["peage"] = prix_peage
+            o["libelle"] += " (péage " + str(prix_peage) + " pièces)"
+        options.append(o)
+    payables = [o for o in options if o.get("peage", 0) <= etat["pieces"][j]]
+    options = payables or options
     vus = {}
     for o in options:
         vus[o["libelle"]] = vus.get(o["libelle"], 0) + 1
@@ -156,6 +177,42 @@ def _options(etat, j, de):
         if vus[o["libelle"]] > 1:
             o["libelle"] += " (case " + str(o["arrivee"]) + ")"
     return options
+
+
+def _planifier(etat, j):
+    """Avance la route du joueur j jusqu au bout de son de, ou jusqu au prochain embranchement
+    (il doit alors choisir : etat["options"])."""
+    cases = _cases(etat)
+    de = etat["des"][str(j)]
+    ch = etat["trajets"].setdefault(str(j), [])
+    pos = ch[-1] if ch else etat["positions"][j]
+    etat["options"].pop(str(j), None)
+    while len(ch) < de:
+        suivants = cases[pos]["suivants"]
+        if len(suivants) > 1:
+            options = _options_carrefour(etat, j, pos, de - len(ch))
+            if len(options) > 1:
+                etat["options"][str(j)] = options
+                etat["choix"].pop(str(j), None)
+                return
+            suivants = [options[0]["chemin"][0]]
+        pos = suivants[0]
+        ch.append(pos)
+
+
+def _replanifier(etat, j):
+    """La position du joueur j a change avant les deplacements : sa route repart de zero."""
+    if str(j) in etat["des"]:
+        etat["trajets"][str(j)] = []
+        etat["choix"].pop(str(j), None)
+        _planifier(etat, j)
+
+
+def _choisir(etat, j, k):
+    o = etat["options"][str(j)][k]
+    etat["trajets"].setdefault(str(j), []).extend(o["chemin"])
+    etat["choix"][str(j)] = k
+    _planifier(etat, j)
 
 
 def _precedents(cases):
@@ -173,7 +230,9 @@ def _types(etat):
 def _carte(p):
     return {"id": p["id"], "nom": p["nom"], "difficulte": p["difficulte"], "icone": p["icone"],
             "description": p["description"], "cases": p["cases"], "videur": p["videur"] is not None,
-            "boire": p["boire"], "pieces": p["pieces"]}
+            "boire": p["boire"], "pieces": p["pieces"], "peage": p.get("peage", 0),
+            "capsule_possibles": p.get("capsule_possibles", []), "faces": _FACES, "poche_max": _POCHE,
+            "objets": TR_CONFIG["objets"]}
 
 
 def tr_plateaux():
@@ -215,8 +274,17 @@ def tr_initialiser(noms, maintenant, tours=None, deja=None, plateau=None):
         "bonus": {},                 # effets de l evenement de plateau du tour
         "evenement_plateau": None,   # {tour, id, texte, ...} (public)
         "des": {},                   # str(joueur) -> valeur du de (public)
-        "options": {},               # str(joueur) -> chemins possibles (public)
-        "choix": {},                 # str(joueur) -> indice du chemin choisi
+        "options": {},               # str(joueur) -> routes a l embranchement ou il doit choisir (public)
+        "choix": {},                 # str(joueur) -> indice du dernier chemin choisi
+        "trajets": {},               # str(joueur) -> la route deja decidee pour ce tour
+        "des_detail": {},            # str(joueur) -> les des lances (double, triple...)
+        "objets": [[] for _ in range(n)],   # les poches (3 objets au plus, public comme dans Mario Party)
+        "objet_tour": {},            # str(joueur) -> objet utilise ce tour (un seul)
+        "modif_de": {},              # str(joueur) -> {"des": 2} ou {"bonus": 3} pour le prochain lancer
+        "utilisations": [],          # les objets utilises ce tour (public)
+        "pieges_poses": {},          # str(case) -> joueur qui y a pose un verre renverse
+        "boutiques": {},             # str(joueur) -> la boutique devant laquelle il est passe
+        "achats": {},                # str(joueur) -> objet achete (ou None : rien)
         "deplacements": None,        # resultat du tour de plateau (public)
         "minijeu": None,             # {id, nom, regle, duree, sens, graine}
         "dernier_minijeu": deja.get("dernier_minijeu"),
@@ -264,6 +332,14 @@ def tr_etat_public(etat, maintenant):
         "des": {k: v for k, v in etat["des"].items()},
         "options": etat["options"] if phase == "des" else {},
         "choix": etat["choix"],
+        "trajets": etat.get("trajets", {}) if phase == "des" else {},
+        "des_detail": etat.get("des_detail", {}),
+        "objets": etat.get("objets"),
+        "objet_tour": etat.get("objet_tour", {}),
+        "utilisations": etat.get("utilisations", []),
+        "pieges_poses": etat.get("pieges_poses", {}),
+        "boutiques": etat.get("boutiques", {}) if phase == "boutique" else {},
+        "achats": etat.get("achats", {}) if phase == "boutique" else {},
         "deplacements": etat["deplacements"] if phase != "des" else None,
         "minijeu": etat["minijeu"],
         "a_joue": [str(i) in etat["scores"] for i in range(etat["nb_joueurs"])],
@@ -294,6 +370,22 @@ def _gagner(etat, j, pieces):
 def _boit(etat, j, n):
     etat["gorgees"][j] += n
     return n
+
+
+def _protege(etat, k):
+    """L ange gardien de k bloque un vol (il s en va ensuite)."""
+    poche = etat.get("objets", [[]] * etat["nb_joueurs"])[k]
+    if "bouclier" in poche:
+        poche.remove("bouclier")
+        return True
+    return False
+
+
+def _donner_objet(etat, j, objet):
+    if len(etat["objets"][j]) >= _POCHE:
+        return False
+    etat["objets"][j].append(objet)
+    return True
 
 
 def _echanger(etat, j, rng):
@@ -328,9 +420,12 @@ def _appliquer(etat, j, ev, e, rng):
         autres = [k for k in _presents(etat) if k != j]
         if autres:
             riche = max(autres, key=lambda k: (etat["pieces"][k], -k))
-            pris = -_gagner(etat, riche, -ev["vol"])
-            _gagner(etat, j, pris)
-            e["victime"], e["pieces"] = riche, pris
+            if _protege(etat, riche):
+                e["victime"], e["protege"] = riche, True
+            else:
+                pris = -_gagner(etat, riche, -ev["vol"])
+                _gagner(etat, j, pris)
+                e["victime"], e["pieces"] = riche, pris
     if "raccourci" in ev:
         # Juste avant la capsule : on remonte de quelques cases a partir d elle.
         prec = _precedents(_cases(etat))
@@ -350,9 +445,12 @@ def _appliquer(etat, j, ev, e, rng):
         autres = [k for k in _presents(etat) if k != j and etat["capsules"][k] > 0]
         if autres:
             leader = max(autres, key=lambda k: (etat["capsules"][k], etat["pieces"][k], -k))
-            etat["capsules"][leader] -= 1
-            etat["capsules"][j] += 1
-            e["victime"], e["capsules"] = leader, 1
+            if _protege(etat, leader):
+                e["victime"], e["protege"] = leader, True
+            else:
+                etat["capsules"][leader] -= 1
+                etat["capsules"][j] += 1
+                e["victime"], e["capsules"] = leader, 1
         else:
             e["rate"] = True
 
@@ -399,6 +497,16 @@ def _effet_case(etat, j, case, effets, rng):
         vers = p["cases"][case]["vers"]
         etat["positions"][j] = vers
         effets.append({"type": "trappe", "vers": vers})
+    elif type_ == "transport":
+        vers = p["cases"][case]["vers"]
+        etat["positions"][j] = vers
+        effets.append({"type": "transport", "moyen": p["cases"][case].get("moyen"), "vers": vers})
+    elif type_ == "objet":
+        objet = rng.choice(p.get("objets_case") or list(_OBJETS))
+        if _donner_objet(etat, j, objet):
+            effets.append({"type": "objet", "objet": objet})
+        else:
+            effets.append({"type": "objet", "plein": True, "pieces": _gagner(etat, j, TR_CONFIG["objet_plein_pieces"])})
 
 
 def _deplacer(etat, ev, maintenant, rng=random):
@@ -407,25 +515,25 @@ def _deplacer(etat, ev, maintenant, rng=random):
     cases = p["cases"]
     ordre = sorted((-v, int(k)) for k, v in etat["des"].items())
     lignes = []
+    boutiques = {}
     for moins_de, j in ordre:
         de = -moins_de
         depart = etat["positions"][j]
-        options = etat["options"].get(str(j))
-        if options:
-            k = etat["choix"].get(str(j))
-            if not isinstance(k, int) or not 0 <= k < len(options):
-                k = rng.randrange(len(options))
-                etat["choix"][str(j)] = k
-            prevu = options[k]["chemin"]
-        else:
-            prevu = _chemins(cases, depart, de)[0]
-        if prevu[0] not in cases[depart]["suivants"]:
+        etat.setdefault("trajets", {})
+        while str(j) in etat["options"]:
+            _choisir(etat, j, rng.randrange(len(etat["options"][str(j)])))
+        prevu = etat["trajets"].get(str(j)) or []
+        if len(prevu) != de or prevu[0] not in cases[depart]["suivants"]:
             # Un joueur passe avant a echange sa place avec lui : il repart de sa nouvelle case.
-            prevu = rng.choice(_chemins(cases, depart, de))
+            prevu = _chemin_hasard(cases, depart, de, rng)
         chemin, effets = [], []
         renvoye = False
         for n, pos in enumerate(prevu):
             chemin.append(pos)
+            if cases[pos]["type"] == "peage" and p.get("peage"):
+                effets.append({"type": "peage", "case": pos, "pieces": _gagner(etat, j, -p["peage"])})
+            if cases[pos]["type"] == "boutique":
+                boutiques[j] = pos
             if pos == 0:
                 effets.append({"type": "depart", "case": pos,
                                "pieces": _gagner(etat, j, p["pieces"]["depart"])})
@@ -452,6 +560,13 @@ def _deplacer(etat, ev, maintenant, rng=random):
                                    "pieces": _gagner(etat, j, p["videur"]["fouille"])})
         etat["positions"][j] = 0 if renvoye else chemin[-1]
         if not renvoye:
+            pose = etat.setdefault("pieges_poses", {}).get(str(chemin[-1]))
+            if pose is not None and pose != j:
+                # Un verre renverse : on paie celui qui l a pose.
+                pris = -_gagner(etat, j, -TR_CONFIG["piege_pose"])
+                _gagner(etat, pose, pris)
+                del etat["pieges_poses"][str(chemin[-1])]
+                effets.append({"type": "piege_pose", "case": chemin[-1], "proprio": pose, "pieces": -pris})
             _effet_case(etat, j, chemin[-1], effets, rng)
         lignes.append({"joueur": j, "de": de, "depart": depart, "chemin": chemin,
                        "arrivee": etat["positions"][j], "effets": effets})
@@ -459,12 +574,45 @@ def _deplacer(etat, ev, maintenant, rng=random):
     for l in lignes:
         l["arrivee"] = etat["positions"][l["joueur"]]
     etat["deplacements"] = {"tour": etat["tour"], "lignes": lignes, "positions": list(etat["positions"])}
+    etat["boutiques"] = {}
+    etat["achats"] = {}
+    for j, c in boutiques.items():
+        offre = _offre(etat, j, c)
+        if offre:
+            etat["boutiques"][str(j)] = offre
     etat["phase"] = "deplacement"
     noms = etat["noms"]
     achats = [l["joueur"] for l in lignes if any(e["type"] == "capsule" for e in l["effets"])]
     etat["message"] = ("Capsule d'or pour " + ", ".join(noms[j] for j in achats) + " !") if achats else "En route !"
     ev.append(_tous({"type": "tr_deplacements", "deplacements": etat["deplacements"]}))
     _armer(etat, maintenant)
+
+
+def _prix_objet(etat, objet):
+    return max(1, round(_OBJETS[objet]["prix"] * etat["bonus"].get("soldes", 1)))
+
+
+def _offre(etat, j, c):
+    """Ce que la boutique c propose au joueur j (rien s il a les poches pleines ou pas un sou)."""
+    case = _cases(etat)[c]
+    if etat["partis"][j] or len(etat["objets"][j]) >= _POCHE:
+        return None
+    stock = [{"id": o, "prix": _prix_objet(etat, o)} for o in case.get("stock", []) if o in _OBJETS]
+    if not stock or etat["pieces"][j] < min(s["prix"] for s in stock):
+        return None
+    return {"case": c, "nom": case.get("nom", "La boutique"), "stock": stock}
+
+
+def _apres_deplacement(etat, ev, maintenant, rng=random):
+    clients = [j for j in etat.get("boutiques", {}) if not etat["partis"][int(j)]]
+    if clients:
+        etat["phase"] = "boutique"
+        noms = [etat["noms"][int(j)] for j in clients]
+        etat["message"] = "Boutique : " + ", ".join(noms) + (" font" if len(noms) > 1 else " fait") + " ses courses."
+        ev.append(_tous({"type": "tr_boutique", "boutiques": etat["boutiques"]}))
+        _armer(etat, maintenant)
+    else:
+        _lancer_minijeu(etat, ev, maintenant, rng)
 
 
 def _tirer_equipes(etat, m, rng):
@@ -615,6 +763,8 @@ def _evenement_plateau(etat, rng):
             etat["bonus"]["prix_capsule"] = ev["prix_capsule"]
         if "multiplicateur" in ev:
             etat["bonus"]["multiplicateur"] = ev["multiplicateur"]
+        if "soldes" in ev:
+            etat["bonus"]["soldes"] = ev["soldes"]
         if ev.get("capsule_bouge"):
             etat["capsule_case"] = _nouvelle_case_capsule(etat, rng)
             e["capsule_case"] = etat["capsule_case"]
@@ -660,6 +810,13 @@ def _tour_suivant(etat, ev, maintenant, rng=random):
     etat["des"] = {}
     etat["options"] = {}
     etat["choix"] = {}
+    etat["trajets"] = {}
+    etat["des_detail"] = {}
+    etat["objet_tour"] = {}
+    etat["modif_de"] = {}
+    etat["utilisations"] = []
+    etat["boutiques"] = {}
+    etat["achats"] = {}
     etat["deplacements"] = None
     etat["minijeu"] = None
     etat["scores"] = {}
@@ -697,8 +854,22 @@ def _terminer(etat, ev):
 
 
 def _pret_a_partir(etat):
-    return all(str(j) in etat["des"] and (not etat["options"].get(str(j)) or str(j) in etat["choix"])
-               for j in _presents(etat))
+    return all(str(j) in etat["des"] and not etat["options"].get(str(j)) for j in _presents(etat))
+
+
+def _rouler(etat, j, rng=random):
+    """Le lancer du joueur j : un de de 10, ou plus avec un objet."""
+    m = etat.setdefault("modif_de", {}).get(str(j), {})
+    detail = [rng.randint(1, _FACES) for _ in range(m.get("des", 1))]
+    return sum(detail) + m.get("bonus", 0), detail
+
+
+def _poser_de(etat, ev, j, total, detail):
+    etat["des"][str(j)] = total
+    etat.setdefault("des_detail", {})[str(j)] = detail
+    etat.setdefault("trajets", {})[str(j)] = []
+    _planifier(etat, j)
+    ev.append(_tous({"type": "tr_de", "index": j, "valeur": total, "detail": detail}))
 
 
 def _lancer(etat, ev, i, message, maintenant):
@@ -706,26 +877,119 @@ def _lancer(etat, ev, i, message, maintenant):
         return []
     if str(i) in etat["des"]:
         return []
-    de = random.randint(1, 6)
-    etat["des"][str(i)] = de
-    options = _options(etat, i, de)
-    if options:
-        etat["options"][str(i)] = options
-    ev.append(_tous({"type": "tr_de", "index": i, "valeur": de}))
+    total, detail = _rouler(etat, i)
+    _poser_de(etat, ev, i, total, detail)
     if _pret_a_partir(etat):
         _deplacer(etat, ev, maintenant)
     return ev
 
 
 def _choisir_chemin(etat, ev, i, message, maintenant):
-    if etat["phase"] != "des" or not etat["options"].get(str(i)) or str(i) in etat["choix"]:
+    if etat["phase"] != "des" or not etat["options"].get(str(i)):
         return []
     k = message.get("choix")
     if isinstance(k, bool) or not isinstance(k, int) or not 0 <= k < len(etat["options"][str(i)]):
         return _erreur(i, "Chemin inconnu.")
-    etat["choix"][str(i)] = k
+    _choisir(etat, i, k)
     if _pret_a_partir(etat):
         _deplacer(etat, ev, maintenant)
+    return ev
+
+
+def _utiliser_objet(etat, ev, i, message, maintenant, rng=random):
+    """Avant de lancer son de, on peut utiliser un objet de sa poche (un par tour)."""
+    if etat["phase"] != "des":
+        return _erreur(i, "Les objets s'utilisent avant de lancer le dé.")
+    if str(i) in etat["des"]:
+        return _erreur(i, "Tu as déjà lancé ton dé.")
+    if str(i) in etat.setdefault("objet_tour", {}):
+        return _erreur(i, "Un seul objet par tour.")
+    objet = message.get("objet")
+    poche = etat["objets"][i]
+    if not isinstance(objet, str) or objet not in poche or objet not in _OBJETS:
+        return _erreur(i, "Tu n'as pas cet objet.")
+    o = _OBJETS[objet]
+    if o.get("passif"):
+        return _erreur(i, o["nom"] + " agit tout seul.")
+    cible = message.get("cible")
+    if o.get("cible"):
+        if isinstance(cible, bool) or not isinstance(cible, int) or cible == i or cible not in _presents(etat):
+            return _erreur(i, "Choisis un autre joueur.")
+        if o.get("vol_objet") and not etat["objets"][cible]:
+            return _erreur(i, etat["noms"][cible] + " n'a rien dans les poches.")
+    u = {"joueur": i, "objet": objet}
+    if o.get("choix_de"):
+        v = message.get("valeur")
+        if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= _FACES:
+            return _erreur(i, "Choisis un chiffre de 1 à " + str(_FACES) + ".")
+        u["valeur"] = v
+    if o.get("piege"):
+        case = etat["positions"][i]
+        if _cases(etat)[case]["type"] == "depart" or str(case) in etat.setdefault("pieges_poses", {}):
+            return _erreur(i, "Pas de piège possible sur cette case.")
+    poche.remove(objet)
+    etat["objet_tour"][str(i)] = objet
+    if "des" in o or "bonus" in o:
+        etat.setdefault("modif_de", {})[str(i)] = {"des": o.get("des", 1), "bonus": o.get("bonus", 0)}
+    elif o.get("taxi"):
+        prec = _precedents(_cases(etat))[etat["capsule_case"]]
+        vers = rng.choice(prec)
+        etat["positions"][i] = vers
+        u["vers"] = vers
+    elif o.get("echange"):
+        etat["positions"][i], etat["positions"][cible] = etat["positions"][cible], etat["positions"][i]
+        u["cible"], u["vers"] = cible, etat["positions"][i]
+        _replanifier(etat, cible)
+    elif "vol" in o:
+        u["cible"] = cible
+        if _protege(etat, cible):
+            u["protege"] = True
+        else:
+            pris = -_gagner(etat, cible, -rng.randint(*o["vol"]))
+            _gagner(etat, i, pris)
+            u["pieces"] = pris
+    elif o.get("vol_objet"):
+        u["cible"] = cible
+        if _protege(etat, cible):
+            u["protege"] = True
+        else:
+            pris = rng.choice(etat["objets"][cible])
+            etat["objets"][cible].remove(pris)
+            etat["objets"][i].append(pris)
+            u["vole"] = pris
+    elif o.get("piege"):
+        etat["pieges_poses"][str(etat["positions"][i])] = i
+        u["case"] = etat["positions"][i]
+    elif "gorgees" in o:
+        u["cible"], u["boit"] = cible, _boit(etat, cible, o["gorgees"])
+    etat.setdefault("utilisations", []).append(u)
+    etat["message"] = etat["noms"][i] + " utilise " + o["nom"] + (" sur " + etat["noms"][cible] if "cible" in u else "") + " !"
+    ev.append(_tous({"type": "tr_objet_utilise", "utilisation": u}))
+    if o.get("choix_de"):
+        _poser_de(etat, ev, i, u["valeur"], [u["valeur"]])
+        if _pret_a_partir(etat):
+            _deplacer(etat, ev, maintenant)
+    return ev
+
+
+def _acheter(etat, ev, i, message, maintenant):
+    if etat["phase"] != "boutique" or str(i) not in etat["boutiques"] or str(i) in etat["achats"]:
+        return []
+    objet = message.get("objet")
+    if objet is not None:
+        offre = {s["id"]: s["prix"] for s in etat["boutiques"][str(i)]["stock"]}
+        if not isinstance(objet, str) or objet not in offre:
+            return _erreur(i, "Pas en rayon.")
+        if etat["pieces"][i] < offre[objet]:
+            return _erreur(i, "Pas assez de pièces.")
+        if len(etat["objets"][i]) >= _POCHE:
+            return _erreur(i, "Tes poches sont pleines.")
+        etat["pieces"][i] -= offre[objet]
+        etat["objets"][i].append(objet)
+    etat["achats"][str(i)] = objet
+    ev.append(_tous({"type": "tr_achat", "index": i, "objet": objet}))
+    if not _attendus(etat):
+        _lancer_minijeu(etat, ev, maintenant)
     return ev
 
 
@@ -768,6 +1032,8 @@ def _suivant(etat, ev, i, message, maintenant):
 TR_ACTIONS = {
     "tr_lancer": _lancer,
     "tr_chemin": _choisir_chemin,
+    "tr_objet": _utiliser_objet,
+    "tr_acheter": _acheter,
     "tr_score": _envoyer_score,
     "tr_suivant": _suivant,
 }
@@ -793,6 +1059,8 @@ def _attendus(etat):
     if etat["phase"] == "des":
         return [j for j in presents if str(j) not in etat["des"]
                 or (etat["options"].get(str(j)) and str(j) not in etat["choix"])]
+    if etat["phase"] == "boutique":
+        return [j for j in presents if str(j) in etat["boutiques"] and str(j) not in etat["achats"]]
     if etat["phase"] == "minijeu":
         return [j for j in presents if str(j) not in etat["scores"]]
     if etat["phase"] == "resultats":
@@ -807,6 +1075,8 @@ def _armer(etat, maintenant):
     elif phase == "deplacement":
         nb = len((etat["deplacements"] or {}).get("lignes", []))
         etat["echeance"] = maintenant + _D["deplacement_base"] + _D["deplacement_par_joueur"] * nb
+    elif phase == "boutique":
+        etat["echeance"] = maintenant + (_D["boutique"] if _attendus(etat) else _D["absent"])
     elif phase == "minijeu":
         m = etat["minijeu"]
         etat["echeance"] = maintenant + m["consignes"] + m["duree"] + _M["marge"]
@@ -830,16 +1100,16 @@ def tr_expirer(etat, maintenant):
     if phase == "des":
         for j in _presents(etat):
             if str(j) not in etat["des"]:
-                etat["des"][str(j)] = random.randint(1, 6)
-                options = _options(etat, j, etat["des"][str(j)])
-                if options:
-                    etat["options"][str(j)] = options
+                total, detail = _rouler(etat, j)
+                _poser_de(etat, ev, j, total, detail)
         if not etat["des"]:
             # Personne n est la : on ne bouge pas, on attend.
             etat["echeance"] = maintenant + _D["des"]
             return ev
         _deplacer(etat, ev, maintenant)
     elif phase == "deplacement":
+        _apres_deplacement(etat, ev, maintenant)
+    elif phase == "boutique":
         _lancer_minijeu(etat, ev, maintenant)
     elif phase == "minijeu":
         _classer_minijeu(etat, ev, maintenant)
@@ -860,7 +1130,7 @@ def tr_joueur_parti(etat, index, maintenant):
         return
     etat["partis"][index] = True
     etat["version"] += 1
-    if etat["phase"] in ("des", "minijeu", "resultats") and not _attendus(etat):
+    if etat["phase"] in ("des", "boutique", "minijeu", "resultats") and not _attendus(etat):
         etat["echeance"] = min(etat["echeance"] or maintenant, maintenant + _D["absent"])
 
 

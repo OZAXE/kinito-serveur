@@ -1,5 +1,5 @@
 {
-  "_note": "La Tournée (party game plateau + mini-jeux) : valeurs chiffrées communes. Chaque plateau (tournee_plateaux.json) a ses propres gains, gorgées et événements. Durées en secondes.",
+  "_note": "La Tournée (party game plateau + mini-jeux) : valeurs chiffrées communes. Chaque plateau (tournee_plateaux.json) a ses propres gains, gorgées, événements, boutiques et objets. Durées en secondes.",
   "joueurs": {
     "min": 2,
     "max": 8
@@ -13,6 +13,109 @@
     ]
   },
   "pieces_depart": 10,
+  "de": {
+    "faces": 10
+  },
+  "poche_max": 3,
+  "objet_plein_pieces": 5,
+  "piege_pose": 10,
+  "objets": [
+    {
+      "id": "double",
+      "nom": "Double shot",
+      "icone": "🎲",
+      "texte": "Tu lances 2 dés.",
+      "prix": 8,
+      "des": 2
+    },
+    {
+      "id": "triple",
+      "nom": "Triple shot",
+      "icone": "🎰",
+      "texte": "Tu lances 3 dés.",
+      "prix": 14,
+      "des": 3
+    },
+    {
+      "id": "cafe",
+      "nom": "Café serré",
+      "icone": "☕",
+      "texte": "+3 à ton dé.",
+      "prix": 5,
+      "bonus": 3
+    },
+    {
+      "id": "pipe",
+      "nom": "Dé pipé",
+      "icone": "🎯",
+      "texte": "Tu choisis ton dé, de 1 à 10.",
+      "prix": 10,
+      "choix_de": true
+    },
+    {
+      "id": "taxi",
+      "nom": "Taxi doré",
+      "icone": "🚕",
+      "texte": "Il te dépose juste avant la capsule d'or.",
+      "prix": 22,
+      "taxi": true
+    },
+    {
+      "id": "chaises",
+      "nom": "Chaises musicales",
+      "icone": "🪑",
+      "texte": "Tu échanges ta place avec le joueur de ton choix.",
+      "prix": 8,
+      "cible": true,
+      "echange": true
+    },
+    {
+      "id": "pickpocket",
+      "nom": "Main baladeuse",
+      "icone": "🤏",
+      "texte": "Tu voles 5 à 10 pièces au joueur de ton choix.",
+      "prix": 8,
+      "cible": true,
+      "vol": [
+        5,
+        10
+      ]
+    },
+    {
+      "id": "vide_poche",
+      "nom": "Vide-poche",
+      "icone": "👝",
+      "texte": "Tu voles un objet au joueur de ton choix.",
+      "prix": 6,
+      "cible": true,
+      "vol_objet": true
+    },
+    {
+      "id": "piege",
+      "nom": "Verre renversé",
+      "icone": "🍷",
+      "texte": "Tu poses un piège sur ta case : le prochain qui s'y arrête te donne 10 pièces.",
+      "prix": 6,
+      "piege": true
+    },
+    {
+      "id": "bouclier",
+      "nom": "Ange gardien",
+      "icone": "😇",
+      "texte": "Il te protège du prochain vol (pièces, objet ou capsule). Rien à faire, il agit tout seul.",
+      "prix": 6,
+      "passif": true
+    },
+    {
+      "id": "tournee",
+      "nom": "Tournée offerte",
+      "icone": "🍻",
+      "texte": "Le joueur de ton choix boit 2 gorgées.",
+      "prix": 4,
+      "cible": true,
+      "gorgees": 2
+    }
+  ],
   "capsule": {
     "interdites": [
       "depart",
@@ -158,6 +261,11 @@
       "id": "coup_de_pouce",
       "texte": "Coup de pouce : le dernier du classement gagne 10 pièces.",
       "coup_de_pouce": 10
+    },
+    {
+      "id": "soldes",
+      "texte": "Soldes : tout est à moitié prix dans les boutiques ce tour.",
+      "soldes": 0.5
     }
   ],
   "minijeu": {
@@ -178,6 +286,7 @@
     "deplacement_par_joueur": 1.5,
     "resultats": 10,
     "absent": 3,
-    "retour": 10
+    "retour": 10,
+    "boutique": 15
   }
 }

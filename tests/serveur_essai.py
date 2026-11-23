@@ -76,7 +76,8 @@ async def etat(code: str):
         "tr": {"tour": e.get("tour"), "nb_tours": e.get("nb_tours"), "positions": e.get("positions"),
                "pieces": e.get("pieces"), "capsules": e.get("capsules"), "gorgees": e.get("gorgees"),
                "scores": e.get("scores"), "minijeu": e.get("minijeu"), "des": e.get("des"),
-               "plateau": e.get("plateau"), "choix": e.get("choix")}
+               "plateau": e.get("plateau"), "choix": e.get("choix"), "phase": e.get("phase"),
+               "objets": e.get("objets"), "boutiques": e.get("boutiques"), "capsule_case": e.get("capsule_case")}
               if salon.get("jeu") == "tournee" else None,
         # Loup-Garou : les roles et la nuit en cours, pour jouer chaque role depuis les pages.
         "lg": {"roles": e.get("roles"), "vivants": e.get("vivants"), "nuit": e.get("nuit"), "jour": e.get("jour"),
