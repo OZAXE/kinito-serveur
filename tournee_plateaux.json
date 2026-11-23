@@ -7,268 +7,943 @@
    "nom": "La Terrasse",
    "difficulte": "facile",
    "icone": "🌞",
-   "description": "Un port au soleil, un raccourci par la pergola. Peu de pièges, peu de surprises, on boit peu.",
+   "description": "Un port au soleil : la plage, les dunes, la colline du phare, le marché et la jetée. Un bateau pour filer par la mer, peu de pièges, on boit peu.",
    "cases": [
     {
      "id": 0,
      "type": "depart",
-     "x": 0.0,
-     "z": 0.795,
+     "x": 0.25,
+     "z": 1.72,
+     "y": 0.05,
      "suivants": [
       1
-     ]
+     ],
+     "zone": "les quais"
     },
     {
      "id": 1,
      "type": "pieces",
-     "x": -0.248,
-     "z": 0.762,
+     "x": 0.004,
+     "z": 1.754,
+     "y": 0.051,
      "suivants": [
       2
-     ]
+     ],
+     "zone": "les quais"
     },
     {
      "id": 2,
      "type": "pieces",
-     "x": -0.509,
-     "z": 0.727,
+     "x": -0.242,
+     "z": 1.784,
+     "y": 0.051,
      "suivants": [
       3
-     ]
+     ],
+     "zone": "les quais"
     },
     {
      "id": 3,
-     "type": "evenement",
-     "x": -0.782,
-     "z": 0.644,
+     "type": "pieces",
+     "x": -0.485,
+     "z": 1.745,
+     "y": 0.047,
      "suivants": [
       4
-     ]
+     ],
+     "zone": "les quais"
     },
     {
      "id": 4,
-     "type": "pieces",
-     "x": -0.975,
-     "z": 0.463,
+     "type": "objet",
+     "x": -0.712,
+     "z": 1.644,
+     "y": 0.038,
      "suivants": [
-      5,
-      24
-     ]
+      5
+     ],
+     "zone": "les quais"
     },
     {
      "id": 5,
-     "type": "chance",
-     "x": -1.012,
-     "z": 0.223,
+     "type": "pieces",
+     "x": -0.95,
+     "z": 1.58,
+     "y": 0.03,
      "suivants": [
       6
-     ]
+     ],
+     "zone": "la plage"
     },
     {
      "id": 6,
      "type": "pieces",
-     "x": -0.953,
-     "z": 0.0,
+     "x": -1.189,
+     "z": 1.684,
+     "y": 0.029,
      "suivants": [
       7
-     ]
+     ],
+     "zone": "la plage"
     },
     {
      "id": 7,
-     "type": "piege",
-     "x": -0.901,
-     "z": -0.199,
+     "type": "evenement",
+     "x": -1.424,
+     "z": 1.799,
+     "y": 0.03,
      "suivants": [
       8
-     ]
+     ],
+     "zone": "la plage"
     },
     {
      "id": 8,
      "type": "pieces",
-     "x": -0.851,
-     "z": -0.405,
+     "x": -1.685,
+     "z": 1.762,
+     "y": 0.028,
      "suivants": [
       9
-     ]
+     ],
+     "zone": "la plage"
     },
     {
      "id": 9,
-     "type": "tournee",
-     "x": -0.727,
-     "z": -0.599,
+     "type": "transport",
+     "x": -1.928,
+     "z": 1.661,
+     "y": 0.027,
      "suivants": [
       10
-     ]
+     ],
+     "zone": "la plage",
+     "moyen": "bateau",
+     "vers": 49
     },
     {
      "id": 10,
      "type": "pieces",
-     "x": -0.519,
-     "z": -0.74,
+     "x": -2.138,
+     "z": 1.501,
+     "y": 0.036,
      "suivants": [
       11
-     ]
+     ],
+     "zone": "la plage"
     },
     {
      "id": 11,
-     "type": "evenement",
-     "x": -0.271,
-     "z": -0.832,
+     "type": "chance",
+     "x": -2.307,
+     "z": 1.298,
+     "y": 0.053,
      "suivants": [
       12
-     ]
+     ],
+     "zone": "la plage"
     },
     {
      "id": 12,
      "type": "pieces",
-     "x": -0.0,
-     "z": -0.885,
+     "x": -2.38,
+     "z": 1.05,
+     "y": 0.08,
      "suivants": [
       13
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 13,
      "type": "pieces",
-     "x": 0.28,
-     "z": -0.861,
+     "x": -2.197,
+     "z": 0.876,
+     "y": 0.108,
      "suivants": [
       14
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 14,
-     "type": "chance",
-     "x": 0.511,
-     "z": -0.728,
+     "type": "pieces",
+     "x": -1.974,
+     "z": 0.744,
+     "y": 0.134,
      "suivants": [
       15
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 15,
-     "type": "pieces",
-     "x": 0.66,
-     "z": -0.544,
+     "type": "boutique",
+     "x": -1.863,
+     "z": 0.539,
+     "y": 0.169,
      "suivants": [
-      16
+      16,
+      61
+     ],
+     "zone": "les dunes",
+     "nom": "L'épicerie des dunes",
+     "stock": [
+      "cafe",
+      "double",
+      "pipe",
+      "bouclier"
      ]
     },
     {
      "id": 16,
-     "type": "piege",
-     "x": 0.792,
-     "z": -0.377,
+     "type": "pieces",
+     "x": -2.043,
+     "z": 0.355,
+     "y": 0.194,
      "suivants": [
       17
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 17,
-     "type": "pieces",
-     "x": 0.959,
-     "z": -0.212,
+     "type": "piege",
+     "x": -2.237,
+     "z": 0.184,
+     "y": 0.22,
      "suivants": [
       18
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 18,
-     "type": "evenement",
-     "x": 1.087,
-     "z": -0.0,
+     "type": "pieces",
+     "x": -2.323,
+     "z": -0.055,
+     "y": 0.269,
      "suivants": [
       19
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 19,
-     "type": "pieces",
-     "x": 1.069,
-     "z": 0.236,
+     "type": "evenement",
+     "x": -2.298,
+     "z": -0.311,
+     "y": 0.33,
      "suivants": [
       20
-     ]
+     ],
+     "zone": "les dunes"
     },
     {
      "id": 20,
      "type": "pieces",
-     "x": 0.916,
-     "z": 0.435,
+     "x": -2.2,
+     "z": -0.55,
+     "y": 0.4,
      "suivants": [
       21
-     ]
+     ],
+     "zone": "la colline du phare"
     },
     {
      "id": 21,
-     "type": "tournee",
-     "x": 0.715,
-     "z": 0.589,
+     "type": "chance",
+     "x": -1.977,
+     "z": -0.697,
+     "y": 0.478,
      "suivants": [
       22
-     ]
+     ],
+     "zone": "la colline du phare"
     },
     {
      "id": 22,
      "type": "pieces",
-     "x": 0.501,
-     "z": 0.715,
+     "x": -1.732,
+     "z": -0.813,
+     "y": 0.556,
      "suivants": [
       23
-     ]
+     ],
+     "zone": "la colline du phare"
     },
     {
      "id": 23,
-     "type": "pieces",
-     "x": 0.257,
-     "z": 0.791,
+     "type": "objet",
+     "x": -1.586,
+     "z": -1.036,
+     "y": 0.661,
      "suivants": [
-      0
-     ]
+      24
+     ],
+     "zone": "la colline du phare"
     },
     {
      "id": 24,
      "type": "pieces",
-     "x": -0.604,
-     "z": 0.267,
+     "x": -1.499,
+     "z": -1.294,
+     "y": 0.769,
      "suivants": [
       25
      ],
-     "zone": "la pergola"
+     "zone": "la colline du phare"
     },
     {
      "id": 25,
-     "type": "piege",
-     "x": -0.269,
-     "z": 0.05,
+     "type": "pieces",
+     "x": -1.337,
+     "z": -1.507,
+     "y": 0.831,
      "suivants": [
       26
      ],
-     "zone": "la pergola"
+     "zone": "la colline du phare"
     },
     {
      "id": 26,
-     "type": "pieces",
-     "x": 0.028,
-     "z": -0.188,
+     "type": "evenement",
+     "x": -1.114,
+     "z": -1.662,
+     "y": 0.837,
      "suivants": [
       27
      ],
-     "zone": "la pergola"
+     "zone": "la colline du phare"
     },
     {
      "id": 27,
-     "type": "evenement",
-     "x": 0.288,
-     "z": -0.447,
+     "type": "pieces",
+     "x": -0.864,
+     "z": -1.765,
+     "y": 0.816,
      "suivants": [
-      14
+      28
      ],
-     "zone": "la pergola"
+     "zone": "la colline du phare"
+    },
+    {
+     "id": 28,
+     "type": "tournee",
+     "x": -0.604,
+     "z": -1.732,
+     "y": 0.767,
+     "suivants": [
+      29
+     ],
+     "zone": "la colline du phare"
+    },
+    {
+     "id": 29,
+     "type": "pieces",
+     "x": -0.39,
+     "z": -1.565,
+     "y": 0.696,
+     "suivants": [
+      30
+     ],
+     "zone": "la colline du phare"
+    },
+    {
+     "id": 30,
+     "type": "pieces",
+     "x": -0.15,
+     "z": -1.45,
+     "y": 0.62,
+     "suivants": [
+      31
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 31,
+     "type": "pieces",
+     "x": 0.08,
+     "z": -1.571,
+     "y": 0.566,
+     "suivants": [
+      32
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 32,
+     "type": "pieces",
+     "x": 0.282,
+     "z": -1.743,
+     "y": 0.526,
+     "suivants": [
+      33
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 33,
+     "type": "pieces",
+     "x": 0.528,
+     "z": -1.82,
+     "y": 0.489,
+     "suivants": [
+      34
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 34,
+     "type": "piege",
+     "x": 0.779,
+     "z": -1.736,
+     "y": 0.46,
+     "suivants": [
+      35
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 35,
+     "type": "pieces",
+     "x": 1.024,
+     "z": -1.637,
+     "y": 0.442,
+     "suivants": [
+      36
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 36,
+     "type": "chance",
+     "x": 1.282,
+     "z": -1.657,
+     "y": 0.45,
+     "suivants": [
+      37
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 37,
+     "type": "pieces",
+     "x": 1.504,
+     "z": -1.801,
+     "y": 0.491,
+     "suivants": [
+      38
+     ],
+     "zone": "les jardins"
+    },
+    {
+     "id": 38,
+     "type": "evenement",
+     "x": 1.75,
+     "z": -1.88,
+     "y": 0.52,
+     "suivants": [
+      39
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 39,
+     "type": "pieces",
+     "x": 2.003,
+     "z": -1.773,
+     "y": 0.506,
+     "suivants": [
+      40
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 40,
+     "type": "pieces",
+     "x": 2.224,
+     "z": -1.609,
+     "y": 0.478,
+     "suivants": [
+      41
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 41,
+     "type": "pieces",
+     "x": 2.383,
+     "z": -1.389,
+     "y": 0.438,
+     "suivants": [
+      42
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 42,
+     "type": "piege",
+     "x": 2.288,
+     "z": -1.138,
+     "y": 0.391,
+     "suivants": [
+      43
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 43,
+     "type": "pieces",
+     "x": 2.133,
+     "z": -0.91,
+     "y": 0.346,
+     "suivants": [
+      44,
+      71
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 44,
+     "type": "objet",
+     "x": 2.148,
+     "z": -0.65,
+     "y": 0.293,
+     "suivants": [
+      45
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 45,
+     "type": "pieces",
+     "x": 2.324,
+     "z": -0.439,
+     "y": 0.247,
+     "suivants": [
+      46
+     ],
+     "zone": "le belvédère"
+    },
+    {
+     "id": 46,
+     "type": "pieces",
+     "x": 2.45,
+     "z": -0.2,
+     "y": 0.2,
+     "suivants": [
+      47
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 47,
+     "type": "pieces",
+     "x": 2.327,
+     "z": 0.026,
+     "y": 0.164,
+     "suivants": [
+      48
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 48,
+     "type": "pieces",
+     "x": 2.152,
+     "z": 0.221,
+     "y": 0.138,
+     "suivants": [
+      49
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 49,
+     "type": "boutique",
+     "x": 2.097,
+     "z": 0.463,
+     "y": 0.112,
+     "suivants": [
+      50
+     ],
+     "zone": "le marché",
+     "nom": "La halle du marché",
+     "stock": [
+      "cafe",
+      "double",
+      "triple",
+      "chaises",
+      "taxi"
+     ]
+    },
+    {
+     "id": 50,
+     "type": "pieces",
+     "x": 2.251,
+     "z": 0.674,
+     "y": 0.097,
+     "suivants": [
+      51
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 51,
+     "type": "evenement",
+     "x": 2.397,
+     "z": 0.889,
+     "y": 0.084,
+     "suivants": [
+      52
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 52,
+     "type": "pieces",
+     "x": 2.305,
+     "z": 1.125,
+     "y": 0.069,
+     "suivants": [
+      53
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 53,
+     "type": "chance",
+     "x": 2.113,
+     "z": 1.302,
+     "y": 0.058,
+     "suivants": [
+      54
+     ],
+     "zone": "le marché"
+    },
+    {
+     "id": 54,
+     "type": "pieces",
+     "x": 1.88,
+     "z": 1.42,
+     "y": 0.05,
+     "suivants": [
+      55
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 55,
+     "type": "tournee",
+     "x": 1.62,
+     "z": 1.369,
+     "y": 0.048,
+     "suivants": [
+      56
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 56,
+     "type": "pieces",
+     "x": 1.373,
+     "z": 1.263,
+     "y": 0.049,
+     "suivants": [
+      57
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 57,
+     "type": "piege",
+     "x": 1.123,
+     "z": 1.307,
+     "y": 0.05,
+     "suivants": [
+      58
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 58,
+     "type": "pieces",
+     "x": 0.961,
+     "z": 1.522,
+     "y": 0.05,
+     "suivants": [
+      59
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 59,
+     "type": "chance",
+     "x": 0.782,
+     "z": 1.719,
+     "y": 0.05,
+     "suivants": [
+      60
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 60,
+     "type": "pieces",
+     "x": 0.518,
+     "z": 1.745,
+     "y": 0.05,
+     "suivants": [
+      0
+     ],
+     "zone": "le port de pêche"
+    },
+    {
+     "id": 61,
+     "type": "pieces",
+     "x": -1.584,
+     "z": 0.554,
+     "y": 0.178,
+     "suivants": [
+      62
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 62,
+     "type": "pieces",
+     "x": -1.305,
+     "z": 0.551,
+     "y": 0.19,
+     "suivants": [
+      63
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 63,
+     "type": "pieces",
+     "x": -1.038,
+     "z": 0.476,
+     "y": 0.21,
+     "suivants": [
+      64
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 64,
+     "type": "objet",
+     "x": -0.797,
+     "z": 0.337,
+     "y": 0.236,
+     "suivants": [
+      65
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 65,
+     "type": "pieces",
+     "x": -0.59,
+     "z": 0.15,
+     "y": 0.271,
+     "suivants": [
+      66
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 66,
+     "type": "evenement",
+     "x": -0.447,
+     "z": -0.088,
+     "y": 0.315,
+     "suivants": [
+      67
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 67,
+     "type": "pieces",
+     "x": -0.364,
+     "z": -0.355,
+     "y": 0.366,
+     "suivants": [
+      68
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 68,
+     "type": "chance",
+     "x": -0.298,
+     "z": -0.626,
+     "y": 0.421,
+     "suivants": [
+      69
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 69,
+     "type": "pieces",
+     "x": -0.241,
+     "z": -0.899,
+     "y": 0.485,
+     "suivants": [
+      70
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 70,
+     "type": "piege",
+     "x": -0.194,
+     "z": -1.174,
+     "y": 0.552,
+     "suivants": [
+      30
+     ],
+     "zone": "la rue du village"
+    },
+    {
+     "id": 71,
+     "type": "pieces",
+     "x": 1.875,
+     "z": -0.821,
+     "y": 0.3,
+     "suivants": [
+      72
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 72,
+     "type": "pieces",
+     "x": 1.619,
+     "z": -0.726,
+     "y": 0.256,
+     "suivants": [
+      73
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 73,
+     "type": "pieces",
+     "x": 1.374,
+     "z": -0.604,
+     "y": 0.216,
+     "suivants": [
+      74
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 74,
+     "type": "chance",
+     "x": 1.146,
+     "z": -0.453,
+     "y": 0.185,
+     "suivants": [
+      75
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 75,
+     "type": "pieces",
+     "x": 0.938,
+     "z": -0.277,
+     "y": 0.159,
+     "suivants": [
+      76
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 76,
+     "type": "objet",
+     "x": 0.763,
+     "z": -0.067,
+     "y": 0.134,
+     "suivants": [
+      77
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 77,
+     "type": "pieces",
+     "x": 0.633,
+     "z": 0.173,
+     "y": 0.11,
+     "suivants": [
+      78
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 78,
+     "type": "evenement",
+     "x": 0.552,
+     "z": 0.433,
+     "y": 0.089,
+     "suivants": [
+      79
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 79,
+     "type": "pieces",
+     "x": 0.623,
+     "z": 0.685,
+     "y": 0.071,
+     "suivants": [
+      80
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 80,
+     "type": "tournee",
+     "x": 0.84,
+     "z": 0.851,
+     "y": 0.064,
+     "suivants": [
+      81
+     ],
+     "zone": "la jetée"
+    },
+    {
+     "id": 81,
+     "type": "pieces",
+     "x": 1.016,
+     "z": 1.056,
+     "y": 0.056,
+     "suivants": [
+      57
+     ],
+     "zone": "la jetée"
     }
+   ],
+   "capsule_possibles": [
+    25,
+    41,
+    7,
+    65,
+    75,
+    54,
+    33,
+    46
    ],
    "videur": null,
    "prix_capsule": 20,
+   "peage": 0,
    "pieces": {
     "pieces": 3,
     "piege": -2,
@@ -293,13 +968,20 @@
     "poche_trouee",
     "elan"
    ],
+   "objets_case": [
+    "cafe",
+    "double",
+    "pipe",
+    "bouclier"
+   ],
    "duel_capsule": false,
    "evenements_plateau": {
     "tous_les": 4,
     "liste": [
      "soleil",
      "apero",
-     "promo_capsule"
+     "promo_capsule",
+     "soldes"
     ]
    }
   },
@@ -308,345 +990,1024 @@
    "nom": "Le Pub",
    "difficulte": "moyen",
    "icone": "🍺",
-   "description": "La ville de nuit : deux embranchements, des duels et des vols de pièces. Une surprise du patron tous les 3 tours.",
+   "description": "La ville de nuit : la butte et ses escaliers, le quartier des néons, un canal et ses ponts. Un tram, un pont à péage, des duels et des vols.",
    "cases": [
     {
      "id": 0,
      "type": "depart",
      "x": 0.0,
-     "z": 0.916,
+     "z": 1.76,
+     "y": 0.05,
      "suivants": [
       1
-     ]
+     ],
+     "zone": "la grand-place"
     },
     {
      "id": 1,
      "type": "pieces",
-     "x": -0.274,
-     "z": 0.959,
+     "x": -0.245,
+     "z": 1.777,
+     "y": 0.05,
      "suivants": [
       2
-     ]
+     ],
+     "zone": "la grand-place"
     },
     {
      "id": 2,
      "type": "pieces",
-     "x": -0.535,
-     "z": 0.888,
+     "x": -0.49,
+     "z": 1.784,
+     "y": 0.05,
      "suivants": [
       3
-     ]
+     ],
+     "zone": "la grand-place"
     },
     {
      "id": 3,
      "type": "pieces",
-     "x": -0.719,
-     "z": 0.721,
+     "x": -0.712,
+     "z": 1.688,
+     "y": 0.05,
      "suivants": [
-      4,
-      28
-     ]
+      4
+     ],
+     "zone": "la grand-place"
     },
     {
      "id": 4,
      "type": "evenement",
-     "x": -0.815,
-     "z": 0.52,
+     "x": -0.878,
+     "z": 1.508,
+     "y": 0.05,
      "suivants": [
       5
-     ]
+     ],
+     "zone": "la grand-place"
     },
     {
      "id": 5,
-     "type": "piege",
-     "x": -0.878,
-     "z": 0.338,
+     "type": "pieces",
+     "x": -1.08,
+     "z": 1.38,
+     "y": 0.05,
      "suivants": [
       6
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 6,
      "type": "pieces",
-     "x": -0.964,
-     "z": 0.176,
+     "x": -1.286,
+     "z": 1.522,
+     "y": 0.049,
      "suivants": [
       7
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 7,
-     "type": "tournee",
-     "x": -1.07,
-     "z": 0.0,
+     "type": "piege",
+     "x": -1.462,
+     "z": 1.708,
+     "y": 0.049,
      "suivants": [
       8
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 8,
-     "type": "pieces",
-     "x": -1.129,
-     "z": -0.206,
+     "type": "transport",
+     "x": -1.698,
+     "z": 1.783,
+     "y": 0.05,
      "suivants": [
       9
-     ]
+     ],
+     "zone": "les ruelles",
+     "moyen": "tram",
+     "vers": 36
     },
     {
      "id": 9,
-     "type": "chance",
-     "x": -1.078,
-     "z": -0.415,
+     "type": "pieces",
+     "x": -1.948,
+     "z": 1.73,
+     "y": 0.05,
      "suivants": [
       10
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 10,
-     "type": "pieces",
-     "x": -0.913,
-     "z": -0.582,
+     "type": "chance",
+     "x": -2.175,
+     "z": 1.614,
+     "y": 0.054,
      "suivants": [
       11
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 11,
      "type": "pieces",
-     "x": -0.687,
-     "z": -0.689,
+     "x": -2.335,
+     "z": 1.418,
+     "y": 0.073,
      "suivants": [
       12
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 12,
-     "type": "evenement",
-     "x": -0.457,
-     "z": -0.758,
+     "type": "objet",
+     "x": -2.409,
+     "z": 1.174,
+     "y": 0.1,
      "suivants": [
       13
-     ]
+     ],
+     "zone": "les ruelles"
     },
     {
      "id": 13,
-     "type": "piege",
-     "x": -0.234,
-     "z": -0.82,
+     "type": "pieces",
+     "x": -2.4,
+     "z": 0.92,
+     "y": 0.14,
      "suivants": [
       14
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 14,
      "type": "pieces",
-     "x": -0.0,
-     "z": -0.872,
+     "x": -2.179,
+     "z": 0.757,
+     "y": 0.199,
      "suivants": [
       15
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 15,
-     "type": "duel",
-     "x": 0.251,
-     "z": -0.879,
+     "type": "pieces",
+     "x": -1.935,
+     "z": 0.619,
+     "y": 0.266,
      "suivants": [
       16
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 16,
-     "type": "pieces",
-     "x": 0.489,
-     "z": -0.813,
+     "type": "evenement",
+     "x": -2.05,
+     "z": 0.387,
+     "y": 0.337,
      "suivants": [
       17
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 17,
      "type": "pieces",
-     "x": 0.68,
-     "z": -0.682,
+     "x": -2.254,
+     "z": 0.192,
+     "y": 0.39,
      "suivants": [
       18,
-      33
-     ]
+      61
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 18,
-     "type": "evenement",
-     "x": 0.822,
-     "z": -0.524,
+     "type": "piege",
+     "x": -2.34,
+     "z": -0.07,
+     "y": 0.46,
      "suivants": [
       19
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 19,
      "type": "pieces",
-     "x": 0.946,
-     "z": -0.364,
+     "x": -2.29,
+     "z": -0.347,
+     "y": 0.534,
      "suivants": [
       20
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 20,
-     "type": "pieces",
-     "x": 1.07,
-     "z": -0.195,
+     "type": "duel",
+     "x": -2.154,
+     "z": -0.592,
+     "y": 0.612,
      "suivants": [
       21
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 21,
-     "type": "piege",
-     "x": 1.165,
-     "z": -0.0,
+     "type": "pieces",
+     "x": -1.951,
+     "z": -0.787,
+     "y": 0.687,
      "suivants": [
       22
-     ]
+     ],
+     "zone": "les escaliers"
     },
     {
      "id": 22,
-     "type": "tournee",
-     "x": 1.168,
-     "z": 0.213,
+     "type": "pieces",
+     "x": -1.72,
+     "z": -0.95,
+     "y": 0.76,
      "suivants": [
       23
-     ]
+     ],
+     "zone": "la butte"
     },
     {
      "id": 23,
-     "type": "pieces",
-     "x": 1.048,
-     "z": 0.404,
+     "type": "boutique",
+     "x": -1.459,
+     "z": -1.039,
+     "y": 0.836,
      "suivants": [
       24
+     ],
+     "zone": "la butte",
+     "nom": "Le bazar de la butte",
+     "stock": [
+      "cafe",
+      "double",
+      "pipe",
+      "pickpocket",
+      "bouclier",
+      "tournee"
      ]
     },
     {
      "id": 24,
      "type": "pieces",
-     "x": 0.841,
-     "z": 0.537,
+     "x": -1.2,
+     "z": -1.135,
+     "y": 0.896,
      "suivants": [
       25
-     ]
+     ],
+     "zone": "la butte"
     },
     {
      "id": 25,
      "type": "chance",
-     "x": 0.619,
-     "z": 0.62,
+     "x": -1.031,
+     "z": -1.353,
+     "y": 0.928,
      "suivants": [
       26
-     ]
+     ],
+     "zone": "la butte"
     },
     {
      "id": 26,
      "type": "pieces",
-     "x": 0.422,
-     "z": 0.701,
+     "x": -0.895,
+     "z": -1.595,
+     "y": 0.938,
      "suivants": [
       27
-     ]
+     ],
+     "zone": "la butte"
     },
     {
      "id": 27,
-     "type": "evenement",
-     "x": 0.23,
-     "z": 0.808,
+     "type": "tournee",
+     "x": -0.689,
+     "z": -1.775,
+     "y": 0.893,
      "suivants": [
-      0
-     ]
+      28
+     ],
+     "zone": "la butte"
     },
     {
      "id": 28,
-     "type": "evenement",
-     "x": -0.577,
-     "z": 0.483,
+     "type": "pieces",
+     "x": -0.426,
+     "z": -1.864,
+     "y": 0.783,
      "suivants": [
       29
      ],
-     "zone": "l'arrière-salle"
+     "zone": "la butte"
     },
     {
      "id": 29,
-     "type": "chance",
-     "x": -0.49,
-     "z": 0.246,
+     "type": "pieces",
+     "x": -0.15,
+     "z": -1.88,
+     "y": 0.66,
      "suivants": [
       30
      ],
-     "zone": "l'arrière-salle"
+     "zone": "le pont des amoureux"
     },
     {
      "id": 30,
      "type": "pieces",
-     "x": -0.457,
-     "z": 0.01,
+     "x": 0.091,
+     "z": -1.774,
+     "y": 0.561,
      "suivants": [
       31
      ],
-     "zone": "l'arrière-salle"
+     "zone": "le pont des amoureux"
     },
     {
      "id": 31,
-     "type": "duel",
-     "x": -0.479,
-     "z": -0.224,
+     "type": "evenement",
+     "x": 0.316,
+     "z": -1.633,
+     "y": 0.47,
      "suivants": [
       32
      ],
-     "zone": "l'arrière-salle"
+     "zone": "le pont des amoureux"
     },
     {
      "id": 32,
      "type": "pieces",
-     "x": -0.556,
-     "z": -0.457,
+     "x": 0.569,
+     "z": -1.635,
+     "y": 0.377,
      "suivants": [
-      11
+      33
      ],
-     "zone": "l'arrière-salle"
+     "zone": "le pont des amoureux"
     },
     {
      "id": 33,
-     "type": "piege",
-     "x": 0.549,
-     "z": -0.361,
+     "type": "objet",
+     "x": 0.783,
+     "z": -1.792,
+     "y": 0.305,
      "suivants": [
       34
      ],
-     "zone": "le fumoir"
+     "zone": "le pont des amoureux"
     },
     {
      "id": 34,
      "type": "pieces",
-     "x": 0.532,
-     "z": -0.051,
+     "x": 1.02,
+     "z": -1.9,
+     "y": 0.24,
      "suivants": [
       35
      ],
-     "zone": "le fumoir"
+     "zone": "le quartier des néons"
     },
     {
      "id": 35,
-     "type": "piege",
-     "x": 0.63,
-     "z": 0.249,
+     "type": "pieces",
+     "x": 1.263,
+     "z": -1.766,
+     "y": 0.195,
      "suivants": [
-      24
+      36
      ],
-     "zone": "le fumoir"
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 36,
+     "type": "pieces",
+     "x": 1.484,
+     "z": -1.591,
+     "y": 0.169,
+     "suivants": [
+      37
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 37,
+     "type": "pieces",
+     "x": 1.756,
+     "z": -1.573,
+     "y": 0.153,
+     "suivants": [
+      38
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 38,
+     "type": "piege",
+     "x": 2.014,
+     "z": -1.688,
+     "y": 0.15,
+     "suivants": [
+      39
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 39,
+     "type": "pieces",
+     "x": 2.282,
+     "z": -1.757,
+     "y": 0.15,
+     "suivants": [
+      40
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 40,
+     "type": "duel",
+     "x": 2.431,
+     "z": -1.529,
+     "y": 0.148,
+     "suivants": [
+      41
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 41,
+     "type": "pieces",
+     "x": 2.469,
+     "z": -1.25,
+     "y": 0.148,
+     "suivants": [
+      42
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 42,
+     "type": "chance",
+     "x": 2.392,
+     "z": -0.987,
+     "y": 0.153,
+     "suivants": [
+      43
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 43,
+     "type": "pieces",
+     "x": 2.163,
+     "z": -0.822,
+     "y": 0.164,
+     "suivants": [
+      44
+     ],
+     "zone": "le quartier des néons"
+    },
+    {
+     "id": 44,
+     "type": "evenement",
+     "x": 1.98,
+     "z": -0.62,
+     "y": 0.18,
+     "suivants": [
+      45
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 45,
+     "type": "pieces",
+     "x": 2.138,
+     "z": -0.387,
+     "y": 0.203,
+     "suivants": [
+      46
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 46,
+     "type": "pieces",
+     "x": 2.345,
+     "z": -0.185,
+     "y": 0.219,
+     "suivants": [
+      47
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 47,
+     "type": "pieces",
+     "x": 2.407,
+     "z": 0.081,
+     "y": 0.211,
+     "suivants": [
+      48
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 48,
+     "type": "tournee",
+     "x": 2.271,
+     "z": 0.336,
+     "y": 0.174,
+     "suivants": [
+      49
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 49,
+     "type": "pieces",
+     "x": 2.21,
+     "z": 0.61,
+     "y": 0.131,
+     "suivants": [
+      50,
+      76
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 50,
+     "type": "piege",
+     "x": 2.357,
+     "z": 0.857,
+     "y": 0.088,
+     "suivants": [
+      51
+     ],
+     "zone": "le pont-levis"
+    },
+    {
+     "id": 51,
+     "type": "pieces",
+     "x": 2.45,
+     "z": 1.12,
+     "y": 0.05,
+     "suivants": [
+      52
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 52,
+     "type": "pieces",
+     "x": 2.274,
+     "z": 1.331,
+     "y": 0.044,
+     "suivants": [
+      53
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 53,
+     "type": "pieces",
+     "x": 2.04,
+     "z": 1.48,
+     "y": 0.048,
+     "suivants": [
+      54
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 54,
+     "type": "chance",
+     "x": 1.776,
+     "z": 1.554,
+     "y": 0.05,
+     "suivants": [
+      55
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 55,
+     "type": "pieces",
+     "x": 1.516,
+     "z": 1.463,
+     "y": 0.05,
+     "suivants": [
+      56
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 56,
+     "type": "evenement",
+     "x": 1.254,
+     "z": 1.376,
+     "y": 0.05,
+     "suivants": [
+      57
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 57,
+     "type": "pieces",
+     "x": 1.004,
+     "z": 1.481,
+     "y": 0.05,
+     "suivants": [
+      58
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 58,
+     "type": "objet",
+     "x": 0.793,
+     "z": 1.661,
+     "y": 0.05,
+     "suivants": [
+      59
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 59,
+     "type": "pieces",
+     "x": 0.552,
+     "z": 1.793,
+     "y": 0.05,
+     "suivants": [
+      60
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 60,
+     "type": "piege",
+     "x": 0.276,
+     "z": 1.792,
+     "y": 0.05,
+     "suivants": [
+      0
+     ],
+     "zone": "les docks"
+    },
+    {
+     "id": 61,
+     "type": "peage",
+     "x": -2.019,
+     "z": 0.043,
+     "y": 0.4,
+     "suivants": [
+      62
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 62,
+     "type": "pieces",
+     "x": -1.782,
+     "z": -0.101,
+     "y": 0.409,
+     "suivants": [
+      63
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 63,
+     "type": "chance",
+     "x": -1.534,
+     "z": -0.227,
+     "y": 0.421,
+     "suivants": [
+      64
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 64,
+     "type": "evenement",
+     "x": -1.271,
+     "z": -0.316,
+     "y": 0.438,
+     "suivants": [
+      65
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 65,
+     "type": "pieces",
+     "x": -1.001,
+     "z": -0.381,
+     "y": 0.456,
+     "suivants": [
+      66
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 66,
+     "type": "objet",
+     "x": -0.729,
+     "z": -0.438,
+     "y": 0.459,
+     "suivants": [
+      67
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 67,
+     "type": "pieces",
+     "x": -0.454,
+     "z": -0.48,
+     "y": 0.451,
+     "suivants": [
+      68
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 68,
+     "type": "duel",
+     "x": -0.179,
+     "z": -0.522,
+     "y": 0.432,
+     "suivants": [
+      69
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 69,
+     "type": "pieces",
+     "x": 0.09,
+     "z": -0.591,
+     "y": 0.403,
+     "suivants": [
+      70
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 70,
+     "type": "pieces",
+     "x": 0.35,
+     "z": -0.689,
+     "y": 0.364,
+     "suivants": [
+      71
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 71,
+     "type": "evenement",
+     "x": 0.613,
+     "z": -0.776,
+     "y": 0.321,
+     "suivants": [
+      72
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 72,
+     "type": "pieces",
+     "x": 0.889,
+     "z": -0.795,
+     "y": 0.281,
+     "suivants": [
+      73
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 73,
+     "type": "pieces",
+     "x": 1.156,
+     "z": -0.721,
+     "y": 0.245,
+     "suivants": [
+      74
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 74,
+     "type": "chance",
+     "x": 1.425,
+     "z": -0.654,
+     "y": 0.216,
+     "suivants": [
+      75
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 75,
+     "type": "pieces",
+     "x": 1.702,
+     "z": -0.632,
+     "y": 0.196,
+     "suivants": [
+      44
+     ],
+     "zone": "le pont à péage"
+    },
+    {
+     "id": 76,
+     "type": "pieces",
+     "x": 1.947,
+     "z": 0.617,
+     "y": 0.11,
+     "suivants": [
+      77
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 77,
+     "type": "pieces",
+     "x": 1.684,
+     "z": 0.611,
+     "y": 0.09,
+     "suivants": [
+      78
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 78,
+     "type": "pieces",
+     "x": 1.43,
+     "z": 0.552,
+     "y": 0.078,
+     "suivants": [
+      79
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 79,
+     "type": "pieces",
+     "x": 1.214,
+     "z": 0.403,
+     "y": 0.078,
+     "suivants": [
+      80
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 80,
+     "type": "boutique",
+     "x": 0.998,
+     "z": 0.254,
+     "y": 0.08,
+     "suivants": [
+      81
+     ],
+     "zone": "le marché de nuit",
+     "nom": "L'épicerie de nuit",
+     "stock": [
+      "cafe",
+      "double",
+      "triple",
+      "chaises",
+      "piege",
+      "vide_poche",
+      "taxi"
+     ]
+    },
+    {
+     "id": 81,
+     "type": "pieces",
+     "x": 0.742,
+     "z": 0.235,
+     "y": 0.077,
+     "suivants": [
+      82
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 82,
+     "type": "chance",
+     "x": 0.502,
+     "z": 0.34,
+     "y": 0.069,
+     "suivants": [
+      83
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 83,
+     "type": "pieces",
+     "x": 0.28,
+     "z": 0.481,
+     "y": 0.061,
+     "suivants": [
+      84
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 84,
+     "type": "evenement",
+     "x": 0.063,
+     "z": 0.63,
+     "y": 0.056,
+     "suivants": [
+      85
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 85,
+     "type": "pieces",
+     "x": -0.136,
+     "z": 0.801,
+     "y": 0.052,
+     "suivants": [
+      86
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 86,
+     "type": "objet",
+     "x": -0.269,
+     "z": 1.022,
+     "y": 0.049,
+     "suivants": [
+      87
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 87,
+     "type": "pieces",
+     "x": -0.184,
+     "z": 1.268,
+     "y": 0.05,
+     "suivants": [
+      88
+     ],
+     "zone": "le marché de nuit"
+    },
+    {
+     "id": 88,
+     "type": "piege",
+     "x": -0.093,
+     "z": 1.514,
+     "y": 0.05,
+     "suivants": [
+      0
+     ],
+     "zone": "le marché de nuit"
     }
+   ],
+   "capsule_possibles": [
+    24,
+    32,
+    47,
+    69,
+    9,
+    54,
+    83,
+    39
    ],
    "videur": null,
    "prix_capsule": 20,
+   "peage": 8,
    "pieces": {
     "pieces": 3,
     "piege": -3,
@@ -675,6 +2036,16 @@
     "echange",
     "elan"
    ],
+   "objets_case": [
+    "cafe",
+    "double",
+    "pipe",
+    "chaises",
+    "pickpocket",
+    "bouclier",
+    "tournee",
+    "piege"
+   ],
    "duel_capsule": false,
    "evenements_plateau": {
     "tous_les": 3,
@@ -683,7 +2054,8 @@
      "tournee_patron",
      "capsule_bouge",
      "addition_salee",
-     "coup_de_pouce"
+     "coup_de_pouce",
+     "soldes"
     ]
    }
   },
@@ -692,401 +2064,998 @@
    "nom": "La Cave",
    "difficulte": "difficile",
    "icone": "💀",
-   "description": "Des caves volcaniques : trois chemins, deux trappes, un videur qui rôde, des capsules qui se volent : tout peut basculer.",
+   "description": "Des caves volcaniques : la galerie des fûts, le cratère, un pont suspendu au-dessus de la lave. Geyser, trappes, un videur qui rôde, des capsules qui se volent : tout peut basculer.",
    "cases": [
     {
      "id": 0,
      "type": "depart",
      "x": 0.0,
-     "z": 0.937,
+     "z": 1.76,
+     "y": 0.1,
      "suivants": [
       1
-     ]
+     ],
+     "zone": "l'entrée"
     },
     {
      "id": 1,
      "type": "pieces",
-     "x": -0.221,
-     "z": 0.822,
+     "x": -0.245,
+     "z": 1.757,
+     "y": 0.101,
      "suivants": [
       2
-     ]
+     ],
+     "zone": "l'entrée"
     },
     {
      "id": 2,
      "type": "pieces",
-     "x": -0.401,
-     "z": 0.712,
+     "x": -0.489,
+     "z": 1.732,
+     "y": 0.101,
      "suivants": [
-      3,
-      30
-     ]
+      3
+     ],
+     "zone": "l'entrée"
     },
     {
      "id": 3,
-     "type": "piege",
-     "x": -0.599,
-     "z": 0.651,
+     "type": "pieces",
+     "x": -0.711,
+     "z": 1.634,
+     "y": 0.097,
      "suivants": [
       4
-     ]
+     ],
+     "zone": "l'entrée"
     },
     {
      "id": 4,
-     "type": "pieces",
-     "x": -0.836,
-     "z": 0.594,
+     "type": "piege",
+     "x": -0.89,
+     "z": 1.467,
+     "y": 0.089,
      "suivants": [
       5
-     ]
+     ],
+     "zone": "l'entrée"
     },
     {
      "id": 5,
-     "type": "evenement",
-     "x": -1.042,
-     "z": 0.475,
+     "type": "pieces",
+     "x": -1.1,
+     "z": 1.35,
+     "y": 0.08,
      "suivants": [
       6
-     ]
+     ],
+     "zone": "la galerie des fûts"
     },
     {
      "id": 6,
      "type": "pieces",
-     "x": -1.127,
-     "z": 0.289,
+     "x": -1.331,
+     "z": 1.444,
+     "y": 0.07,
      "suivants": [
       7
-     ]
+     ],
+     "zone": "la galerie des fûts"
     },
     {
      "id": 7,
-     "type": "trappe",
-     "x": -1.101,
-     "z": 0.091,
+     "type": "evenement",
+     "x": -1.544,
+     "z": 1.583,
+     "y": 0.062,
      "suivants": [
       8
      ],
-     "vers": 22
+     "zone": "la galerie des fûts"
     },
     {
      "id": 8,
-     "type": "duel",
-     "x": -1.06,
-     "z": -0.088,
+     "type": "trappe",
+     "x": -1.79,
+     "z": 1.6,
+     "y": 0.061,
      "suivants": [
       9
-     ]
+     ],
+     "zone": "la galerie des fûts",
+     "vers": 40
     },
     {
      "id": 9,
      "type": "pieces",
-     "x": -1.067,
-     "z": -0.274,
+     "x": -2.019,
+     "z": 1.492,
+     "y": 0.065,
      "suivants": [
       10
-     ]
+     ],
+     "zone": "la galerie des fûts"
     },
     {
      "id": 10,
-     "type": "piege",
-     "x": -1.068,
-     "z": -0.487,
+     "type": "objet",
+     "x": -2.218,
+     "z": 1.335,
+     "y": 0.073,
      "suivants": [
       11
-     ]
+     ],
+     "zone": "la galerie des fûts"
     },
     {
      "id": 11,
      "type": "pieces",
-     "x": -0.964,
-     "z": -0.685,
+     "x": -2.301,
+     "z": 1.11,
+     "y": 0.087,
      "suivants": [
       12
-     ]
+     ],
+     "zone": "la galerie des fûts"
     },
     {
      "id": 12,
-     "type": "pieces",
-     "x": -0.735,
-     "z": -0.799,
+     "type": "duel",
+     "x": -2.182,
+     "z": 0.886,
+     "y": 0.101,
      "suivants": [
-      13,
-      34
-     ]
+      13
+     ],
+     "zone": "la galerie des fûts"
     },
     {
      "id": 13,
-     "type": "evenement",
-     "x": -0.46,
-     "z": -0.816,
+     "type": "pieces",
+     "x": -2.1,
+     "z": 0.65,
+     "y": 0.12,
      "suivants": [
       14
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 14,
-     "type": "piege",
-     "x": -0.217,
-     "z": -0.807,
+     "type": "pieces",
+     "x": -2.253,
+     "z": 0.423,
+     "y": 0.143,
      "suivants": [
       15
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 15,
      "type": "pieces",
-     "x": -0.0,
-     "z": -0.836,
+     "x": -2.433,
+     "z": 0.211,
+     "y": 0.171,
      "suivants": [
-      16
-     ]
+      16,
+      61
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 16,
-     "type": "tournee",
-     "x": 0.237,
-     "z": -0.88,
+     "type": "pieces",
+     "x": -2.382,
+     "z": -0.049,
+     "y": 0.213,
      "suivants": [
       17
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 17,
-     "type": "pieces",
-     "x": 0.484,
-     "z": -0.858,
+     "type": "transport",
+     "x": -2.232,
+     "z": -0.284,
+     "y": 0.257,
      "suivants": [
       18
-     ]
+     ],
+     "zone": "la grotte",
+     "moyen": "geyser",
+     "vers": 29
     },
     {
      "id": 18,
-     "type": "chance",
-     "x": 0.674,
-     "z": -0.732,
+     "type": "pieces",
+     "x": -2.244,
+     "z": -0.549,
+     "y": 0.308,
      "suivants": [
       19
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 19,
-     "type": "pieces",
-     "x": 0.78,
-     "z": -0.555,
+     "type": "piege",
+     "x": -2.389,
+     "z": -0.787,
+     "y": 0.355,
      "suivants": [
       20
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 20,
-     "type": "piege",
-     "x": 0.866,
-     "z": -0.395,
+     "type": "pieces",
+     "x": -2.363,
+     "z": -1.041,
+     "y": 0.435,
      "suivants": [
       21
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 21,
-     "type": "pieces",
-     "x": 1.006,
-     "z": -0.258,
+     "type": "chance",
+     "x": -2.141,
+     "z": -1.208,
+     "y": 0.518,
      "suivants": [
       22
-     ]
+     ],
+     "zone": "la grotte"
     },
     {
      "id": 22,
-     "type": "trappe",
-     "x": 1.176,
-     "z": -0.098,
+     "type": "pieces",
+     "x": -1.88,
+     "z": -1.3,
+     "y": 0.6,
      "suivants": [
       23
      ],
-     "vers": 7
+     "zone": "la montée du cratère"
     },
     {
      "id": 23,
-     "type": "evenement",
-     "x": 1.262,
-     "z": 0.105,
+     "type": "pieces",
+     "x": -1.609,
+     "z": -1.218,
+     "y": 0.67,
      "suivants": [
       24
-     ]
+     ],
+     "zone": "la montée du cratère"
     },
     {
      "id": 24,
      "type": "pieces",
-     "x": 1.188,
-     "z": 0.305,
+     "x": -1.348,
+     "z": -1.098,
+     "y": 0.732,
      "suivants": [
-      25,
-      39
-     ]
+      25
+     ],
+     "zone": "la montée du cratère"
     },
     {
      "id": 25,
-     "type": "duel",
-     "x": 1.003,
-     "z": 0.457,
+     "type": "evenement",
+     "x": -1.129,
+     "z": -1.237,
+     "y": 0.809,
      "suivants": [
       26
-     ]
+     ],
+     "zone": "la montée du cratère"
     },
     {
      "id": 26,
      "type": "pieces",
-     "x": 0.813,
-     "z": 0.578,
+     "x": -1.022,
+     "z": -1.504,
+     "y": 0.864,
      "suivants": [
       27
-     ]
+     ],
+     "zone": "la montée du cratère"
     },
     {
      "id": 27,
-     "type": "piege",
-     "x": 0.66,
-     "z": 0.717,
+     "type": "boutique",
+     "x": -0.834,
+     "z": -1.715,
+     "y": 0.922,
      "suivants": [
       28
+     ],
+     "zone": "la montée du cratère",
+     "nom": "Le marchand du cratère",
+     "stock": [
+      "cafe",
+      "double",
+      "triple",
+      "pipe",
+      "bouclier",
+      "taxi"
      ]
     },
     {
      "id": 28,
      "type": "pieces",
-     "x": 0.491,
-     "z": 0.87,
+     "x": -0.581,
+     "z": -1.849,
+     "y": 0.974,
      "suivants": [
       29
-     ]
+     ],
+     "zone": "la montée du cratère"
     },
     {
      "id": 29,
-     "type": "tournee",
-     "x": 0.26,
-     "z": 0.964,
+     "type": "piege",
+     "x": -0.3,
+     "z": -1.9,
+     "y": 1.02,
      "suivants": [
-      0
-     ]
+      30
+     ],
+     "zone": "le cratère"
     },
     {
      "id": 30,
      "type": "pieces",
-     "x": -0.382,
-     "z": 0.469,
+     "x": -0.069,
+     "z": -1.803,
+     "y": 1.051,
      "suivants": [
       31
      ],
-     "zone": "le couloir des fûts"
+     "zone": "le cratère"
     },
     {
      "id": 31,
-     "type": "evenement",
-     "x": -0.438,
-     "z": 0.249,
+     "type": "pieces",
+     "x": 0.14,
+     "z": -1.659,
+     "y": 1.073,
      "suivants": [
       32
      ],
-     "zone": "le couloir des fûts"
+     "zone": "le cratère"
     },
     {
      "id": 32,
      "type": "pieces",
-     "x": -0.572,
-     "z": 0.052,
+     "x": 0.376,
+     "z": -1.582,
+     "y": 1.079,
      "suivants": [
-      33
+      33,
+      78
      ],
-     "zone": "le couloir des fûts"
+     "zone": "le cratère"
     },
     {
      "id": 33,
-     "type": "chance",
-     "x": -0.781,
-     "z": -0.122,
+     "type": "tournee",
+     "x": 0.598,
+     "z": -1.697,
+     "y": 1.061,
      "suivants": [
-      9
+      34
      ],
-     "zone": "le couloir des fûts"
+     "zone": "le cratère"
     },
     {
      "id": 34,
-     "type": "piege",
-     "x": -0.473,
-     "z": -0.599,
+     "type": "pieces",
+     "x": 0.799,
+     "z": -1.852,
+     "y": 1.026,
      "suivants": [
       35
      ],
-     "zone": "les catacombes"
+     "zone": "le cratère"
     },
     {
      "id": 35,
      "type": "chance",
-     "x": -0.2,
-     "z": -0.443,
+     "x": 1.042,
+     "z": -1.905,
+     "y": 0.97,
      "suivants": [
       36
      ],
-     "zone": "les catacombes"
+     "zone": "le cratère"
     },
     {
      "id": 36,
-     "type": "duel",
-     "x": 0.085,
-     "z": -0.33,
+     "type": "pieces",
+     "x": 1.289,
+     "z": -1.854,
+     "y": 0.898,
      "suivants": [
       37
      ],
-     "zone": "les catacombes"
+     "zone": "le cratère"
     },
     {
      "id": 37,
      "type": "pieces",
-     "x": 0.38,
-     "z": -0.262,
+     "x": 1.52,
+     "z": -1.75,
+     "y": 0.82,
      "suivants": [
       38
      ],
-     "zone": "les catacombes"
+     "zone": "la crête"
     },
     {
      "id": 38,
-     "type": "piege",
-     "x": 0.688,
-     "z": -0.238,
+     "type": "pieces",
+     "x": 1.721,
+     "z": -1.576,
+     "y": 0.736,
      "suivants": [
-      21
+      39
      ],
-     "zone": "les catacombes"
+     "zone": "la crête"
     },
     {
      "id": 39,
      "type": "pieces",
-     "x": 1.236,
-     "z": 0.689,
+     "x": 1.897,
+     "z": -1.376,
+     "y": 0.654,
      "suivants": [
       40
      ],
-     "zone": "l'escalier"
+     "zone": "la crête"
     },
     {
      "id": 40,
-     "type": "pieces",
-     "x": 1.003,
-     "z": 0.877,
+     "type": "trappe",
+     "x": 2.115,
+     "z": -1.225,
+     "y": 0.576,
      "suivants": [
-      28
+      41
      ],
-     "zone": "l'escalier"
+     "zone": "la crête",
+     "vers": 8
+    },
+    {
+     "id": 41,
+     "type": "pieces",
+     "x": 2.361,
+     "z": -1.122,
+     "y": 0.505,
+     "suivants": [
+      42
+     ],
+     "zone": "la crête"
+    },
+    {
+     "id": 42,
+     "type": "duel",
+     "x": 2.428,
+     "z": -0.897,
+     "y": 0.423,
+     "suivants": [
+      43
+     ],
+     "zone": "la crête"
+    },
+    {
+     "id": 43,
+     "type": "pieces",
+     "x": 2.293,
+     "z": -0.667,
+     "y": 0.367,
+     "suivants": [
+      44
+     ],
+     "zone": "la crête"
+    },
+    {
+     "id": 44,
+     "type": "evenement",
+     "x": 2.2,
+     "z": -0.42,
+     "y": 0.32,
+     "suivants": [
+      45
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 45,
+     "type": "pieces",
+     "x": 2.299,
+     "z": -0.159,
+     "y": 0.289,
+     "suivants": [
+      46
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 46,
+     "type": "pieces",
+     "x": 2.433,
+     "z": 0.089,
+     "y": 0.27,
+     "suivants": [
+      47
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 47,
+     "type": "piege",
+     "x": 2.382,
+     "z": 0.353,
+     "y": 0.244,
+     "suivants": [
+      48
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 48,
+     "type": "pieces",
+     "x": 2.196,
+     "z": 0.565,
+     "y": 0.22,
+     "suivants": [
+      49
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 49,
+     "type": "objet",
+     "x": 2.11,
+     "z": 0.819,
+     "y": 0.192,
+     "suivants": [
+      50
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 50,
+     "type": "pieces",
+     "x": 2.266,
+     "z": 1.053,
+     "y": 0.166,
+     "suivants": [
+      51
+     ],
+     "zone": "le pont de lave"
+    },
+    {
+     "id": 51,
+     "type": "pieces",
+     "x": 2.38,
+     "z": 1.3,
+     "y": 0.14,
+     "suivants": [
+      52
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 52,
+     "type": "pieces",
+     "x": 2.183,
+     "z": 1.479,
+     "y": 0.129,
+     "suivants": [
+      53
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 53,
+     "type": "pieces",
+     "x": 1.931,
+     "z": 1.579,
+     "y": 0.124,
+     "suivants": [
+      54
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 54,
+     "type": "chance",
+     "x": 1.665,
+     "z": 1.572,
+     "y": 0.116,
+     "suivants": [
+      55
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 55,
+     "type": "pieces",
+     "x": 1.438,
+     "z": 1.425,
+     "y": 0.108,
+     "suivants": [
+      56
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 56,
+     "type": "tournee",
+     "x": 1.199,
+     "z": 1.302,
+     "y": 0.101,
+     "suivants": [
+      57
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 57,
+     "type": "pieces",
+     "x": 0.958,
+     "z": 1.405,
+     "y": 0.099,
+     "suivants": [
+      58
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 58,
+     "type": "evenement",
+     "x": 0.767,
+     "z": 1.598,
+     "y": 0.099,
+     "suivants": [
+      59
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 59,
+     "type": "pieces",
+     "x": 0.54,
+     "z": 1.74,
+     "y": 0.1,
+     "suivants": [
+      60
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 60,
+     "type": "piege",
+     "x": 0.271,
+     "z": 1.77,
+     "y": 0.1,
+     "suivants": [
+      0
+     ],
+     "zone": "les forges"
+    },
+    {
+     "id": 61,
+     "type": "peage",
+     "x": -2.174,
+     "z": 0.141,
+     "y": 0.214,
+     "suivants": [
+      62
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 62,
+     "type": "pieces",
+     "x": -1.914,
+     "z": 0.077,
+     "y": 0.256,
+     "suivants": [
+      63
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 63,
+     "type": "piege",
+     "x": -1.648,
+     "z": 0.049,
+     "y": 0.296,
+     "suivants": [
+      64
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 64,
+     "type": "pieces",
+     "x": -1.39,
+     "z": 0.113,
+     "y": 0.329,
+     "suivants": [
+      65
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 65,
+     "type": "evenement",
+     "x": -1.149,
+     "z": 0.232,
+     "y": 0.356,
+     "suivants": [
+      66
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 66,
+     "type": "pieces",
+     "x": -0.897,
+     "z": 0.318,
+     "y": 0.379,
+     "suivants": [
+      67
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 67,
+     "type": "objet",
+     "x": -0.631,
+     "z": 0.295,
+     "y": 0.398,
+     "suivants": [
+      68
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 68,
+     "type": "pieces",
+     "x": -0.372,
+     "z": 0.225,
+     "y": 0.413,
+     "suivants": [
+      69
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 69,
+     "type": "duel",
+     "x": -0.107,
+     "z": 0.202,
+     "y": 0.42,
+     "suivants": [
+      70
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 70,
+     "type": "pieces",
+     "x": 0.146,
+     "z": 0.287,
+     "y": 0.421,
+     "suivants": [
+      71
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 71,
+     "type": "chance",
+     "x": 0.386,
+     "z": 0.406,
+     "y": 0.414,
+     "suivants": [
+      72
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 72,
+     "type": "pieces",
+     "x": 0.642,
+     "z": 0.482,
+     "y": 0.398,
+     "suivants": [
+      73
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 73,
+     "type": "piege",
+     "x": 0.906,
+     "z": 0.446,
+     "y": 0.369,
+     "suivants": [
+      74
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 74,
+     "type": "pieces",
+     "x": 1.166,
+     "z": 0.38,
+     "y": 0.331,
+     "suivants": [
+      75
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 75,
+     "type": "pieces",
+     "x": 1.43,
+     "z": 0.394,
+     "y": 0.293,
+     "suivants": [
+      76
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 76,
+     "type": "evenement",
+     "x": 1.67,
+     "z": 0.513,
+     "y": 0.258,
+     "suivants": [
+      77
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 77,
+     "type": "pieces",
+     "x": 1.892,
+     "z": 0.663,
+     "y": 0.225,
+     "suivants": [
+      49
+     ],
+     "zone": "le pont suspendu"
+    },
+    {
+     "id": 78,
+     "type": "pieces",
+     "x": 0.407,
+     "z": -1.311,
+     "y": 0.972,
+     "suivants": [
+      79
+     ],
+     "zone": "la cheminée"
+    },
+    {
+     "id": 79,
+     "type": "boutique",
+     "x": 0.474,
+     "z": -1.047,
+     "y": 0.862,
+     "suivants": [
+      80
+     ],
+     "zone": "la cheminée",
+     "nom": "La forge de la cheminée",
+     "stock": [
+      "cafe",
+      "pipe",
+      "chaises",
+      "pickpocket",
+      "piege",
+      "vide_poche",
+      "tournee"
+     ]
+    },
+    {
+     "id": 80,
+     "type": "pieces",
+     "x": 0.646,
+     "z": -0.837,
+     "y": 0.76,
+     "suivants": [
+      81
+     ],
+     "zone": "la cheminée"
+    },
+    {
+     "id": 81,
+     "type": "pieces",
+     "x": 0.87,
+     "z": -0.682,
+     "y": 0.669,
+     "suivants": [
+      82
+     ],
+     "zone": "la cheminée"
+    },
+    {
+     "id": 82,
+     "type": "chance",
+     "x": 1.124,
+     "z": -0.585,
+     "y": 0.573,
+     "suivants": [
+      83
+     ],
+     "zone": "la cheminée"
+    },
+    {
+     "id": 83,
+     "type": "piege",
+     "x": 1.396,
+     "z": -0.566,
+     "y": 0.479,
+     "suivants": [
+      84
+     ],
+     "zone": "la cheminée"
+    },
+    {
+     "id": 84,
+     "type": "pieces",
+     "x": 1.667,
+     "z": -0.538,
+     "y": 0.405,
+     "suivants": [
+      85
+     ],
+     "zone": "la cheminée"
+    },
+    {
+     "id": 85,
+     "type": "objet",
+     "x": 1.934,
+     "z": -0.481,
+     "y": 0.358,
+     "suivants": [
+      44
+     ],
+     "zone": "la cheminée"
     }
    ],
+   "capsule_possibles": [
+    32,
+    7,
+    46,
+    68,
+    82,
+    54,
+    18,
+    24
+   ],
    "videur": {
-    "depart": 16,
-    "pas_min": 1,
-    "pas_max": 3,
+    "depart": 35,
+    "pas_min": 2,
+    "pas_max": 5,
     "fouille": -2
    },
    "prix_capsule": 20,
+   "peage": 10,
    "pieces": {
     "pieces": 3,
     "piege": -4,
@@ -1116,6 +3085,17 @@
     "echange",
     "elan",
     "vol_capsule"
+   ],
+   "objets_case": [
+    "cafe",
+    "double",
+    "pipe",
+    "chaises",
+    "pickpocket",
+    "vide_poche",
+    "bouclier",
+    "tournee",
+    "piege"
    ],
    "duel_capsule": true,
    "evenements_plateau": {

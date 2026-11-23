@@ -252,34 +252,61 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 
 - 2 à 8 joueurs, page `tournee-3d-jeu.html`. Trois plateaux dans `tournee_plateaux.json` (fabriqué par
   `tournee_plateaux.py`, ne pas le modifier à la main) : **La Terrasse** (`terrasse`, facile), **Le Pub** (`pub`,
-  moyen, défaut), **La Cave** (`cave`, difficile). Un plateau = une boucle et des branches ; chaque case a un
-  `type` (`depart`, `pieces`, `piege`, `evenement`, `tournee`, `chance`, `duel`, `trappe`), des `suivants` (deux =
-  embranchement), une `zone` (nom de la branche) et des coordonnées `x`, `z` pour le site, qui pose autour un
-  monde 3D (`commun/mondes3d.js` : port ensoleillé, ville de nuit, caves volcaniques ; la boucle serpente pour lui
-  laisser de la place). Chaque plateau a ses
+  moyen, défaut), **La Cave** (`cave`, difficile). Construits comme les cartes de Mario Party : 82 à 89 cases,
+  une grande boucle découpée en quartiers (la plage, la colline du phare, la butte, le cratère...), deux
+  embranchements, un raccourci à péage (Pub, Cave), un gadget (bateau, tram, geyser, trappes), deux boutiques,
+  au moins 4 cases objet et 7 ou 8 emplacements possibles pour la capsule (`capsule_possibles`). Chaque case a
+  un `type` (`depart`, `pieces`, `piege`, `evenement`, `tournee`, `chance`, `duel`, `trappe`, `objet`,
+  `boutique`, `peage`, `transport`), des `suivants` (deux = embranchement), une `zone` (le quartier), des
+  coordonnées `x`, `z` (de -2,5 à 2,5) et une hauteur `y` (de 0 au bord de l'eau à environ 1 au sommet) pour le
+  site, qui modèle autour un monde 3D en relief (`commun/mondes3d.js` : port ensoleillé, ville de nuit, caves
+  volcaniques). Une boutique a un `nom` et un `stock` ; un `transport` (aller simple) et une `trappe`
+  (aller-retour) ont un `vers`, le transport un `moyen` (`bateau`, `tram`, `geyser`). `python
+  tournee_plateaux.py svg` dessine aussi chaque carte en SVG pour la vérifier. Chaque plateau a ses
   gains (`pieces`), ses gorgées (`boire`), ses événements de case, ses cartes chance et ses événements de plateau.
   La difficulté, c'est surtout les **retournements** : rien à la Terrasse ; vols de pièces, échanges de place,
   duels et coup de pouce au dernier au Pub ; à la Cave en plus, vol de capsule, duels pour une capsule, partage
   de toutes les pièces, trappes et videur. Valeurs communes dans `tournee_config.json`.
+- **Le dé** va de 1 à 10 (`de.faces`). **Les objets** (`objets` de `tournee_config.json`, 3 au plus dans la poche,
+  `poche_max`, publics comme dans Mario Party) : Double shot et Triple shot (2 ou 3 dés), Café serré (+3), Dé pipé
+  (on choisit de 1 à 10), Taxi doré (juste avant la capsule), Chaises musicales (échange de place avec un joueur
+  choisi), Main baladeuse (vole 5 à 10 pièces), Vide-poche (vole un objet), Verre renversé (piège posé sur sa
+  case : le prochain autre joueur qui s'y arrête donne 10 pièces au poseur), Ange gardien (passif : bloque le
+  prochain vol de pièces, d'objet ou de capsule) et Tournée offerte (un joueur choisi boit 2 gorgées). On en gagne
+  sur une case `objet` (pris dans `objets_case` du plateau ; poches pleines : +5 pièces) ou en boutique.
+  La Terrasse ne vend rien pour voler.
 - `tr_demarrer` : `tours` (5, 10 ou 15 ; défaut 10), `plateau` (défaut : celui de la partie précédente du salon,
   sinon `pub`). Le dernier mini-jeu joué dans le salon n'ouvre pas la partie suivante.
 - `tr_etat` : `carte` (le plateau complet : `id`, `nom`, `difficulte`, `cases`, `boire`...), `plateau` (liste des
-  types, ancien format), `positions`, `pieces`, `capsules`, `gorgees`, `capsule_case`, `prix_capsule`, `videur`
-  (case du videur ou `null`), `bonus`, `evenement_plateau`, `des`, `options`, `choix`...
-- Début de chaque tour (sauf le premier) : à la Cave, le videur avance de 1 à 3 cases ; tous les `tous_les` tours,
+  types, ancien format ; `carte` donne aussi `peage`, `capsule_possibles`, `faces`, `poche_max` et le catalogue
+  `objets`), `positions`, `pieces`, `capsules`, `gorgees`, `capsule_case`, `prix_capsule`, `videur` (case du
+  videur ou `null`), `bonus`, `evenement_plateau`, `des`, `des_detail` (les dés lancés), `options`, `choix`,
+  `trajets` (la route déjà décidée ce tour), `objets` (les poches), `objet_tour`, `utilisations` (objets utilisés
+  ce tour), `pieges_poses` (case -> poseur), `boutiques` et `achats` (phase `boutique`)...
+- Début de chaque tour (sauf le premier) : à la Cave, le videur avance de 2 à 5 cases ; tous les `tous_les` tours,
   un événement de plateau (`evenement_plateau`, événement `tr_evenement_plateau`) : happy hour (pièces doublées),
-  promo sur la capsule, tournée du patron, capsule qui bouge, partage des pièces...
-- Un tour, quatre phases (`tr_etat.phase`) :
-  1. `des` (20 s) : `tr_lancer`, tout le monde en même temps ; le serveur tire le dé (événement `tr_de`, `des`
-     public). Si plusieurs chemins sont possibles, `options[joueur]` les liste (`chemin`, `arrivee`, `libelle`,
-     `type_arrivee`) et le joueur choisit par `tr_chemin` (`choix` = indice). À l'échéance, dé et chemin au hasard.
-  2. `deplacement` (2,5 s + 1,5 s par joueur, sans action) : on avance dans l'ordre des dés, du plus haut au plus bas.
+  promo sur la capsule, tournée du patron, capsule qui bouge, partage des pièces, soldes en boutique...
+- Un tour, quatre phases (`tr_etat.phase`), plus la boutique :
+  1. `des` (20 s) : d'abord, si on veut, un objet : `tr_objet` (`objet`, `cible` = indice d'un autre joueur pour
+     les objets qui visent quelqu'un, `valeur` de 1 à 10 pour le dé pipé), un seul par tour, avant son dé
+     (événement `tr_objet_utilise`). Puis `tr_lancer`, tout le monde en même temps ; le serveur tire le dé
+     (événement `tr_de` avec `valeur` et `detail`). Le joueur avance jusqu'au premier embranchement de sa route :
+     `options[joueur]` liste alors les routes (`chemin` jusqu'au prochain embranchement ou au bout du dé,
+     `arrivee`, `libelle`, `type_arrivee`, `peage`) et il choisit par `tr_chemin` (`choix` = indice) ; un
+     embranchement plus loin repose la question. Un péage trop cher n'est pas proposé. À l'échéance, dé et
+     chemins au hasard.
+  2. `deplacement` (2,5 s + 1 s par joueur + 0,18 s par case parcourue + 0,6 s par effet, sans action) : on avance dans l'ordre des dés, du plus haut au plus bas.
      Passer par le départ : +5 pièces. Passer ou s'arrêter sur la capsule : achetée si on a de quoi (elle part
-     ailleurs, pas juste devant un pion). Passer devant le videur : fouille (−2 pièces) ; s'arrêter sur lui :
-     retour au départ et gorgées. Puis la case d'arrivée : `pieces`, `piege` (pièces perdues et gorgées),
-     `tournee` (gorgées à distribuer), `evenement`, `chance`, `duel` (contre un joueur au hasard : 5 pièces, ou une
-     capsule à la Cave ; le perdant boit), `trappe` (on ressort par l'autre). `deplacements.lignes` : dé, départ,
+     sur un de ses emplacements, à 7 à 18 cases du joueur le plus proche si possible). Passer un `peage` :
+     `peage` pièces. Passer devant le videur : fouille (−2 pièces) ; s'arrêter sur lui : retour au départ et
+     gorgées. Puis un verre renversé posé par un autre (10 pièces pour lui), et la case d'arrivée : `pieces`,
+     `piege` (pièces perdues et gorgées), `tournee` (gorgées à distribuer), `evenement`, `chance`, `duel` (contre
+     un joueur au hasard : 5 pièces, ou une capsule à la Cave ; le perdant boit), `trappe` (on ressort par
+     l'autre), `transport` (on part au `vers`), `objet` (un objet gratuit). `deplacements.lignes` : dé, départ,
      chemin, arrivée, effets ; `deplacements.positions` : les positions finales. Événement `tr_deplacements`.
+  2 bis. `boutique` (15 s, seulement si quelqu'un est passé devant une boutique, a de quoi payer et de la place
+     dans ses poches) : `boutiques[joueur]` = `{case, nom, stock: [{id, prix}]}` ; `tr_acheter` (`objet`, ou
+     `null` pour ne rien prendre), une fois. Événements `tr_boutique` et `tr_achat`.
   3. `minijeu` (consignes 7 s + durée du mini-jeu + 6 s de marge) : `minijeu` = `{id, nom, regle, duree, sens,
      consignes, graine, equipes, gorgees_max}`, tiré dans `tournee_minijeux.json`, ni le dernier ni un de la moitié du catalogue la plus
      récemment jouée (`minijeux_recents`, gardé d'une partie à l'autre). Dès

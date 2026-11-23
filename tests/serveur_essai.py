@@ -76,7 +76,8 @@ async def etat(code: str):
         "tr": {"tour": e.get("tour"), "nb_tours": e.get("nb_tours"), "positions": e.get("positions"),
                "pieces": e.get("pieces"), "capsules": e.get("capsules"), "gorgees": e.get("gorgees"),
                "scores": e.get("scores"), "minijeu": e.get("minijeu"), "des": e.get("des"),
-               "plateau": e.get("plateau"), "choix": e.get("choix")}
+               "plateau": e.get("plateau"), "choix": e.get("choix"), "phase": e.get("phase"),
+               "objets": e.get("objets"), "boutiques": e.get("boutiques"), "capsule_case": e.get("capsule_case")}
               if salon.get("jeu") == "tournee" else None,
         # Loup-Garou : les roles et la nuit en cours, pour jouer chaque role depuis les pages.
         "lg": {"roles": e.get("roles"), "vivants": e.get("vivants"), "nuit": e.get("nuit"), "jour": e.get("jour"),
@@ -85,6 +86,31 @@ async def etat(code: str):
                "amoureux": e.get("amoureux"), "capitaine": e.get("capitaine")}
               if salon.get("jeu") == "loupgarou" else None,
     }
+
+
+@serveur.app.get("/test/tr_preparer/{code}")
+async def tr_preparer(code: str):
+    """La Tournee : des objets dans les poches et le deuxieme joueur juste avant une boutique,
+    pour essayer les objets et la boutique depuis les pages."""
+    import tournee
+    salon = serveur.salons.get(code)
+    e = (salon or {}).get("etat")
+    if not e or salon.get("jeu") != "tournee" or e.get("phase") != "des":
+        return {"ok": False}
+    cases = tournee.TR_PLATEAUX[e["plateau"]]["cases"]
+    boutique = [c["id"] for c in cases if c["type"] == "boutique"][0]
+    avant = [c["id"] for c in cases if c["suivants"] == [boutique]][0]
+    n = e["nb_joueurs"]
+    e["objets"] = [["double", "bouclier"]] + [[] for _ in range(n - 1)]
+    if n > 2:
+        e["objets"][2] = ["pickpocket"]
+    e["pieces"] = [40] * n
+    e["positions"][1] = avant
+    import time as _t
+    e["echeance"] = _t.time() + tournee._D["des"]   # le temps d essayer les objets depuis des pages lentes
+    e["version"] += 1
+    await serveur.tr_publier(code, [])
+    return {"ok": True, "boutique": boutique}
 
 
 @serveur.app.get("/test/couper/{code}/{nom}")
@@ -117,6 +143,12 @@ async def lg_role(code: str, index: int, role: str):
             __import__("loupgarou")._accord_meute(etat)   # la meute a pu perdre ou gagner un membre
         await serveur.lg_publier(code, [])
     return {"ok": True}
+
+
+# La Tournee : une boutique longue, pour que les pages lentes (trois navigateurs 3D) l affichent.
+import tournee  # noqa: E402
+tournee._D["boutique"] = float(os.environ.get("TR_BOUTIQUE", "60"))
+tournee._D["des"] = float(os.environ.get("TR_DES", "60"))
 
 
 if os.environ.get("LG_NUIT"):

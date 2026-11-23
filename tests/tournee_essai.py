@@ -3,7 +3,7 @@ Essai du moteur de La Tournee, hors ligne : des centaines de parties jouees
 au hasard (des, scores valides et absurdes, absents, delais depasses), de 2
 a 8 joueurs. On verifie qu aucune ne plante ni ne se fige, que les scores ne
 fuient pas avant les resultats, et que les regles tiennent (deplacements,
-capsule d or, cases, gains du mini-jeu, fin).
+capsule d or, cases, objets, boutiques, gains du mini-jeu, fin).
 Usage : python tests/tournee_essai.py [nombre de parties]
 """
 import os
@@ -14,7 +14,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import tournee as T
 
-TYPES = {"depart", "pieces", "piege", "evenement", "tournee", "chance", "duel", "trappe"}
+TYPES = {"depart", "pieces", "piege", "evenement", "tournee", "chance", "duel", "trappe",
+         "objet", "boutique", "peage", "transport"}
 
 
 def cases(etat):
@@ -33,6 +34,19 @@ def verifier_config():
         for e in p["evenements_plateau"]["liste"]:
             assert e in T._EV_PLATEAU, e
         assert "—" not in p["description"] + p["nom"]
+        # Comme Mario Party : de grandes cartes, deux boutiques, des cases objet, des embranchements.
+        assert len(p["cases"]) >= 60, p["id"]
+        assert sum(c["type"] == "boutique" for c in p["cases"]) == 2
+        assert sum(c["type"] == "objet" for c in p["cases"]) >= 4
+        assert sum(len(c["suivants"]) > 1 for c in p["cases"]) >= 2
+        assert any(c["type"] == "transport" for c in p["cases"])
+        assert max(c["y"] for c in p["cases"]) - min(c["y"] for c in p["cases"]) > 0.7, "du relief"
+        for c in p["cases"]:
+            for o in c.get("stock", []):
+                assert o in T._OBJETS, o
+        for o in p["objets_case"]:
+            assert o in T._OBJETS and not T._OBJETS[o].get("taxi"), o
+        assert len(p["capsule_possibles"]) >= 6
     # La difficulte : on boit de plus en plus, et les retournements arrivent au Pub et a la Cave.
     b = [T.TR_PLATEAUX[x]["boire"] for x in ("terrasse", "pub", "cave")]
     for cle in ("piege", "minijeu_dernier", "fin_dernier"):
@@ -41,6 +55,12 @@ def verifier_config():
     assert not any("vol" in T._EVENEMENTS[e] or "vol_capsule" in T._EVENEMENTS[e] for e in T.TR_PLATEAUX["terrasse"]["evenements"])
     for e in list(T.TR_CONFIG["chance"]) + list(T.TR_CONFIG["evenements_plateau"]):
         assert "—" not in e["texte"] and "cul sec" not in e["texte"].lower(), e
+    assert T._FACES == 10
+    for o in T.TR_CONFIG["objets"]:
+        assert o["prix"] > 0 and o["nom"] and o["icone"] and "—" not in o["texte"] + o["nom"], o
+    # La Terrasse ne vend rien pour voler.
+    for c in T.TR_PLATEAUX["terrasse"]["cases"]:
+        assert not any("vol" in T._OBJETS[o] or T._OBJETS[o].get("vol_objet") for o in c.get("stock", []))
     ids = [m["id"] for m in T.TR_MINIJEUX]
     assert len(ids) == len(set(ids)) >= 3
     for m in T.TR_MINIJEUX:
@@ -57,6 +77,11 @@ def verifier(etat):
     assert all(0 <= p < n for p in etat["positions"])
     assert all(p >= 0 for p in etat["pieces"]) and all(g >= 0 for g in etat["gorgees"])
     assert all(c >= 0 for c in etat["capsules"])
+    assert all(len(p) <= T._POCHE and all(o in T._OBJETS for o in p) for p in etat["objets"])
+    for c, j in etat["pieges_poses"].items():
+        assert 0 <= int(c) < n and 0 <= j < etat["nb_joueurs"]
+    if etat["phase"] == "boutique":
+        assert etat["boutiques"] and all(cs[b["case"]]["type"] == "boutique" for b in etat["boutiques"].values())
     assert 0 <= etat["capsule_case"] < n and cs[etat["capsule_case"]]["type"] not in ("depart", "trappe")
     assert len(pub["plateau"]) == n and pub["carte"]["id"] == etat["plateau"]
     if etat["videur"] is not None:
@@ -78,18 +103,20 @@ def verifier_deplacements(etat, avant):
     cs = cases(etat)
     bouge = False
     for l in res["lignes"]:
-        assert 1 <= l["de"] <= 6 and len(l["chemin"]) == l["de"]
+        j = str(l["joueur"])
+        detail = avant["des_detail"].get(j) or etat["des_detail"].get(j)
+        assert 1 <= l["de"] <= 3 * T._FACES + 3 and len(l["chemin"]) == l["de"]
+        assert detail and all(1 <= d <= T._FACES for d in detail) and sum(detail) <= l["de"] <= sum(detail) + 3
         prec = l["depart"]
         for c in l["chemin"]:
             assert c in cs[prec]["suivants"], "chemin hors du plateau"
             prec = c
-        o = avant["options"].get(str(l["joueur"]))
-        deplace = not any(l["chemin"][0] == x["chemin"][0] for x in (o or []))
-        if o and not deplace:
-            k = etat["choix"][str(l["joueur"])]
-            assert l["chemin"] == o[k]["chemin"], "le chemin choisi n est pas suivi"
-            if str(l["joueur"]) in avant["choix"]:
-                assert k == avant["choix"][str(l["joueur"])]
+        # La route deja decidee avant l echeance est suivie (sauf si un autre joueur l a deplace).
+        prevu = avant["trajets"].get(j) or []
+        if prevu and l["depart"] == avant["positions"][l["joueur"]]:
+            assert l["chemin"][:len(prevu)] == prevu, "la route choisie n est pas suivie"
+        payes = sum(1 for c in l["chemin"] if cs[c]["type"] == "peage")
+        assert sum(1 for e in l["effets"] if e["type"] == "peage") == (payes if T.TR_PLATEAUX[etat["plateau"]]["peage"] else 0)
         if any("vers" in e or "avec" in e for e in l["effets"]):
             bouge = True
     if not bouge:
@@ -148,7 +175,9 @@ def partie(n, graine):
         r = random.random()
         i = random.randrange(n)
         phase = etat["phase"]
-        avant = {"capsules": list(etat["capsules"]), "options": dict(etat["options"]), "choix": dict(etat["choix"])}
+        avant = {"capsules": list(etat["capsules"]), "options": dict(etat["options"]), "choix": dict(etat["choix"]),
+                 "trajets": {k: list(v) for k, v in etat["trajets"].items()}, "positions": list(etat["positions"]),
+                 "des_detail": dict(etat["des_detail"])}
         if r < 0.03:
             if etat["partis"][i]:
                 T.tr_joueur_revenu(etat, i, t)
@@ -158,11 +187,19 @@ def partie(n, graine):
             t = etat["echeance"] + 0.1
             T.tr_expirer(etat, t)
         elif phase == "des":
-            if etat["options"].get(str(i)) and str(i) not in etat["choix"] and random.random() < 0.8:
+            if etat["options"].get(str(i)) and random.random() < 0.8:
                 k = random.choice([0, 1, 2, 7, -1, "a", True])
                 T.tr_action(etat, i, {"type": "tr_chemin", "choix": k}, t)
+            elif str(i) not in etat["des"] and random.random() < 0.3:
+                o = random.choice(etat["objets"][i] + list(T._OBJETS) + ["x", None, 3])
+                T.tr_action(etat, i, {"type": "tr_objet", "objet": o, "cible": random.choice([0, 1, 2, i, -1, 9, None, "a"]),
+                                      "valeur": random.choice([1, 5, 10, 0, 11, "a", True])}, t)
             else:
                 T.tr_action(etat, i, {"type": "tr_lancer"}, t)
+        elif phase == "boutique":
+            offre = etat["boutiques"].get(str(i))
+            o = random.choice(([s["id"] for s in offre["stock"]] if offre else []) + [None, "taxi", "x", 4])
+            T.tr_action(etat, i, {"type": "tr_acheter", "objet": o}, t)
         elif phase == "minijeu":
             m = T._minijeu(etat["minijeu"]["id"])
             T.tr_action(etat, i, {"type": "tr_score", "score": score_hasard(m),
@@ -191,9 +228,11 @@ def scenario():
     """Un cas a la main : capsule, depart, cases, mini-jeu."""
     e = T.tr_initialiser(["A", "B", "C"], 0, tours=5, plateau="terrasse")
     rng = random.Random(3)
+    cs = cases(e)
+    fin_boucle = [c["id"] for c in cs if c["suivants"] == [0] and c["zone"] == cs[c["id"] - 1]["zone"]][0]
     e["capsule_case"] = 4
     e["pieces"] = [25, 5, 10]
-    e["positions"] = [0, 0, 21]
+    e["positions"] = [0, 0, fin_boucle - 2]
     e["des"] = {"0": 5, "1": 4, "2": 3}
     ev = []
     T._deplacer(e, ev, 1, rng)
@@ -202,7 +241,7 @@ def scenario():
     # A passe sur la capsule (case 4) avec 25 pieces : il l achete.
     assert e["capsules"][0] == 1 and any(x["type"] == "capsule" for x in l[0]["effets"])
     assert e["capsule_case"] != 4
-    # C (21 -> 0) passe par le depart : +5.
+    # C (trois cases avant le depart) passe par le depart : +5.
     assert any(x["type"] == "depart" and x["pieces"] == 5 for x in l[2]["effets"])
     assert e["phase"] == "deplacement" and ev[0]["msg"]["type"] == "tr_deplacements"
     # Mini-jeu : B gagne, A deuxieme, C n envoie rien et boit.
@@ -227,23 +266,34 @@ def scenario():
     assert e["phase"] == "des" and e["tour"] == 2
 
 
+def _carrefour(plateau):
+    cs = T.TR_PLATEAUX[plateau]["cases"]
+    j = [c["id"] for c in cs if len(c["suivants"]) > 1][0]
+    avant = [c["id"] for c in cs if c["suivants"] == [j]][0]
+    return cs, j, avant
+
+
 def scenario_chemins():
-    """Un embranchement : le joueur choisit, le chemin est suivi ; sans choix, le hasard a l echeance."""
+    """Un embranchement : le joueur choisit en y arrivant, le chemin est suivi ; sans choix, le hasard a l echeance."""
     e = T.tr_initialiser(["A", "B"], 0, tours=5, plateau="terrasse")
-    e["positions"] = [3, 3]
+    cs, j, avant = _carrefour("terrasse")
+    branche = cs[j]["suivants"][1]
+    e["positions"] = [avant, avant]
     random.seed(1)
     while True:
-        # On force un de qui passe l embranchement (case 4) : il faut au moins 2 pas.
-        e["des"], e["options"], e["choix"] = {}, {}, {}
+        # On attend un de qui passe l embranchement : il faut au moins 2 pas.
+        e["des"], e["options"], e["choix"], e["trajets"] = {}, {}, {}, {}
         T.tr_action(e, 0, {"type": "tr_lancer"}, 1)
         if e["options"].get("0"):
             break
+    assert e["trajets"]["0"] == [j], "on avance jusqu a l embranchement"
     o = e["options"]["0"]
-    assert len(o) == 2 and {x["libelle"] for x in o} == {"tout droit", "par la pergola"}, o
+    assert len(o) == 2 and any("rue du village" in x["libelle"] for x in o), o
     assert T.tr_action(e, 0, {"type": "tr_chemin", "choix": 5}, 1)[0]["msg"]["type"] == "erreur"
-    k = [x["libelle"] for x in o].index("par la pergola")
+    k = [x["chemin"][0] for x in o].index(branche)
     T.tr_action(e, 0, {"type": "tr_chemin", "choix": k}, 1)
-    assert e["choix"]["0"] == k and e["phase"] == "des"
+    assert e["choix"]["0"] == k and e["phase"] == "des" and not e["options"].get("0")
+    assert len(e["trajets"]["0"]) == e["des"]["0"]
     assert T.tr_action(e, 0, {"type": "tr_chemin", "choix": 1 - k}, 1) == [], "un seul choix"
     T.tr_action(e, 1, {"type": "tr_lancer"}, 1)
     if e["phase"] == "des":
@@ -251,7 +301,95 @@ def scenario_chemins():
         T.tr_expirer(e, e["echeance"] + 0.1)
     assert e["phase"] == "deplacement"
     l = [x for x in e["deplacements"]["lignes"] if x["joueur"] == 0][0]
-    assert l["chemin"] == o[k]["chemin"] and l["chemin"][:2] == [4, 24]
+    assert l["chemin"][:2] == [j, branche]
+
+
+def scenario_peage():
+    """Le péage : proposé seulement si on peut payer, et payé au passage."""
+    e = T.tr_initialiser(["A", "B"], 0, tours=5, plateau="pub")
+    cs = cases(e)
+    peage = [c["id"] for c in cs if c["type"] == "peage"][0]
+    j = [c["id"] for c in cs if peage in c["suivants"]][0]
+    e["positions"] = [j, j]
+    e["pieces"] = [3, 30]
+    for i in (0, 1):
+        e["des"][str(i)] = 4
+        e["trajets"][str(i)] = []
+        T._planifier(e, i)
+    assert not e["options"].get("0") and e["trajets"]["0"][0] != peage, "trop pauvre pour le péage"
+    o = e["options"]["1"]
+    k = [x["chemin"][0] for x in o].index(peage)
+    assert "péage" in o[k]["libelle"]
+    T._choisir(e, 1, k)
+    T._deplacer(e, [], 1, random.Random(2))
+    l = [x for x in e["deplacements"]["lignes"] if x["joueur"] == 1][0]
+    assert any(x["type"] == "peage" and x["pieces"] == -T.TR_PLATEAUX["pub"]["peage"] for x in l["effets"])
+
+
+def scenario_objets():
+    """Les objets : un par tour, avant le dé ; double shot, dé pipé, vol, ange gardien, taxi, piège posé."""
+    e = T.tr_initialiser(["A", "B", "C"], 0, tours=5, plateau="cave")
+    e["objets"] = [["double", "pipe", "pickpocket"], ["bouclier"], ["vide_poche", "taxi", "piege"]]
+    e["pieces"] = [10, 20, 20]
+    assert T.tr_action(e, 0, {"type": "tr_objet", "objet": "taxi"}, 1)[0]["msg"]["type"] == "erreur"
+    assert T.tr_action(e, 1, {"type": "tr_objet", "objet": "bouclier"}, 1)[0]["msg"]["type"] == "erreur"
+    T.tr_action(e, 0, {"type": "tr_objet", "objet": "double"}, 1)
+    assert e["objets"][0] == ["pipe", "pickpocket"] and e["modif_de"]["0"]["des"] == 2
+    assert T.tr_action(e, 0, {"type": "tr_objet", "objet": "pipe", "valeur": 3}, 1)[0]["msg"]["type"] == "erreur", "un seul par tour"
+    T.tr_action(e, 0, {"type": "tr_lancer"}, 1)
+    assert len(e["des_detail"]["0"]) == 2 and e["des"]["0"] == sum(e["des_detail"]["0"])
+    assert T.tr_action(e, 0, {"type": "tr_objet", "objet": "pipe", "valeur": 3}, 1)[0]["msg"]["type"] == "erreur", "après le dé"
+    # Vide-poche contre l ange gardien : bloqué, et l ange s en va.
+    T.tr_action(e, 2, {"type": "tr_objet", "objet": "vide_poche", "cible": 1}, 1)
+    assert e["objets"][1] == [] and e["utilisations"][-1].get("protege")
+    # Tour suivant : dé pipé, main baladeuse, taxi.
+    e2 = T.tr_initialiser(["A", "B", "C"], 0, tours=5, plateau="cave")
+    e2["objets"] = [["pipe"], ["pickpocket"], ["taxi"]]
+    e2["pieces"] = [10, 0, 30]
+    assert T.tr_action(e2, 0, {"type": "tr_objet", "objet": "pipe", "valeur": 11}, 1)[0]["msg"]["type"] == "erreur"
+    T.tr_action(e2, 0, {"type": "tr_objet", "objet": "pipe", "valeur": 7}, 1)
+    assert e2["des"]["0"] == 7 and e2["des_detail"]["0"] == [7]
+    T.tr_action(e2, 1, {"type": "tr_objet", "objet": "pickpocket", "cible": 2}, 1)
+    assert 5 <= e2["pieces"][1] <= 10 and e2["pieces"][1] + e2["pieces"][2] == 30
+    T.tr_action(e2, 2, {"type": "tr_objet", "objet": "taxi"}, 1)
+    assert e2["capsule_case"] in cases(e2)[e2["positions"][2]]["suivants"], "juste avant la capsule"
+    # Verre renversé : le suivant qui s arrête dessus paie.
+    e3 = T.tr_initialiser(["A", "B"], 0, tours=5, plateau="terrasse")
+    e3["objets"] = [["piege"], []]
+    e3["positions"] = [5, 2]
+    e3["pieces"] = [0, 30]
+    T.tr_action(e3, 0, {"type": "tr_objet", "objet": "piege"}, 1)
+    assert e3["pieges_poses"] == {"5": 0}
+    e3["capsule_case"] = 40
+    e3["des"] = {"0": 1, "1": 3}
+    T._deplacer(e3, [], 1, random.Random(1))
+    l = [x for x in e3["deplacements"]["lignes"] if x["joueur"] == 1][0]
+    assert any(x["type"] == "piege_pose" and x["proprio"] == 0 for x in l["effets"]) and e3["pieces"][0] >= 10
+    assert e3["pieges_poses"] == {}
+
+
+def scenario_boutique():
+    """Passer devant une boutique : on achète (ou pas), puis le mini-jeu."""
+    e = T.tr_initialiser(["A", "B"], 0, tours=5, plateau="terrasse")
+    cs = cases(e)
+    b = [c for c in cs if c["type"] == "boutique"][0]
+    avant = [c["id"] for c in cs if c["suivants"] == [b["id"]]][0]
+    e["positions"] = [avant, 0]
+    e["pieces"] = [30, 0]
+    e["capsule_case"] = 70
+    e["des"] = {"0": 2, "1": 1}
+    T._deplacer(e, [], 1, random.Random(1))
+    assert list(e["boutiques"]) == ["0"], "B n a pas un sou ou n est pas passé"
+    T.tr_expirer(e, e["echeance"] + 0.1)
+    assert e["phase"] == "boutique"
+    offre = e["boutiques"]["0"]
+    assert offre["nom"] == b["nom"] and [s["id"] for s in offre["stock"]] == b["stock"]
+    assert T.tr_action(e, 1, {"type": "tr_acheter", "objet": "cafe"}, 2) == []
+    assert T.tr_action(e, 0, {"type": "tr_acheter", "objet": "taxi"}, 2)[0]["msg"]["type"] == "erreur"
+    prix, avant = offre["stock"][0]["prix"], e["pieces"][0]
+    T.tr_action(e, 0, {"type": "tr_acheter", "objet": offre["stock"][0]["id"]}, 2)
+    assert e["objets"][0] == [offre["stock"][0]["id"]] and e["pieces"][0] == avant - prix
+    assert e["phase"] == "minijeu"
 
 
 def scenario_variete():
@@ -320,6 +458,9 @@ def main():
     verifier_config()
     scenario()
     scenario_chemins()
+    scenario_peage()
+    scenario_objets()
+    scenario_boutique()
     scenario_retournements()
     scenario_variete()
     vus = set()
