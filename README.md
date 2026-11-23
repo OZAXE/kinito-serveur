@@ -295,7 +295,7 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
      `arrivee`, `libelle`, `type_arrivee`, `peage`) et il choisit par `tr_chemin` (`choix` = indice) ; un
      embranchement plus loin repose la question. Un péage trop cher n'est pas proposé. À l'échéance, dé et
      chemins au hasard.
-  2. `deplacement` (2,5 s + 1,5 s par joueur, sans action) : on avance dans l'ordre des dés, du plus haut au plus bas.
+  2. `deplacement` (2,5 s + 1 s par joueur + 0,18 s par case parcourue + 0,6 s par effet, sans action) : on avance dans l'ordre des dés, du plus haut au plus bas.
      Passer par le départ : +5 pièces. Passer ou s'arrêter sur la capsule : achetée si on a de quoi (elle part
      sur un de ses emplacements, à 7 à 18 cases du joueur le plus proche si possible). Passer un `peage` :
      `peage` pièces. Passer devant le videur : fouille (−2 pièces) ; s'arrêter sur lui : retour au départ et

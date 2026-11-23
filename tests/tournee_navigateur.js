@@ -8,7 +8,8 @@
 //
 // On vérifie :
 //   1. le réglage (5 tours, le plateau) part avec le lancement ;
-//   2. chacun lance son dé, choisit son chemin aux embranchements, les pions
+//   2. au premier tour, objets (Double shot, Main baladeuse bloquée par l'Ange
+//      gardien) et boutique ; chacun lance son dé, choisit son chemin aux embranchements, les pions
 //      avancent, le journal du tour s'affiche ;
 //   3. le mini-jeu s'ouvre en plein écran sur chaque téléphone (consignes, puis
 //      le jeu), se joue au doigt, et le score part au serveur ;
@@ -72,7 +73,7 @@ async function attendreQue(test, delai, quoi) {
   const noms = ['Alice', 'Bruno', 'Chloe'];
   const pages = [];
   for (let k = 0; k < noms.length; k++) pages.push(await nouvelle());
-  const [A] = pages;
+  const [A, B, C] = pages;
   await A.goto(SITE + 'tournee-3d-jeu.html');
   await A.fill('#pseudo', noms[0]);
   await A.locator('button', { hasText: /Cr.er un salon/ }).first().click();
@@ -127,6 +128,14 @@ async function attendreQue(test, delai, quoi) {
   // La machine d essai (trois navigateurs 3D sur peu de processeurs) peut prendre
   // du retard sur les minuteurs du serveur : on suit le tour du serveur plutôt
   // que de compter les nôtres.
+
+  // Cliquer un bouton du panneau d'un seul geste (le panneau peut se redessiner entre deux appels).
+  const cliquer = (p, selecteur, motif, delai = 20000) => p.waitForFunction(([sel, src]) => {
+    const b = [...document.querySelectorAll(sel)].find(b => !b.disabled && (!src || new RegExp(src).test(b.textContent)));
+    if (b) b.click();
+    return !!b;
+  }, [selecteur, motif ? motif.source : null], { timeout: delai, polling: 250 });
+
   const minijeuxVus = new Set();
   let scoresRecus = 0, resultatsVus = false, tour = 1;
   while (tour <= 5) {
@@ -134,10 +143,27 @@ async function attendreQue(test, delai, quoi) {
       .catch(async err => { const x = await etat(code); console.log(x.phase, JSON.stringify(x.tr)); for (const p of pages) console.log('---', await p.locator('#panneau').innerText()); throw err; });
     if (ed.phase === 'fin') break;
     tour = ed.tr.tour;
+    // 2 bis. Au premier tour : des objets dans les poches (Double shot pour A, Main
+    // baladeuse pour C contre l'Ange gardien de A) et B juste avant une boutique.
+    if (tour === 1) {
+      verifier((await (await fetch(`${API}/test/tr_preparer/${code}`)).json()).ok, 'objets et boutique préparés');
+      await A.waitForFunction(() => [...document.querySelectorAll('#panneau .poche button')].some(b => /Double shot/.test(b.textContent)), null, { timeout: 20000 });
+      await capture(A, '2b-poche');
+      await cliquer(A, '#panneau .poche button', /Double shot/);
+      await attendreQue(async () => ((await etat(code)).tr.objets[0] || []).length === 1, 15000, 'Double shot utilisé');
+      await C.waitForFunction(() => [...document.querySelectorAll('#panneau .poche button')].some(b => /Main baladeuse/.test(b.textContent)), null, { timeout: 20000 });
+      await cliquer(C, '#panneau .poche button', /Main baladeuse/);
+      await C.waitForFunction(() => [...document.querySelectorAll('#panneau button')].some(b => /^Alice/.test(b.textContent)), null, { timeout: 15000 });
+      await capture(C, '2c-cible');
+      await cliquer(C, '#panneau button', /^Alice/);
+      await attendreQue(async () => { const x = await etat(code); return x.tr.objets[0].length === 0 && x.tr.objets[2].length === 0; }, 20000, 'Ange gardien de A')
+        .catch(async err => { console.log(JSON.stringify((await etat(code)).tr.objets), '---', await C.locator('#panneau').innerText()); throw err; });
+      verifier((await etat(code)).tr.pieces[0] === 40, "l'Ange gardien bloque la Main baladeuse");
+    }
     // 2. Les dés : chacun lance.
     await Promise.all(pages.map(async p => {
-      await p.waitForFunction(() => [...document.querySelectorAll('#panneau button')].some(b => /Lancer le d/.test(b.textContent)), null, { timeout: 30000 }).catch(() => {});
-      await p.evaluate(() => { const b = [...document.querySelectorAll('#panneau button')].find(b => /Lancer le d/.test(b.textContent)); if (b) b.click(); });
+      await p.waitForFunction(() => [...document.querySelectorAll('#panneau button')].some(b => /Lancer/.test(b.textContent)), null, { timeout: 30000 }).catch(() => {});
+      await p.evaluate(() => { const b = [...document.querySelectorAll('#panneau button')].find(b => /Lancer/.test(b.textContent)); if (b) b.click(); });
       // À un embranchement, des boutons de chemin apparaissent : on prend le dernier.
       const vu = await p.waitForSelector('#panneau [data-choix]', { timeout: 4000 }).then(() => true).catch(() => false);
       if (vu) {
@@ -146,13 +172,28 @@ async function attendreQue(test, delai, quoi) {
         await p.evaluate(() => { const b = [...document.querySelectorAll('#panneau [data-choix]')]; b[b.length - 1].click(); });
       }
     }));
-    await attendreQue(async () => (await etat(code)).phase !== 'des', 30000, 'déplacement ' + tour);
+    await attendreQue(async () => (await etat(code)).phase !== 'des', 90000, 'déplacement ' + tour);
+    // La boutique arrive juste après les pions : on la guette pendant qu'on lit le journal.
+    const boutiqueVue = tour === 1 ? attendreQue(async () => (await etat(code)).phase === 'boutique', 60000, 'boutique')
+      .catch(async err => { const x = await etat(code); console.log(x.phase, JSON.stringify(x.tr.positions), JSON.stringify(x.tr.des), JSON.stringify(x.tr.pieces)); throw err; }) : null;
     if (tour === 1) {
       const e = await etat(code);
       verifier(Object.keys(e.tr.des).length === 3, 'les trois dés sont lancés : ' + JSON.stringify(e.tr.des));
-      const lignes = await A.waitForSelector('.journal', { timeout: 30000 }).then(() => A.locator('.journal div').count()).catch(() => 0);
+      verifier(e.tr.des['0'] >= 2, 'Double shot : deux dés pour A (' + e.tr.des['0'] + ')');
+      const lignes = await A.waitForSelector('.journal', { timeout: 12000 }).then(() => A.locator('.journal div').count()).catch(() => 0);
       verifier(lignes === 3, 'le journal du tour a une ligne par joueur (' + lignes + ')');
       await capture(A, '2-deplacement');
+    }
+    // 2 ter. La boutique : B est passé devant, il achète le premier objet du rayon.
+    if (tour === 1) {
+      await boutiqueVue;
+      await B.waitForSelector('#panneau .rayon button:not([disabled])', { timeout: 40000 })
+        .catch(async err => { const x = await etat(code); console.log(x.phase, JSON.stringify(x.tr.boutiques), '---', await B.locator('#panneau').innerText()); console.log(erreurs.join('\n')); throw err; });
+      await capture(B, '2d-boutique');
+      // Le panneau peut se redessiner entre deux appels : on reprend le bouton au moment du clic.
+      await cliquer(B, '#panneau .rayon button');
+      await attendreQue(async () => ((await etat(code)).tr.objets[1] || []).length === 1, 15000, 'achat de B');
+      verifier(true, 'B achète un objet en boutique');
     }
     // 3. Le mini-jeu.
     const em = await attendreQue(async () => { const x = await etat(code); return x.phase === 'minijeu' && x; }, 30000, 'mini-jeu ' + tour);

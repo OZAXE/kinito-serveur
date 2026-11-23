@@ -283,10 +283,12 @@
   "delais": {
     "des": 20,
     "deplacement_base": 2.5,
-    "deplacement_par_joueur": 1.5,
+    "deplacement_par_joueur": 1.0,
     "resultats": 10,
     "absent": 3,
     "retour": 10,
-    "boutique": 15
+    "boutique": 15,
+    "deplacement_par_case": 0.18,
+    "deplacement_par_effet": 0.6
   }
 }

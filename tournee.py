@@ -1073,8 +1073,12 @@ def _armer(etat, maintenant):
     if phase == "des":
         etat["echeance"] = maintenant + (_D["des"] if _attendus(etat) else _D["absent"])
     elif phase == "deplacement":
-        nb = len((etat["deplacements"] or {}).get("lignes", []))
-        etat["echeance"] = maintenant + _D["deplacement_base"] + _D["deplacement_par_joueur"] * nb
+        lignes = (etat["deplacements"] or {}).get("lignes", [])
+        # Le temps que les pions avancent case par case sur le site (dé de 10, effets en route).
+        cases = sum(len(l["chemin"]) for l in lignes)
+        effets = sum(len(l["effets"]) for l in lignes)
+        etat["echeance"] = (maintenant + _D["deplacement_base"] + _D["deplacement_par_joueur"] * len(lignes)
+                            + _D.get("deplacement_par_case", 0) * cases + _D.get("deplacement_par_effet", 0) * effets)
     elif phase == "boutique":
         etat["echeance"] = maintenant + (_D["boutique"] if _attendus(etat) else _D["absent"])
     elif phase == "minijeu":
