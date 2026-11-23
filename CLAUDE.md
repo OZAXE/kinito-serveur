@@ -20,7 +20,7 @@ dans la même modification quand un comportement change.
 Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
 
 - **Registre des jeux** `JEUX` (`serveur.py`) : kinito, beerbattle, buckshot, picolopoly,
-  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`), conquete (Royaumes, préfixe `sw_`), justepinte (Le Juste Pinte, préfixe `jp_`), quidenous (Qui de nous ?, préfixe `qn_`), tournee (La Tournée, party game, préfixe `tr_`), loupgarou (Loup-Garou, rôles cachés, 4 à 15 joueurs, préfixe `lg_`). Chaque jeu y est déclaré une fois
+  menteur (affiché « Cal 12 »), casino, undercover, telephone (Gribouillophone, préfixe `td_`), conquete (Royaumes, préfixe `sw_`), justepinte (Le Juste Pinte, préfixe `jp_`), quidenous (Qui de nous ?, préfixe `qn_`), tournee (La Tournée, party game, préfixe `tr_`), loupgarou (Loup-Garou, rôles officiels, 4 à 20 joueurs, préfixe `lg_`). Chaque jeu y est déclaré une fois
   (démarrage, actions, reprise, départ, retour, minuteurs, nombre de joueurs) : ajouter un jeu
   = ajouter une entrée.
 - **Moteurs de règles purs** à part, testables hors ligne : `picolopoly.py`, `menteur.py`,

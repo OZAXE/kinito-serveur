@@ -81,7 +81,8 @@ async def etat(code: str):
         # Loup-Garou : les roles et la nuit en cours, pour jouer chaque role depuis les pages.
         "lg": {"roles": e.get("roles"), "vivants": e.get("vivants"), "nuit": e.get("nuit"), "jour": e.get("jour"),
                "meute": e.get("meute"), "victime": e.get("victime"), "potions": e.get("potions"),
-               "tireur": e.get("tireur"), "gorgees": e.get("gorgees")}
+               "tireur": e.get("tireur"), "gorgees": e.get("gorgees"), "convertis": e.get("convertis"),
+               "amoureux": e.get("amoureux"), "capitaine": e.get("capitaine")}
               if salon.get("jeu") == "loupgarou" else None,
     }
 
@@ -95,6 +96,30 @@ async def couper(code: str, nom: str):
             await serveur.fermer(j["ws"], 1001)
             return {"coupe": True}
     return {"coupe": False}
+
+
+@serveur.app.get("/test/lg_role/{code}/{index}/{role}")
+async def lg_role(code: str, index: int, role: str):
+    """Reserve aux tests : donne une autre carte a un joueur du Loup-Garou (pour voir chaque panneau)."""
+    salon = serveur.salons.get(code)
+    etat = (salon or {}).get("etat")
+    if not etat or salon.get("jeu") != "loupgarou" or role not in __import__("loupgarou").LG_ROLES:
+        return {"ok": False}
+    async with serveur.verrou(salon):
+        etat["roles"][index] = role
+        etat["convertis"][index] = False
+        if role == "infect":
+            etat["infection"] = True
+        if etat["phase"] == "nuit":
+            __import__("loupgarou")._accord_meute(etat)   # la meute a pu perdre ou gagner un membre
+        await serveur.lg_publier(code, [])
+    return {"ok": True}
+
+
+if os.environ.get("LG_NUIT"):
+    # Loup-Garou : une nuit longue, pour passer chaque panneau de role en revue.
+    import loupgarou  # noqa: E402
+    loupgarou._D["nuit"] = float(os.environ["LG_NUIT"])
 
 
 # --- Enquete : crediter des PE sans jouer, et chrono d archive raccourci ---
