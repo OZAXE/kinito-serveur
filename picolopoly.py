@@ -77,11 +77,13 @@ PP_DIFFICULTE_DEFAUT = "difficile"
 PP_CAGNOTTE_PAR_GORGEE = 50
 PP_MOTIFS_CAGNOTTE = ["taxe", "carte", "prison"]
 # Roulette (europeenne, comme au casino) : un lancer par tour, autant de
-# paris qu on veut sur le tapis, chacun par tranches de 50 EUR. 1 gorgee par
-# tranche misee en tout (bue quoi qu il sorte). Les mises perdues partent
-# dans la cagnotte. Gains nets : plein 35 pour 1, douzaine et colonne 2 pour 1,
-# chances simples 1 pour 1 (la mise gagnante est rendue en plus).
+# paris qu on veut sur le tapis, chacun par tranches de 50 EUR. Le lancer
+# coute PP_ROULETTE_GORGEES gorgee(s), quelle que soit la mise (bue quoi qu il
+# sorte). Les mises perdues partent dans la cagnotte. Gains nets : plein 35
+# pour 1, cheval 17, transversale 11, carre 8, sixain 5, douzaine et colonne
+# 2, chances simples 1 (la mise gagnante est rendue en plus).
 PP_ROULETTE_MISE = 50
+PP_ROULETTE_GORGEES = 1        # prix d un lancer, quelle que soit la mise
 PP_ROULETTE_ROUGES = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
 # Paris exterieurs : (gain net pour 1, test sur le numero). Plein ("n17") : 35 pour 1.
 PP_ROULETTE_PARIS = {
@@ -105,6 +107,42 @@ PP_ROULETTE_LIBELLES = {
     "c1": "la 1re colonne", "c2": "la 2e colonne", "c3": "la 3e colonne",
 }
 PP_ROULETTE_PARIS_MAX = 20     # paris differents sur un meme lancer
+
+
+def _combinaisons_roulette():
+    """
+    Les mises a plusieurs numeros du tapis, codees "x" + numeros croissants
+    joints par "-" ("x17-18"). Rangee r (1 a 12) : 3r-2, 3r-1, 3r.
+    cheval (2 numeros voisins), transversale (une rangee, ou 0-1-2 / 0-2-3),
+    carre (4 numeros en carre, ou 0-1-2-3), sixain (deux rangees voisines).
+    """
+    combis = {}
+
+    def ajouter(nums, sorte):
+        combis["x" + "-".join(str(n) for n in sorted(nums))] = sorte
+
+    for n in range(1, 37):
+        if n % 3 != 0:
+            ajouter((n, n + 1), "cheval")
+        if n <= 33:
+            ajouter((n, n + 3), "cheval")
+    for n in (1, 2, 3):
+        ajouter((0, n), "cheval")
+    for r in range(1, 13):
+        ajouter((3 * r - 2, 3 * r - 1, 3 * r), "transversale")
+    ajouter((0, 1, 2), "transversale")
+    ajouter((0, 2, 3), "transversale")
+    for n in range(1, 34):
+        if n % 3 != 0:
+            ajouter((n, n + 1, n + 3, n + 4), "carre")
+    ajouter((0, 1, 2, 3), "carre")
+    for r in range(1, 12):
+        ajouter(range(3 * r - 2, 3 * r + 4), "sixain")
+    return combis
+
+
+PP_ROULETTE_COMBIS = _combinaisons_roulette()
+PP_ROULETTE_GAINS_COMBI = {"cheval": 17, "transversale": 11, "carre": 8, "sixain": 5}
 
 # Rythme
 PP_DUREE_PARTIE = 3600        # chrono dur, en secondes
@@ -1032,14 +1070,16 @@ def _lever(etat, ev, i, message):
 
 # --- Roulette ------------------------------------------------
 # Comme au casino : un tapis, plusieurs paris par lancer. Chaque pari est un
-# code : "n0" a "n36" (plein), "rouge", "noir", "pair", "impair",
+# code : "n0" a "n36" (plein), "x17-18" etc. (cheval, transversale, carre,
+# sixain : PP_ROULETTE_COMBIS), "rouge", "noir", "pair", "impair",
 # "manque" (1-18), "passe" (19-36), "d1" a "d3" (douzaines), "c1" a "c3"
-# (colonnes ; c1 = 1, 4, 7... 34). Le zero fait perdre tout sauf le plein sur 0.
+# (colonnes ; c1 = 1, 4, 7... 34). Le zero fait perdre tout sauf les mises
+# qui le couvrent (plein, cheval, transversale ou carre avec le 0).
 
 def _pari_valide(pari):
     if not isinstance(pari, str):
         return False
-    if pari in PP_ROULETTE_PARIS:
+    if pari in PP_ROULETTE_PARIS or pari in PP_ROULETTE_COMBIS:
         return True
     if pari.startswith("n") and pari[1:].isdigit():
         n = int(pari[1:])
@@ -1050,17 +1090,30 @@ def _pari_valide(pari):
 def _pari_gagne(pari, tirage):
     if pari in PP_ROULETTE_PARIS:
         return PP_ROULETTE_PARIS[pari][1](tirage)
+    if pari in PP_ROULETTE_COMBIS:
+        return tirage in [int(n) for n in pari[1:].split("-")]
     return int(pari[1:]) == tirage
 
 
 def _gain_pari(pari):
-    """Gain net pour 1 EUR mise : 35 sur un plein, 2 ou 1 ailleurs."""
-    return PP_ROULETTE_PARIS[pari][0] if pari in PP_ROULETTE_PARIS else 35
+    """Gain net pour 1 EUR mise : 35 sur un plein, 17 a 5 sur une combinaison, 2 ou 1 ailleurs."""
+    if pari in PP_ROULETTE_PARIS:
+        return PP_ROULETTE_PARIS[pari][0]
+    if pari in PP_ROULETTE_COMBIS:
+        return PP_ROULETTE_GAINS_COMBI[PP_ROULETTE_COMBIS[pari]]
+    return 35
 
 
 def _libelle_pari(pari):
     if pari in PP_ROULETTE_LIBELLES:
         return PP_ROULETTE_LIBELLES[pari]
+    if pari in PP_ROULETTE_COMBIS:
+        nums = pari[1:].split("-")
+        sorte = PP_ROULETTE_COMBIS[pari]
+        if sorte == "sixain":
+            return "le sixain " + nums[0] + " à " + nums[-1]
+        return {"cheval": "le cheval ", "transversale": "la transversale ",
+                "carre": "le carré "}[sorte] + "-".join(nums)
     return "le " + pari[1:]
 
 
@@ -1096,8 +1149,9 @@ def _mises_roulette(message):
 def _roulette(etat, ev, i, message):
     """
     Un lancer par tour, avant ou apres les des, avec autant de paris qu on
-    veut sur le tapis. Les gorgees (1 par tranche de 50 EUR misee en tout)
-    sont le prix d entree, choisi : volontaires, comme celles de la cagnotte.
+    veut sur le tapis. Les gorgees (PP_ROULETTE_GORGEES par lancer, quelle
+    que soit la mise) sont le prix d entree, choisi : volontaires, comme
+    celles de la cagnotte.
     """
     if not _peut_gerer(etat, i, False):
         return "La roulette ne tourne que pendant votre tour."
@@ -1112,7 +1166,7 @@ def _roulette(etat, ev, i, message):
 
     etat["roulette_jouee"] = True
     etat["argent"][i] -= total
-    _boire(etat, ev, [(i, total // PP_ROULETTE_MISE)], "roulette", volontaire=True)
+    _boire(etat, ev, [(i, PP_ROULETTE_GORGEES)], "roulette", volontaire=True)
     tirage = random.randint(0, 36)
     retour = perdu = 0
     for m in mises:
