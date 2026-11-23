@@ -108,7 +108,8 @@ def coup_au_hasard(e, rnd):
                  argent_donne=rnd.choice([0, 0, 50, 300, -5, "x"]),
                  argent_recu=rnd.choice([0, 0, 100, 5000]))
     elif t == "pp_roulette":
-        paris = list(pp.PP_ROULETTE_PARIS) + ["n0", "n17", "n36", "n37", "n07", "vert", 3]
+        paris = list(pp.PP_ROULETTE_PARIS) + ["n0", "n17", "n36", "n37", "n07", "vert", 3,
+                                             "x17-18", "x0-1-2-3", "x31-32-33-34-35-36", "x3-4"]
         if rnd.random() < 0.2:
             # Ancien format a un seul pari (pages en cache).
             m.update(pari=rnd.choice(["rouge", "plein", "douzaine", "vert"]),
@@ -205,6 +206,27 @@ def essai_roulette():
         verifier(m is None and not e["roulette_jouee"], "mise invalide acceptee : " + json.dumps(mises))
     e, i, m, _ = lancer([{"pari": "rouge", "montant": 50}, {"pari": "rouge", "montant": 50}], 3)
     verifier(m["mises"] == [{"pari": "rouge", "montant": 100, "gagne": True}] and m["gain"] == 200, "doublon mal fusionne")
+    # Mises a plusieurs numeros : cheval 17, transversale 11, carre 8, sixain 5.
+    e, i, m, c0 = lancer([{"pari": "x17-18", "montant": 50}, {"pari": "x16-17-18", "montant": 50},
+                          {"pari": "x14-15-17-18", "montant": 50}, {"pari": "x13-14-15-16-17-18", "montant": 50},
+                          {"pari": "x19-20", "montant": 50}], 17)
+    verifier(m["gain"] == 50 * 18 + 50 * 12 + 50 * 9 + 50 * 6, "combinaisons mal payees : " + str(m["gain"]))
+    verifier(e["cagnotte"] == c0 + 50, "cheval perdant pas a la cagnotte")
+    # Le zero paie les mises qui le couvrent.
+    e, i, m, _ = lancer([{"pari": "x0-1", "montant": 50}, {"pari": "x0-1-2-3", "montant": 50},
+                         {"pari": "x0-2-3", "montant": 50}], 0)
+    verifier(m["gain"] == 50 * 18 + 50 * 9 + 50 * 12, "combinaisons du zero mal payees")
+    # Une gorgee par lancer, quelle que soit la mise.
+    for mises in ([{"pari": "rouge", "montant": 50}], [{"pari": "rouge", "montant": 900},
+                                                       {"pari": "n3", "montant": 100}]):
+        e, i, m, _ = lancer(mises, 3)
+        verifier(e["gorgees"][i] == pp.PP_ROULETTE_GORGEES, "la roulette doit couter "
+                 + str(pp.PP_ROULETTE_GORGEES) + " gorgee par lancer")
+    # Combinaisons impossibles sur le tapis.
+    for pari in ("x3-4", "x1-5", "x18-17", "x1-2-3-4", "x34-35-36-37", "x0-4", "x"):
+        e, i, m, _ = lancer([{"pari": pari, "montant": 50}], 3)
+        verifier(m is None, "combinaison impossible acceptee : " + pari)
+    verifier(len(pp.PP_ROULETTE_COMBIS) == 60 + 14 + 23 + 11, "nombre de combinaisons du tapis")
     print("roulette : OK")
 
 
