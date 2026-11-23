@@ -150,6 +150,7 @@ function robot(code, nom, alice) {
     ['cartomancienne', /Sonde un joueur/], ['videur', /Protège un joueur/], ['renard', /Flaire un joueur/],
     ['corbeau', /Désigne un joueur/], ['enfant_sauvage', /Choisis ton modèle/], ['petite_fille', /entrouvres les yeux/],
     ['villageois', /Qui soupçonnes-tu/], ['ancien', /Qui soupçonnes-tu/], ['chien_loup', /Qui soupçonnes-tu/],
+    ['vampire', /Mordez un joueur/], ['pyromane', /Arrose un joueur/], ['assassin', /Choisis ta victime/],
     ['cupidon', /Unis deux amoureux/],
   ];
   for (const [role, re] of PANNEAUX) {
@@ -157,7 +158,7 @@ function robot(code, nom, alice) {
     if (!/true/.test(rep)) console.log("lg_role", role, rep);
     const ok = await attendreQue(() => A.evaluate(src => new RegExp(src).test(document.getElementById('panneau').innerText), re.source), 15000, 'panneau ' + role).catch(() => false);
     verifier(!!ok, 'nuit : panneau ' + role + ' (' + re.source + ')');
-    if (role === 'infect' || role === 'cupidon') await capture('roles-2-' + role);
+    if (['infect', 'cupidon', 'vampire', 'pyromane'].includes(role)) await capture('roles-2-' + role);
   }
   // 3. Cupidon : Alice s'unit à Bruno.
   const B = indexDe('Bruno');

@@ -9,10 +9,10 @@
     "seuils": [6, 10, 13, 16]
   },
   "speciaux": {
-    "_note": "Rôles spéciaux (identifiants internes : cartomancienne = Voyante, videur = Salvateur, herboriste = Sorcière, braconnier = Chasseur). a_partir_de : nombre de joueurs à partir duquel le rôle entre automatiquement ; les rôles absents de a_partir_de ne viennent que si le créateur les coche. infect et loup_blanc prennent une place de loup ; soeur compte 2 cartes, frere 3.",
+    "_note": "Rôles spéciaux (identifiants internes : cartomancienne = Voyante, videur = Salvateur, herboriste = Sorcière, braconnier = Chasseur). a_partir_de : nombre de joueurs à partir duquel le rôle entre automatiquement ; les rôles absents de a_partir_de ne viennent que si le créateur les coche. infect et loup_blanc prennent une place de loup ; soeur compte 2 cartes, frere 3. vampire, pyromane et assassin (rôles solitaires des versions en ligne) ne viennent que cochés.",
     "ordre": ["cartomancienne", "videur", "herboriste", "braconnier", "cupidon", "petite_fille", "ancien",
               "idiot", "corbeau", "renard", "enfant_sauvage", "montreur", "chevalier", "bouc", "ange",
-              "chien_loup", "soeur", "frere", "infect", "loup_blanc"],
+              "chien_loup", "soeur", "frere", "infect", "loup_blanc", "vampire", "pyromane", "assassin"],
     "a_partir_de": {
       "cartomancienne": 4,
       "videur": 6,
@@ -58,6 +58,8 @@
     "abattu": 2,
     "elimine": 2,
     "chagrin": 2,
+    "brule": 2,
+    "assassine": 2,
     "loup_demasque": 3,
     "accusateur_innocent": 1,
     "perdant": 2

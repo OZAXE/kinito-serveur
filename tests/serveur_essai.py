@@ -108,8 +108,11 @@ async def lg_role(code: str, index: int, role: str):
     async with serveur.verrou(salon):
         etat["roles"][index] = role
         etat["convertis"][index] = False
+        etat["vampires"][index] = role == "vampire"
         if role == "infect":
             etat["infection"] = True
+        if role == "renard":
+            etat["renard_actif"] = True          # le vrai Renard a pu perdre son flair
         if etat["phase"] == "nuit":
             __import__("loupgarou")._accord_meute(etat)   # la meute a pu perdre ou gagner un membre
         await serveur.lg_publier(code, [])
