@@ -80,7 +80,7 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "famille", "undercover", "white", "mot", "contenu", "auto", "actif", "emoji", "album",
           "source", "etapes", "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire",
           "tours", "aleatoire", "vengeance", "soin", "poison", "loups", "speciaux", "cible2", "solo",
-          "infecter", "capitaine"]
+          "infecter", "capitaine", "allumer"]
 
 
 def valeur_bizarre(rnd):

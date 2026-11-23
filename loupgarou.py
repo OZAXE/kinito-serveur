@@ -54,6 +54,18 @@ Roles du village :
     sinon simple villageois.
   - chien_loup (Chien-Loup) : choisit son camp en decouvrant sa carte.
   - soeur (2 cartes) / frere (3 cartes) : se connaissent entre eux.
+Roles solitaires (venus des versions en ligne, seulement sur demande) :
+  - vampire : camp des vampires. Une nuit sur deux (nuits impaires), les
+    vampires mordent un joueur : il devient vampire en secret a l aube (sur
+    un loup, la morsure echoue sans rien dire). Ils gagnent quand il ne reste que des vampires, ou des
+    qu ils sont au moins aussi nombreux que le village quand il n y a plus
+    d autre camp.
+  - pyromane : chaque nuit, il arrose un joueur d essence, ou il allume
+    (`allumer: true`) : tous les arroses encore en vie brulent a l aube.
+    Gagne seul.
+  - assassin : chaque nuit, il tue un joueur. Les loups ne peuvent pas le
+    devorer. Gagne seul.
+  Le Salvateur protege aussi des morsures et de l Assassin (pas du feu).
 Capitaine (option) : elu au premier jour, sa voix compte double, il designe
 son successeur en mourant.
 
@@ -115,10 +127,15 @@ LG_NOMS_ROLES = {
     "frere": "Frère",
     "infect": "Infect Père des Loups",
     "loup_blanc": "Loup Blanc",
+    "vampire": "Vampire",
+    "pyromane": "Pyromane",
+    "assassin": "Assassin",
 }
 LG_ROLES_LOUPS = ("loup", "infect", "loup_blanc")
 LG_LOUPS_SPECIAUX = ("infect", "loup_blanc")
 LG_GROUPES = {"soeur": 2, "frere": 3}
+# Roles solitaires (ni village ni loups) : chacun gagne avec son camp seul.
+LG_SOLITAIRES = ("vampire", "pyromane", "assassin")
 # Pouvoirs perdus quand le village tue l Ancien.
 _POUVOIRS_VILLAGE = ("cartomancienne", "videur", "herboriste", "braconnier", "petite_fille", "idiot",
                      "corbeau", "renard", "montreur", "chevalier")
@@ -318,6 +335,11 @@ def lg_initialiser(noms, maintenant, loups=None, speciaux=None, alea=None, capit
         "idiot_revele": None,
         "ange_gagne": False,
         "chien": {},                         # str(chien) -> "loups" ou "village" (phase role)
+        "vampires": [r == "vampire" for r in roles],  # SECRET : vampires de naissance et mordus
+        "morsure": None,                     # proie des vampires cette nuit (apres le vote)
+        "arroses": [],                       # SECRET : arroses par le Pyromane
+        "allumer": False,                    # le Pyromane met le feu cette nuit
+        "cible_assassin": None,
         # Capitaine
         "capitaine_option": bool(lg_capitaine_auto(n) if capitaine is None else capitaine is True),
         "capitaine": None,
@@ -388,11 +410,21 @@ def lg_etat_public(etat, maintenant):
     }
 
 
+def _morsure_possible(etat):
+    return etat["nuit"] % 2 == 1
+
+
 def _type_nuit(etat, j):
     """Ce que le joueur j fait cette nuit."""
     if _est_loup(etat, j):
         return "meute"
+    if etat["vampires"][j]:
+        return "vampire" if _morsure_possible(etat) else "suspect"
     r = _effectif(etat, j)
+    if r == "pyromane":
+        return "pyromane"
+    if r == "assassin":
+        return "assassin"
     if r == "cartomancienne":
         return "vision"
     if r == "videur":
@@ -459,7 +491,12 @@ def lg_vue(etat, i):
         "famille": None,
         "modele": None,
         "chien": None,
+        "vampires": None,
+        "morsures": None,
+        "arroses": None,
+        "allumer": None,
         "tous_roles": list(etat["roles"]) if fantome else None,
+        "tous_vampires": list(etat["vampires"]) if fantome else None,
         "tous_convertis": list(etat["convertis"]) if fantome else None,
     }
     if loup or fantome:
@@ -509,6 +546,13 @@ def lg_vue(etat, i):
         vue["modele"] = etat["modele"]
     if role == "chien_loup":
         vue["chien"] = etat["chien"].get(str(i), "village")
+    if etat["vampires"][i] or fantome:
+        vue["vampires"] = [j for j in range(n) if etat["vampires"][j]]
+        if vivant and phase == "nuit" and etat["vampires"][i]:
+            vue["morsures"] = {k: v for k, v in etat["actions"].items() if etat["vampires"][int(k)]}
+    if role == "pyromane":
+        vue["arroses"] = [j for j in etat["arroses"] if etat["vivants"][j]]
+        vue["allumer"] = etat["allumer"] if phase == "nuit" else None
     return vue
 
 
@@ -518,7 +562,13 @@ def lg_vue(etat, i):
 def _camp_base(etat, j):
     if etat["roles"][j] == "loup_blanc":
         return "loup_blanc"
-    return "loups" if _est_loup(etat, j) else "village"
+    if _est_loup(etat, j):
+        return "loups"
+    if etat["vampires"][j]:
+        return "vampires"
+    if etat["roles"][j] in ("pyromane", "assassin"):
+        return etat["roles"][j]
+    return "village"
 
 
 def _couple_mixte(etat):
@@ -541,10 +591,12 @@ def _vainqueur(etat):
     camps = {_camp(etat, j) for j in vivants}
     if len(camps) == 1:
         return camps.pop()
-    if camps == {"loups", "village"}:
-        loups = len([j for j in vivants if _camp(etat, j) == "loups"])
-        if loups >= len(vivants) - loups:
-            return "loups"
+    # Victoire anticipee d une meute face au village seul (plus aucun autre camp).
+    for meute in ("loups", "vampires"):
+        if camps == {meute, "village"}:
+            k = len([j for j in vivants if _camp(etat, j) == meute])
+            if k >= len(vivants) - k:
+                return meute
     return None
 
 
@@ -560,7 +612,7 @@ def _mourir(etat, j, cause, morts):
     gorgees = {"devore": _G["devore"], "rouille": _G["devore"], "empoisonne": _G["empoisonne"],
                "abattu": _G["abattu"], "chagrin": _G.get("chagrin", 2),
                "elimine": _G["loup_demasque"] if _est_loup(etat, j) else _G["elimine"],
-               "bouc": _G["elimine"]}.get(cause, 0)
+               "bouc": _G["elimine"], "brule": _G.get("brule", 2), "assassine": _G.get("assassine", 2)}.get(cause, 0)
     etat["gorgees"][j] += gorgees
     mort = {"joueur": j, "role": role, "cause": cause, "boit": gorgees, "converti": etat["convertis"][j],
             "nuit": etat["nuit"], "jour": etat["jour"]}
@@ -603,6 +655,9 @@ def _nouvelle_nuit(etat, ev, maintenant, alea):
     etat["infecter"] = False
     etat["solo"] = None
     etat["couple"] = None
+    etat["morsure"] = None
+    etat["allumer"] = False
+    etat["cible_assassin"] = None
     etat["votes"] = {}
     etat["suivants"] = [False] * n
     etat["annonce"] = None
@@ -657,6 +712,31 @@ def _fin_nuit(etat, ev, maintenant, alea):
         etat["pf_reperee"] = True
         for l in _loups_vivants(etat):
             ev.append(_prive(l, {"type": "lg_petite_fille", "joueur": pf}))
+    # Les vampires : la proie la plus mordue (egalite : le sort).
+    if _morsure_possible(etat):
+        compte = {}
+        for k, c in etat["actions"].items():
+            v = int(k)
+            if etat["vivants"][v] and etat["vampires"][v] and isinstance(c, int) and etat["vivants"][c] \
+                    and not etat["vampires"][c] and not _est_loup(etat, c):
+                compte[c] = compte.get(c, 0) + 1
+        if compte:
+            haut = max(compte.values())
+            tete = sorted(c for c, x in compte.items() if x == haut)
+            etat["morsure"] = tete[0] if len(tete) == 1 else alea.choice(tete)
+    # Le Pyromane : il arrose sa cible (s il n a pas choisi d allumer).
+    pyro = _role_vivant(etat, "pyromane")
+    if pyro is not None and _type_nuit(etat, pyro) == "pyromane":
+        c = etat["actions"].get(str(pyro))
+        if not etat["allumer"] and isinstance(c, int) and c not in etat["arroses"]:
+            etat["arroses"].append(c)
+    else:
+        etat["allumer"] = False
+    # L Assassin.
+    asn = _role_vivant(etat, "assassin")
+    if asn is not None and not etat["vampires"][asn] and not _est_loup(etat, asn):
+        c = etat["actions"].get(str(asn))
+        etat["cible_assassin"] = c if isinstance(c, int) else None
     victime = _choix_meute(etat, alea)
     etat["victime_loups"] = victime
     if victime is not None and victime == etat["protege"]:
@@ -694,6 +774,8 @@ def _aube(etat, ev, maintenant, alea):
     if victime is not None and not potion.get("soin"):
         if etat["roles"][victime] == "ancien" and etat["ancien_vie"]:
             etat["ancien_vie"] = False           # il resiste, en silence
+        elif etat["roles"][victime] == "assassin":
+            pass                                 # les loups ne peuvent rien contre l Assassin
         else:
             _mourir(etat, victime, "devore", morts)
     if potion.get("poison") is not None:
@@ -703,6 +785,21 @@ def _aube(etat, ev, maintenant, alea):
         etat["solo"] = None
     if rouille is not None:
         _mourir(etat, rouille, "rouille", morts)
+    protege = etat["protege"]
+    c = etat["cible_assassin"]
+    if c is not None and c != protege:
+        _mourir(etat, c, "assassine", morts)
+    etat["cible_assassin"] = None
+    if etat["allumer"]:
+        for a in list(etat["arroses"]):
+            _mourir(etat, a, "brule", morts)
+        etat["arroses"] = []
+        etat["allumer"] = False
+    m = etat["morsure"]
+    if m is not None and m != protege and etat["vivants"][m] and not _est_loup(etat, m):
+        etat["vampires"][m] = True
+        ev.append(_prive(m, {"type": "lg_converti", "cause": "vampire"}))
+    etat["morsure"] = None
     for j in range(etat["nb_joueurs"]):
         if etat["convertis"][j] and not convertis_avant[j] and etat["vivants"][j]:
             ev.append(_prive(j, {"type": "lg_converti", "cause": "modele"}))
@@ -891,6 +988,7 @@ def _terminer(etat, ev, gagnant):
         "perdants": [{"joueur": j, "boit": _G["perdant"]} for j in perdants],
         "roles": list(etat["roles"]),
         "convertis": list(etat["convertis"]),
+        "vampires": list(etat["vampires"]),
         "amoureux": etat["amoureux"],
         "flair": list(etat["suspects"]),
         "meilleur_flair": [j for j in range(n) if haut > 0 and etat["suspects"][j] == haut],
@@ -900,10 +998,13 @@ def _terminer(etat, ev, gagnant):
     etat["tireur"] = None
     etat["annonce"] = None
     etat["message"] = {
-        "village": "Le village est sauvé : plus aucun loup !",
+        "village": "Le village est sauvé : plus aucun ennemi !",
         "loups": "Les loups ont dévoré le village !",
         "loup_blanc": "Le Loup Blanc reste seul : il gagne !",
         "amoureux": "Les amoureux restent seuls au monde : ils gagnent !",
+        "vampires": "Les vampires ont saigné le village !",
+        "pyromane": "Le Pyromane regarde le village brûler : il gagne seul !",
+        "assassin": "L'Assassin est le dernier debout : il gagne seul !",
         "ange": "L'Ange est remonté au ciel dès le premier tour : il gagne !",
         "personne": "Il ne reste personne…",
     }.get(gagnant, "Fin de la partie.")
@@ -944,9 +1045,18 @@ def _nuit(etat, ev, i, message, maintenant, alea):
         return _erreur(i, "Les fantômes ne jouent plus.")
     n = etat["nb_joueurs"]
     cible = _indice(message.get("cible"), n)
+    genre = _type_nuit(etat, i)
+    if genre == "pyromane" and message.get("allumer") is True:
+        if not [a for a in etat["arroses"] if etat["vivants"][a]]:
+            return _erreur(i, "Personne n'est encore arrosé.")
+        etat["allumer"] = True
+        etat["actions"][str(i)] = "feu"
+        etat["agi"][i] = True
+        if not _attendus(etat):
+            _fin_nuit(etat, ev, maintenant, alea)
+        return ev
     if cible is None or not etat["vivants"][cible]:
         return _erreur(i, "Touche un joueur encore en vie.")
-    genre = _type_nuit(etat, i)
     if genre == "meute":
         if _est_loup(etat, cible):
             return _erreur(i, "Un loup ne dévore pas un loup.")
@@ -998,6 +1108,17 @@ def _nuit(etat, ev, i, message, maintenant, alea):
             etat["couple"] = sorted([cible, autre])
         elif genre == "modele":
             etat["modele_choix"] = cible
+        elif genre == "vampire":
+            if etat["vampires"][cible]:
+                return _erreur(i, "Mords un joueur qui n'est pas vampire.")
+            # Mordre un loup est permis (le refuser trahirait la meute) : la morsure echoue.
+            for v in range(n):
+                if etat["vampires"][v] and etat["vivants"][v] and v != i:
+                    ev.append(_prive(v, {"type": "lg_morsure", "vampire": i, "cible": cible}))
+        elif genre == "pyromane":
+            if cible in etat["arroses"]:
+                return _erreur(i, "Ce joueur est déjà arrosé.")
+            etat["allumer"] = False              # il change d avis : il arrose (fait a la fin de la nuit)
         etat["actions"][str(i)] = cible
         etat["agi"][i] = True
     if not _attendus(etat):

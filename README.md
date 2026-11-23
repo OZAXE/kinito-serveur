@@ -345,6 +345,14 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
     **Ange** (`ange` : gagne seul s'il meurt avant la fin du premier vote), **Chien-Loup** (`chien_loup` : choisit
     son camp avec `lg_pret` + `camp: "loups"|"village"`, village par défaut), **Sœurs** (`soeur`, 2 cartes) et
     **Frères** (`frere`, 3 cartes) qui se connaissent (`famille`).
+  - Solitaires (venus des versions en ligne, seulement sur demande, chacun prend une place hors loups) :
+    **Vampire** (`vampire` : camp des vampires ; les nuits impaires, `type_nuit: "vampire"`, ils mordent un joueur
+    (sur un loup, la morsure échoue en silence pour ne pas trahir la meute), la proie la plus mordue devient vampire en secret à l'aube, garde sa carte mais perd son
+    pouvoir, prévenue par `lg_converti` avec `cause: "vampire"` ; les vampires se voient, `vampires`, et voient les
+    morsures en direct, `lg_morsure`), **Pyromane** (`pyromane` : chaque nuit il arrose un joueur, `cible`, ou il
+    envoie `allumer: true` : tous les arrosés encore en vie brûlent à l'aube, cause `brule` ; `arroses` dans son
+    `lg_secret`), **Assassin** (`assassin` : tue un joueur chaque nuit, cause `assassine` ; les loups ne peuvent pas
+    le dévorer). Le Salvateur protège aussi de la morsure et de l'Assassin, pas du feu.
   - **Capitaine** (option `capitaine` de `lg_demarrer`, automatique dès 9 joueurs) : élu au premier jour (phase
     `election`, `lg_voter`, on peut voter pour soi), sa voix compte double, il nomme son successeur en mourant
     (phase `succession`, `lg_tir` avec `cible` ; au hasard sinon).
@@ -352,7 +360,7 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   jusqu'à 16, puis 5 ; jamais plus d'un loup pour deux autres joueurs), `speciaux` (liste ; absent = selon le
   nombre de joueurs : Voyante dès 4, Salvateur 6, Sorcière 7, Chasseur 8, Cupidon 9, Petite Fille 10, Ancien 11,
   Infect 12, Idiot 13, Corbeau 14, Renard 15, Enfant Sauvage 16, Loup Blanc 17, Montreur 18, Chevalier 19,
-  Bouc 20 ; Ange, Chien-Loup, Sœurs et Frères seulement sur demande), `capitaine` (booléen). Infect et Loup Blanc
+  Bouc 20 ; Ange, Chien-Loup, Sœurs, Frères, Vampire, Pyromane et Assassin seulement sur demande), `capitaine` (booléen). Infect et Loup Blanc
   prennent une place de loup (Loup Blanc : 2 loups au moins). Les autres sont Simples Villageois. La composition
   est publique (`composition`), les rôles non.
 - Phases (`lg_etat.phase`) : `role` (30 s, `lg_pret`), `nuit` (50 s), `potion` (seulement si la Sorcière est dans la
@@ -361,7 +369,7 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   `debat` (180 s), `verdict` (`lg_suivant`), `fin`.
 - La nuit, **tout le monde en vie** envoie `lg_nuit` (`cible`) pour que personne ne se trahisse à la table ;
   `lg_secret.type_nuit` dit quoi faire : `meute` (réponse privée `lg_meute` à chaque loup), `vision`, `protection`,
-  `renard`, `corbeau`, `cupidon`, `modele`, ou `suspect` (le « flair », compté en fin de partie). La nuit finit
+  `renard`, `corbeau`, `cupidon`, `modele`, `vampire`, `pyromane`, `assassin`, ou `suspect` (le « flair », compté en fin de partie). La nuit finit
   quand tous ont agi et que la meute est d'accord, ou à l'échéance : la victime est le choix majoritaire de la
   meute (égalité : le sort ; Cupidon et l'Enfant Sauvage absents : au hasard). `lg_potion` (`soin` : booléen,
   `poison` : index ou null). `lg_tir` (`cible`). `lg_voter` (`cible` : index d'un autre vivant, ou null = blanc ;
@@ -371,18 +379,19 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   `annonce` (aube : `morts` avec rôle, cause et `converti`, `corbeau`, `grogne` ; verdict : `votes` avec `poids`,
   `compte`, `blancs`, `elimine`, `accusateurs`, `idiot`, `bouc`, `corbeau` ; `tir`, `succession`), `tireur`,
   `capitaine`, `capitaine_option`, `idiot_revele`, `pouvoirs_perdus`, `corbeau`, `morts`, `gorgees`, `final`
-  (`vainqueur` : `village`, `loups`, `loup_blanc`, `amoureux`, `ange` ou `personne` ; `gagnants`, `perdants`,
-  `roles`, `convertis`, `amoureux`, `flair`, `meilleur_flair`).
+  (`vainqueur` : `village`, `loups`, `loup_blanc`, `vampires`, `pyromane`, `assassin`, `amoureux`, `ange` ou
+  `personne` ; `gagnants`, `perdants`, `roles`, `convertis`, `vampires`, `amoureux`, `flair`, `meilleur_flair`).
   `lg_secret` (privé, après chaque coup) : `role`, `vivant`, `converti`, `type_nuit`, `loups` (pour un loup),
   `meute`, `espion` (Petite Fille), `petite_fille` (loups, si repérée), `action`, `couple` (Cupidon), `vote`,
   `visions`, `flairs` et `renard_actif`, `dernier_protege`, `potions` et `victime` (Sorcière pendant la potion),
   `infection` et `infecter` (Infect), `solo_possible` et `solo` (Loup Blanc), `amoureux`, `famille`, `modele`,
-  `chien`, `tous_roles` et `tous_convertis` pour un mort. Événements `lg_nuit`, `lg_aube`, `lg_tir_attente`,
+  `chien`, `vampires` et `morsures` (vampires), `arroses` et `allumer` (Pyromane), `tous_roles`, `tous_convertis`
+  et `tous_vampires` pour un mort. Événements `lg_nuit`, `lg_aube`, `lg_tir_attente`,
   `lg_tir`, `lg_succession_attente`, `lg_capitaine`, `lg_verdict`, `lg_fin`.
-- Victoire : le village quand il n'y a plus de loup ; les loups dès qu'ils sont au moins aussi nombreux que les
-  autres vivants (s'il n'y a en vie ni Loup Blanc ni couple mixte ; sinon il faut un seul camp en vie) ; le Loup
-  Blanc seul ; le couple mixte seul ; l'Ange s'il meurt au premier tour. Gorgées : mort la nuit 2, abattu 2,
-  éliminé au vote 2 (loup démasqué 3), mort de chagrin 2, chaque accusateur d'un innocent éliminé 1, en fin de
+- Victoire : le village quand il est le seul camp en vie ; les loups (ou les vampires) dès qu'ils sont au moins
+  aussi nombreux que les autres vivants, s'il ne reste qu'eux et le village (sinon il faut un seul camp en vie) ;
+  le Loup Blanc, le Pyromane, l'Assassin ou le couple mixte seul ; l'Ange s'il meurt au premier tour. Gorgées :
+  mort la nuit 2 (dévoré, brûlé, assassiné), abattu 2, éliminé au vote 2 (loup démasqué 3), mort de chagrin 2, chaque accusateur d'un innocent éliminé 1, en fin de
   partie 2 pour chaque joueur du camp perdant (seules celles-ci partent dans `signaler`).
 
 ## Base de données
