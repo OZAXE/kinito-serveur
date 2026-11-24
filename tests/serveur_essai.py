@@ -103,8 +103,8 @@ async def pf_preparer(code: str):
     if not e or salon.get("jeu") != "pichenette" or e.get("phase") != "visee":
         return {"ok": False}
     async with serveur.verrou(salon):
-        e["palets"] = ([[-0.4, -0.6 + 0.15 * k] for k in range(5)] + [[0.0, 0.42]]
-                       + [[0.4, 0.6 - 0.15 * k] for k in range(6)])
+        e["palets"] = ([[-0.4, -0.6 + 0.15 * k] for k in range(4)] + [[0.0, 0.42]]
+                       + [[0.4, 0.6 - 0.15 * k] for k in range(5)])
         e["balle"] = [0.0, 0.6]
         e["version"] += 1
         await serveur.pf_publier(code, [])

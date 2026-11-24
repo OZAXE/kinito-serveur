@@ -11,7 +11,7 @@ pf_prochaine_echeance. Chiffres : pichenette_config.json.
 
 Regles :
   - Deux equipes, les Blondes (en bas, attaquent vers le haut) et les Brunes
-    (en haut). 6 capsules (palets) par equipe et un bouchon (la balle).
+    (en haut). 5 capsules (palets) par equipe et un bouchon (la balle).
     Equipes tirees au sort ; nombre impair : le dernier arrive a la table
     regarde la partie.
   - Phase « formation » : chaque equipe choisit, parmi 6 formations, une
@@ -102,7 +102,7 @@ def _nombre(v, bas, haut):
 # FORMATIONS
 # =============================================================
 def positions_formation(fid, equipe):
-    """Positions des 6 capsules d une equipe (l equipe 1 les recoit retournees)."""
+    """Positions des capsules d une equipe (l equipe 1 les recoit retournees)."""
     pts = FORMATIONS[fid]["palets"]
     if equipe == 0:
         return [[float(x), float(y)] for x, y in pts]
@@ -138,6 +138,37 @@ def _segments():
 
 
 SEGMENTS = _segments()
+
+
+def _sortir_des_cages(pos, n, ray):
+    """Replace devant la ligne de but les capsules dont le centre est dans une cage."""
+    ly, g = _T["longueur"] / 2, _T["but_largeur"] / 2
+    lx = _T["largeur"] / 2
+    bouge = False
+    for i in range(n):
+        x, y = pos[i]
+        if abs(y) <= ly:
+            continue
+        s = 1 if y > 0 else -1
+        r = ray[i]
+        ty = s * (ly - r - 0.004)
+        place = None
+        # On cherche une place libre : d abord pile devant, puis de part et
+        # d autre, puis un rang plus haut sur le terrain.
+        for rang in range(6):
+            yy = ty - s * rang * 2.1 * r
+            for k in range(12):
+                dec = (k + 1) // 2 * 2.1 * r * (1 if k % 2 else -1)
+                xx = max(-lx + r, min(lx - r, x + dec))
+                if all((xx - pos[j][0]) ** 2 + (yy - pos[j][1]) ** 2 >= (r + ray[j] + 0.002) ** 2
+                       for j in range(len(pos)) if j != i):
+                    place = (xx, yy)
+                    break
+            if place:
+                break
+        pos[i] = list(place or (max(-g, min(g, x)), ty))
+        bouge = True
+    return bouge
 
 
 def simuler(palets, balle, tirs):
@@ -263,6 +294,10 @@ def simuler(palets, balle, tirs):
             if etape % pas_image != 0:
                 images.append(image())
             break
+    # Capsule arretee dans une cage : on la ressort juste devant la ligne,
+    # pour qu elle ne bouche pas le but (image en plus pour le replay).
+    if but is None and _sortir_des_cages(pos, n, ray):
+        images.append(image())
     return {
         "images": images,
         "palets": [[round(p[0], 4), round(p[1], 4)] for p in pos[:n]],

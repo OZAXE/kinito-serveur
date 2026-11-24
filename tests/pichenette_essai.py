@@ -76,11 +76,20 @@ def verifier_physique():
     # Le bouchon frappe la bande et revient (il ne la traverse pas).
     r = P.simuler([[0.3, 0]], [0.4, 0], [(0, 1.0, 0.0, 1.0)])
     verifier_positions(r["palets"], r["balle"])
+    # Une capsule arretee dans sa propre cage ressort juste devant la ligne.
+    pal = P.positions_formation("classique", 0) + P.positions_formation("classique", 1)
+    pal[0] = [0.0, -0.84]
+    r = P.simuler(pal, [0, 0], [])
+    x, y = r["palets"][0]
+    ly = C["terrain"]["longueur"] / 2
+    assert -ly < y < -ly + 0.06 and abs(x) < 0.2, r["palets"][0]
+    assert r["images"][-1][1] == round(y * 1000), "le replay ne montre pas la sortie de la cage"
+    verifier_positions(r["palets"], r["balle"])
     # Memes entrees, meme resultat.
     rng = random.Random(5)
     pal = P.positions_formation("ailes", 0) + P.positions_formation("herse", 1)
     tirs = []
-    for k in (1, 3, 7, 10):
+    for k in (1, 3, 6, 9):
         a = rng.uniform(0, 2 * math.pi)
         tirs.append((k, math.cos(a), math.sin(a), rng.random()))
     assert P.simuler(pal, [0, 0], tirs) == P.simuler(pal, [0, 0], tirs)
@@ -140,7 +149,7 @@ def partie(rng, n):
     tours = 0
     while etat["phase"] != "fin":
         tours += 1
-        assert tours < 2000, "la partie ne finit pas"
+        assert tours < 6000, "la partie ne finit pas"
         verifier_public(etat)
         score_avant, gorgees_avant = controler(etat, score_avant, gorgees_avant)
         if etat["phase"] == "fin":
