@@ -153,7 +153,7 @@ async def essai_changement_de_jeu():
     verifier(info["jeu"] == "kinito" and isinstance(info["depuis"], int) and info["fini"] is False,
              "/salon donne depuis quand le jeu tourne")
 
-    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "telephone", "justepinte", "quidenous", "tournee", "loupgarou", "beerbattle", "picolopoly", "casino"]
+    ordre = ["casino", "kinito", "buckshot", "menteur", "undercover", "telephone", "justepinte", "quidenous", "tournee", "loupgarou", "pichenette", "beerbattle", "picolopoly", "casino"]
     for nom in ordre:
         if nom == "loupgarou":
             ugo = await entrer(code, "Ugo")      # le Loup-Garou se joue a 4 au moins

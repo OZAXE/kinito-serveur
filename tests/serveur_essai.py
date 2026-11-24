@@ -85,7 +85,30 @@ async def etat(code: str):
                "tireur": e.get("tireur"), "gorgees": e.get("gorgees"), "convertis": e.get("convertis"),
                "amoureux": e.get("amoureux"), "capitaine": e.get("capitaine")}
               if salon.get("jeu") == "loupgarou" else None,
+        # Pichenette FC : equipes, score, positions et visees, pour jouer depuis les pages.
+        "pf": {"equipes": e.get("equipes"), "spectateurs": e.get("spectateurs"), "score": e.get("score"),
+               "palets": e.get("palets"), "balle": e.get("balle"), "visees": e.get("visees"),
+               "prets": e.get("prets"), "tour": e.get("tour"), "gorgees": e.get("gorgees"),
+               "formations": e.get("formations"), "buts_victoire": e.get("buts_victoire")}
+              if salon.get("jeu") == "pichenette" else None,
     }
+
+
+@serveur.app.get("/test/pf_preparer/{code}")
+async def pf_preparer(code: str):
+    """Pichenette FC : bouchon devant la cage des Brunes, une capsule des Blondes juste derriere,
+    les autres capsules sur les cotes, pour marquer a coup sur depuis une page."""
+    salon = serveur.salons.get(code)
+    e = (salon or {}).get("etat")
+    if not e or salon.get("jeu") != "pichenette" or e.get("phase") != "visee":
+        return {"ok": False}
+    async with serveur.verrou(salon):
+        e["palets"] = ([[-0.4, -0.6 + 0.15 * k] for k in range(5)] + [[0.0, 0.42]]
+                       + [[0.4, 0.6 - 0.15 * k] for k in range(6)])
+        e["balle"] = [0.0, 0.6]
+        e["version"] += 1
+        await serveur.pf_publier(code, [])
+    return {"ok": True, "palet": 5}
 
 
 @serveur.app.get("/test/tr_preparer/{code}")
@@ -149,6 +172,13 @@ async def lg_role(code: str, index: int, role: str):
 import tournee  # noqa: E402
 tournee._D["boutique"] = float(os.environ.get("TR_BOUTIQUE", "60"))
 tournee._D["des"] = float(os.environ.get("TR_DES", "60"))
+
+
+# Pichenette FC : sur une machine d essai lente (4 scenes 3D sans carte graphique), le chrono
+# de visee passerait avant que les pages aient fini de viser.
+import pichenette  # noqa: E402
+pichenette._D["visee"] = float(os.environ.get("PF_VISEE", "90"))
+pichenette._D["formation"] = float(os.environ.get("PF_FORMATION", "90"))
 
 
 if os.environ.get("LG_NUIT"):

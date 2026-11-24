@@ -15,7 +15,7 @@ const PAGES = {
   picolopoly: 'picolopoly-3d-jeu.html', menteur: 'menteur-3d-jeu.html', casino: 'casino-3d-jeu.html',
   undercover: 'undercover-3d-jeu.html', telephone: 'telephone-jeu.html', conquete: 'conquete-3d-jeu.html',
   justepinte: 'justepinte-3d-jeu.html', quidenous: 'quidenous-3d-jeu.html', tournee: 'tournee-3d-jeu.html',
-  loupgarou: 'loupgarou-3d-jeu.html',
+  loupgarou: 'loupgarou-3d-jeu.html', pichenette: 'pichenette-3d-jeu.html',
 };
 // Joueurs test ajoutés (le Loup-Garou se joue à 4 au moins).
 const NB_BOTS = { loupgarou: 3 };
@@ -82,7 +82,7 @@ async function tester(nav, jeu) {
   verifier(await p.evaluate(() => document.getElementById('mode-test').style.visibility === 'hidden'), '« Moi » montre sa propre partie');
   const lance = await attendreQue(async () => {
     if ((await etat(code)).en_partie) return true;
-    await cliquerTexte(p.mainFrame(), /D.marrer la partie|D.marrer le quiz|Ouvrir le casino|Lancer la partie/);
+    await cliquerTexte(p.mainFrame(), /D.marrer la partie|D.marrer le quiz|Ouvrir le casino|Lancer la partie|Coup d.envoi/);
     await attendre(1500);
     await cliquerTexte(p.mainFrame(), /^Remplacer$/);
     return false;

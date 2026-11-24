@@ -79,6 +79,11 @@ from loupgarou import (
     lg_initialiser, lg_action, lg_expirer, lg_etat_public, lg_vue,
     lg_prochaine_echeance, lg_joueur_parti, lg_joueur_revenu,
 )
+from pichenette import (
+    PF_JOUEURS_MIN, PF_JOUEURS_MAX,
+    pf_initialiser, pf_action, pf_expirer, pf_etat_public, pf_vue, pf_catalogue,
+    pf_prochaine_echeance, pf_joueur_parti, pf_joueur_revenu,
+)
 # Casino (roulette, blackjack, poker) : meme principe, moteur pur a part.
 from casino import (
     CS_JOUEURS_MIN, CS_JOUEURS_MAX,
@@ -1115,6 +1120,20 @@ async def _loupgarou_instantane(code_salon, joueur, complet, nouveau):
         await envoyer(joueur, {"type": "lg_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
     await envoyer(joueur, lg_etat_public(etat, time.time()))
     vue = lg_vue(etat, joueur["index"])
+    if vue is not None:
+        await envoyer(joueur, vue)
+
+
+async def _pichenette_instantane(code_salon, joueur, complet, nouveau):
+    salon = salons[code_salon]
+    etat = salon["etat"]
+    # Les visees et la formation de son equipe ne partent que vers lui et ses
+    # coequipiers. Un arrivant en pleine partie regarde.
+    if complet:
+        await envoyer(joueur, {"type": "pf_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await envoyer(joueur, pf_catalogue())
+    await envoyer(joueur, pf_etat_public(etat, time.time()))
+    vue = pf_vue(etat, joueur["index"])
     if vue is not None:
         await envoyer(joueur, vue)
 
@@ -3545,6 +3564,118 @@ async def lg_traiter(code_salon, joueur, message):
 
 
 # =============================================================
+# PICHENETTE FC (foot de comptoir a pichenettes, prefixe pf_)
+# Les regles et la physique sont dans pichenette.py (chiffres :
+# pichenette_config.json). Ici : le reseau, la vue secrete de chaque equipe
+# (sa formation, ses visees) envoyee apres chaque coup, et le minuteur qui
+# tire au bout du chrono et enchaine les tours.
+# =============================================================
+
+async def pf_demarrer(code_salon, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if etat is not None and not (salon.get("jeu") == "pichenette" and etat.get("phase") == "fin"):
+        return
+    salon["joueurs"] = [j for j in salon["joueurs"] if not j.get("parti")]
+    nb = len(salon["joueurs"])
+    if nb < PF_JOUEURS_MIN:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"Pichenette FC demande au moins {PF_JOUEURS_MIN} joueurs."})
+        return
+    if nb > PF_JOUEURS_MAX:
+        await diffuser(code_salon, {"type": "erreur",
+                                    "message": f"Pichenette FC se joue à {PF_JOUEURS_MAX} joueurs maximum."})
+        return
+    for i, j in enumerate(salon["joueurs"]):
+        j["index"] = i
+    # Ordre d arrivee a la table : si on est impair, le dernier regarde.
+    salon["etat"] = pf_initialiser([j["nom"] for j in salon["joueurs"]], time.time(), buts=message.get("buts"))
+    salon["jeu"] = "pichenette"
+    await diffuser(code_salon, {"type": "pf_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
+    await diffuser(code_salon, pf_catalogue())
+    await envoyer_indices(code_salon)
+    await pf_publier(code_salon, [])
+
+
+async def pf_publier(code_salon, evenements):
+    """Evenements du moteur, puis l etat a tous et sa vue d equipe a chacun."""
+    salon = salons.get(code_salon)
+    if not salon or salon.get("jeu") != "pichenette" or not salon.get("etat"):
+        return
+    etat = salon["etat"]
+    for e in evenements:
+        if e["a"] is None:
+            await diffuser(code_salon, e["msg"])
+        else:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+    await diffuser(code_salon, pf_etat_public(etat, time.time()))
+    for joueur in salon["joueurs"]:
+        if not joueur.get("parti"):
+            vue = pf_vue(etat, joueur["index"])
+            if vue is not None:
+                await envoyer(joueur, vue)
+    pf_programmer(code_salon)
+    if etat.get("phase") == "fin" and not etat.get("fin_signalee"):
+        etat["fin_signalee"] = True
+        noms = [j["nom"] for j in salon["joueurs"]]
+        final = etat.get("final") or {}
+        gagnants = [noms[g] for g in final.get("gagnants", []) if g < len(noms)]
+        perdants = [noms[p] for p in final.get("perdants", []) if p < len(noms)]
+        # Les gorgees de la fin seulement (celles des buts ont deja ete bues).
+        doses = {noms[d["joueur"]]: d["boit"] for d in final.get("derniers", []) if d["joueur"] < len(noms)}
+        await signaler(code_salon, "pichenette", "victoire", gagnants=gagnants, perdants=perdants,
+                       details={"score": final.get("score"), "gorgees": doses})
+
+
+def pf_programmer(code_salon):
+    salon = salons.get(code_salon)
+    if not salon:
+        return
+    ancien = salon.get("pf_minuteur")
+    if ancien is not None and not ancien.done():
+        ancien.cancel()
+    etat = salon.get("etat")
+    echeance = pf_prochaine_echeance(etat) if etat and salon.get("jeu") == "pichenette" else None
+    salon["pf_minuteur"] = None if echeance is None else asyncio.create_task(
+        pf_minuteur(code_salon, salon, echeance))
+
+
+async def pf_minuteur(code_salon, salon, echeance):
+    await asyncio.sleep(max(0.0, echeance - time.time()) + 0.05)
+    if salons.get(code_salon) is not salon or salon.get("jeu") != "pichenette":
+        return
+    moi = asyncio.current_task()
+    async with verrou(salon):
+        if salon.get("pf_minuteur") is not moi:
+            return
+        salon["pf_minuteur"] = None
+        etat = salon["etat"]
+        if all(j.get("parti") for j in salon["joueurs"]):
+            return
+        version = etat["version"]
+        evenements = pf_expirer(etat, time.time())
+        if etat["version"] != version:
+            await pf_publier(code_salon, evenements)
+        else:
+            pf_programmer(code_salon)
+
+
+async def pf_traiter(code_salon, joueur, message):
+    salon = salons[code_salon]
+    etat = salon.get("etat")
+    if salon.get("jeu") != "pichenette" or etat is None:
+        return
+    version = etat["version"]
+    evenements = pf_action(etat, joueur["index"], message, time.time())
+    if etat["version"] != version:
+        await pf_publier(code_salon, evenements)
+    else:
+        for e in evenements:
+            await bt_envoyer_prive(salon, e["a"], e["msg"])
+
+
+
+# =============================================================
 # TELEPHONE DESSINE (on ecrit, on dessine, on devine)
 # Les regles sont dans telephone.py (chiffres : telephone_config.json).
 # Ici : le reseau, la tache privee de chacun (la SEULE contribution
@@ -3803,7 +3934,7 @@ async def cs_demarrer(code_salon):
     etat = salon.get("etat")
     if etat is not None:
         jeu = salon.get("jeu")
-        fini = (jeu in ("menteur", "undercover", "telephone", "conquete", "justepinte", "quidenous", "tournee", "loupgarou") and etat.get("phase") == "fin") or \
+        fini = (jeu in ("menteur", "undercover", "telephone", "conquete", "justepinte", "quidenous", "tournee", "loupgarou", "pichenette") and etat.get("phase") == "fin") or \
                (jeu == "beerbattle" and etat.get("phase") == "fini")
         if not fini:
             return
@@ -4045,6 +4176,20 @@ async def _qn_parti(code_salon, index):
         await qn_publier(code_salon, [])
 
 
+def _pf_revenu(code_salon, salon, idx):
+    etat = salon["etat"]
+    if idx < etat["nb_joueurs"]:
+        pf_joueur_revenu(etat, idx, time.time())
+        pf_programmer(code_salon)
+
+
+async def _pf_parti(code_salon, index):
+    etat = salons[code_salon]["etat"]
+    if index < etat["nb_joueurs"]:
+        pf_joueur_parti(etat, index, time.time())
+        await pf_publier(code_salon, [])
+
+
 def _lg_revenu(code_salon, salon, idx):
     etat = salon["etat"]
     if idx < etat["nb_joueurs"]:
@@ -4183,6 +4328,12 @@ JEUX = {
         joueur_parti=_lg_parti, joueur_revenu=_lg_revenu,
         peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("lg_minuteur",),
         min_joueurs=LG_JOUEURS_MIN, max_joueurs=LG_JOUEURS_MAX),
+    "pichenette": Jeu(
+        "pichenette", "Pichenette FC", "pichenette-3d-jeu.html", "pf_demarrer", _prefixe("pf_"),
+        pf_demarrer, pf_traiter, _pichenette_instantane,
+        joueur_parti=_pf_parti, joueur_revenu=_pf_revenu,
+        peut_relancer=lambda etat: etat.get("phase") == "fin", minuteurs=("pf_minuteur",),
+        min_joueurs=PF_JOUEURS_MIN, max_joueurs=PF_JOUEURS_MAX),
 }
 
 
