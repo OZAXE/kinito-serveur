@@ -177,8 +177,8 @@ tournee._D["des"] = float(os.environ.get("TR_DES", "60"))
 # Pichenette FC : sur une machine d essai lente (4 scenes 3D sans carte graphique), le chrono
 # de visee passerait avant que les pages aient fini de viser.
 import pichenette  # noqa: E402
-pichenette._D["visee"] = float(os.environ.get("PF_VISEE", "90"))
-pichenette._D["formation"] = float(os.environ.get("PF_FORMATION", "90"))
+pichenette._D["visee"] = float(os.environ.get("PF_VISEE", "300"))
+pichenette._D["formation"] = float(os.environ.get("PF_FORMATION", "300"))
 
 
 if os.environ.get("LG_NUIT"):

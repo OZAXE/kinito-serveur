@@ -126,7 +126,7 @@ async function attendreQue(test, delai, quoi) {
   await cliquer(P(autre[1]), /Valider les formations/);
   await attendreQue(async () => (await etat(code)).phase === 'visee', 20000, 'coup d envoi');
   e = await etat(code);
-  verifier(Math.abs(e.pf.palets[0][1] - -0.73) < 1e-6 && Math.abs(e.pf.palets[5][0] - 0.1) < 1e-6, 'coup d envoi depuis les défenses choisies (Bunker, Herse)');
+  verifier(Math.abs(e.pf.palets[0][1] - -0.73) < 1e-6 && Math.abs(e.pf.palets[5][0] - 0.1) < 1e-6, 'coup d envoi depuis les défenses choisies (Bunker, Herse) ' + JSON.stringify([e.pf.palets[0], e.pf.palets[5], e.pf.formations]));
 
   // Orientation : les Brunes ont le terrain retourné.
   await attendre(1500);
