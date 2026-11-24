@@ -126,7 +126,7 @@ async function attendreQue(test, delai, quoi) {
   await cliquer(P(autre[1]), /Valider les formations/);
   await attendreQue(async () => (await etat(code)).phase === 'visee', 20000, 'coup d envoi');
   e = await etat(code);
-  verifier(Math.abs(e.pf.palets[0][1] - -0.73) < 1e-6 && Math.abs(e.pf.palets[6][0] - 0.1) < 1e-6, 'coup d envoi depuis les défenses choisies (Bunker, Herse)');
+  verifier(Math.abs(e.pf.palets[0][1] - -0.73) < 1e-6 && Math.abs(e.pf.palets[5][0] - 0.1) < 1e-6, 'coup d envoi depuis les défenses choisies (Bunker, Herse) ' + JSON.stringify([e.pf.palets[0], e.pf.palets[5], e.pf.formations]));
 
   // Orientation : les Brunes ont le terrain retourné.
   await attendre(1500);
@@ -135,7 +135,7 @@ async function attendreQue(test, delai, quoi) {
 
   // 3. Visée : chaque joueur tire sa capsule de devant (la 5 ou la 4 de son équipe).
   await Promise.all(pages.map(p => p.waitForFunction(() => /Tire 1 capsule/.test(document.getElementById('panneau').innerText), null, { timeout: 30000 })));
-  const capsuleDe = i => { const eq = equipeDe(i); return eq * 6 + (e.pf.equipes[eq][0] === i ? 5 : 4); };
+  const capsuleDe = i => { const eq = equipeDe(i); return eq * 5 + (e.pf.equipes[eq][0] === i ? 4 : 3); };
   const pret = p => p.waitForFunction(() => { const v = window.pfTest.visee(); return v.enVisee && !v.file && !v.anims && v.camera < 0.01; }, null, { timeout: 40000 }).catch(() => null);
   await Promise.all(pages.map(pret));
   await tirer(P(chef[0]), capsuleDe(chef[0]), 70, 15);
@@ -168,7 +168,7 @@ async function attendreQue(test, delai, quoi) {
   }, e.pf.palets)));
   verifier(ecarts.every(x => x < 0.002), 'chaque page a rejoué le tir et finit aux positions du serveur (écart max ' + Math.max(...ecarts).toFixed(4) + ')');
 
-  // 5. Trois buts des Blondes : le chef des Blondes tire la capsule 5 droit devant, les autres passent.
+  // 5. Trois buts des Blondes : le chef des Blondes tire la capsule 4 droit devant, les autres passent.
   for (let but = 1; but <= 3; but++) {
     const avant = await etat(code);
     const g0 = avant.pf.gorgees.slice();
@@ -176,13 +176,13 @@ async function attendreQue(test, delai, quoi) {
     verifier(prep.ok, 'bouchon placé devant la cage (but ' + but + ')');
     // La page peut avoir du retard (replay du but précédent, annonce) : on attend qu'elle soit à jour.
     await P(chef[0]).waitForFunction(() => {
-      const v = window.pfTest.visee(), c = window.pfTest.ecran(5), b = window.pfTest.ecran('balle');
+      const v = window.pfTest.visee(), c = window.pfTest.ecran(4), b = window.pfTest.ecran('balle');
       return v.enVisee && !v.file && !v.anims && v.camera < 0.01 && c && b && Math.abs(c.x - b.x) < 3 && b.y < c.y;
     }, null, { timeout: 40000 }).catch(() => null);
     await attendre(500);
-    await tirer(P(chef[0]), 5, 160);
+    await tirer(P(chef[0]), 4, 160);
     await attendreQue(async () => ((await etat(code)).pf.visees[String(chef[0])] || []).length === 1, 10000, 'visée du but')
-      .catch(async err => { console.log(JSON.stringify((await etat(code)).pf), await P(chef[0]).evaluate(() => JSON.stringify({ b: window.pfTest.brouillons(), c: window.pfTest.ecran(5), bal: window.pfTest.ecran('balle'), pos: window.pfTest.positions()[5], r: document.getElementById('rappel').innerText, p: document.getElementById('panneau').innerText }))); await capture(P(chef[0]), 'x-echec'); throw err; });
+      .catch(async err => { console.log(JSON.stringify((await etat(code)).pf), await P(chef[0]).evaluate(() => JSON.stringify({ b: window.pfTest.brouillons(), c: window.pfTest.ecran(4), bal: window.pfTest.ecran('balle'), pos: window.pfTest.positions()[4], r: document.getElementById('rappel').innerText, p: document.getElementById('panneau').innerText }))); await capture(P(chef[0]), 'x-echec'); throw err; });
     await cliquer(P(chef[0]), /Valider mes tirs/);
     for (const i of [autre[0], chef[1], autre[1]]) await cliquer(P(i), /Passer mon tour/);
     const x = await attendreQue(async () => { const y = await etat(code); return (y.pf.score[0] === but) && y; }, 30000, 'but ' + but)

@@ -426,11 +426,11 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 ## Pichenette FC (foot de comptoir à pichenettes, préfixe `pf_`)
 
 - 2 à 8 joueurs, page `pichenette-3d-jeu.html`. Foot de table au tour par tour avec des capsules de bière
-  (6 par équipe) et un bouchon en guise de balle, sur une table de bistrot. Pas d'écran principal : chacun
+  (5 par équipe) et un bouchon en guise de balle, sur une table de bistrot. Pas d'écran principal : chacun
   joue sur son téléphone, son but en bas. Toutes les valeurs (délais, terrain, physique, gorgées,
   formations) sont dans `pichenette_config.json`.
-- Équipes tirées au sort à chaque partie : **Les Blondes** (équipe 0, en bas, capsules 0 à 5, attaquent vers
-  les y positifs) et **Les Brunes** (équipe 1, en haut, capsules 6 à 11). Nombre impair : le dernier arrivé à la
+- Équipes tirées au sort à chaque partie : **Les Blondes** (équipe 0, en bas, capsules 0 à 4, attaquent vers
+  les y positifs) et **Les Brunes** (équipe 1, en haut, capsules 5 à 9). Nombre impair : le dernier arrivé à la
   table (ordre des places) regarde (`spectateurs`).
 - `pf_demarrer` : `buts` (3, 4 ou 5 ; défaut 3).
 - Phases (`pf_etat.phase`) :
@@ -444,9 +444,10 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
     phase finit dès que tous les joueurs présents ont validé.
   - `tir` : toutes les capsules partent ensemble, le serveur calcule la physique (pas fixe de 4 ms, frottement,
     chocs entre disques, rebonds sur les bandes, les poteaux et les filets) et diffuse `pf_tir` (`tir.images` :
-    une image toutes les 40 ms, `[x0, y0, x1, y1, ...]` en millièmes de terrain, capsules 0 à 11 puis le bouchon ;
+    une image toutes les 40 ms, `[x0, y0, x1, y1, ...]` en millièmes de terrain, capsules 0 à 9 puis le bouchon ;
     `tirs` dévoilés, `but` : équipe qui marque ou null, `buteur`, `contre_son_camp`, `boit`). La phase dure le
-    temps du tir plus 2 s (3,5 s après un but), puis nouveau tour.
+    temps du tir plus 2 s (3,5 s après un but), puis nouveau tour. Une capsule arrêtée avec le centre dans une
+    cage est ressortie juste devant la ligne de but (première place libre ; dernière image du tir en plus).
   - `fin` : `final` (`gagnante`, `gagnants`, `perdants`, `derniers`, `score`).
 - But : le bouchon passe entièrement la ligne entre les poteaux. Chaque joueur présent de l'équipe qui encaisse
   boit 1 gorgée ; si la dernière capsule à avoir touché le bouchon est de cette équipe et a été tirée ce tour,

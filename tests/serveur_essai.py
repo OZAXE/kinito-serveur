@@ -103,8 +103,8 @@ async def pf_preparer(code: str):
     if not e or salon.get("jeu") != "pichenette" or e.get("phase") != "visee":
         return {"ok": False}
     async with serveur.verrou(salon):
-        e["palets"] = ([[-0.4, -0.6 + 0.15 * k] for k in range(5)] + [[0.0, 0.42]]
-                       + [[0.4, 0.6 - 0.15 * k] for k in range(6)])
+        e["palets"] = ([[-0.4, -0.6 + 0.15 * k] for k in range(4)] + [[0.0, 0.42]]
+                       + [[0.4, 0.6 - 0.15 * k] for k in range(5)])
         e["balle"] = [0.0, 0.6]
         e["version"] += 1
         await serveur.pf_publier(code, [])
@@ -177,8 +177,8 @@ tournee._D["des"] = float(os.environ.get("TR_DES", "60"))
 # Pichenette FC : sur une machine d essai lente (4 scenes 3D sans carte graphique), le chrono
 # de visee passerait avant que les pages aient fini de viser.
 import pichenette  # noqa: E402
-pichenette._D["visee"] = float(os.environ.get("PF_VISEE", "90"))
-pichenette._D["formation"] = float(os.environ.get("PF_FORMATION", "90"))
+pichenette._D["visee"] = float(os.environ.get("PF_VISEE", "300"))
+pichenette._D["formation"] = float(os.environ.get("PF_FORMATION", "300"))
 
 
 if os.environ.get("LG_NUIT"):
