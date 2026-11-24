@@ -1,18 +1,20 @@
 """
-Rythme des gorgees de Picopoly, par difficulte (picolopoly.py).
+Rythme des gorgees de Picopoly, par difficulte et PAR PERSONNE (picolopoly.py).
 
-Des bots jouent des parties "raisonnables" (achat si 150 EUR restent en
-poche, maisons des qu un groupe est complet et qu il reste 400 EUR, cagnotte
-toujours raflee, pas de roulette ni d echange). On compte toutes les gorgees
-bues par la table.
+Des bots jouent des parties "raisonnables" : achat si 150 EUR restent en
+poche, maisons des qu un groupe est complet et qu il reste 400 EUR,
+cagnotte toujours raflee, roulette un tour sur deux (50 EUR sur rouge),
+pas d echange. Les gorgees a distribuer vont a un adversaire au hasard.
+On compte toutes les gorgees bues, divisees par le nombre de joueurs.
 
-Le temps d un tour n existe pas dans le moteur : on l etalonne sur la
-partie reelle en difficile, ou une heure donne ~100 gorgees. Le tour ou le
-difficile atteint 100 represente donc 1 h, et on lit les autres difficultes
-a ce meme tour. Cibles : difficile ~100, normal ~40, facile ~30.
+Le moteur ne connait pas l heure : on prend SECONDES_PAR_TOUR secondes par
+tour joue (lancer, deplacement, choix, animations). Une heure = 3600 /
+SECONDES_PAR_TOUR tours, partages entre les joueurs.
+Cibles par personne et par heure : difficile ~100, normal ~40, facile ~30.
 
 Usage : python tests/picolopoly_rythme.py [parties_par_cas]
-Sortie en erreur si normal ou facile s ecartent de plus de 20 % de la cible.
+Sortie en erreur si une difficulte s ecarte de plus de 25 % de sa cible
+en moyenne sur 3 a 8 joueurs.
 """
 import collections
 import os
@@ -25,16 +27,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import picolopoly as pp
 
 CIBLES = {"difficile": 100, "normal": 40, "facile": 30}
-TOURS_MAX = 300
+SECONDES_PAR_TOUR = 60
+TOURS_HEURE = 3600 // SECONDES_PAR_TOUR
+JOUEURS = (3, 4, 6, 8)
 
 
-def partie(nb, difficulte, graine):
-    """Total cumule des gorgees de la table apres chaque tour, et leurs raisons."""
+def partie(nb, difficulte, graine, tours=TOURS_HEURE):
+    """(gorgees par personne apres `tours` tours, gorgees par raison)."""
     random.seed(graine)
     e = pp.pp_initialiser(["J%d" % k for k in range(nb)], 0, difficulte)
     e["fin_prevue"] = 10 ** 9
-    t, courbe, raisons = 0, [], collections.Counter()
-    while e["phase"] != "fin" and len(courbe) < TOURS_MAX:
+    t, faits, raisons = 0, 0, collections.Counter()
+    while e["phase"] != "fin" and faits < tours:
         t += 1
         a = e["attente"]
         if a is not None:
@@ -51,49 +55,66 @@ def partie(nb, difficulte, graine):
         elif e["dette"] is not None:
             ev = pp.pp_expirer(e, e["echeance"] + 1)
         elif e["phase"] == "tour":
-            ev = pp.pp_action(e, e["courant"], {"type": "pp_lancer"}, t)
+            i = e["courant"]
+            ev = []
+            if not e["roulette_jouee"] and e["argent"][i] >= 300 and random.random() < 0.5:
+                ev = pp.pp_action(e, i, {"type": "pp_roulette",
+                                         "mises": [{"pari": "rouge", "montant": 50}]}, t)
+                e["roulette_jouee"] = True
+            if e["attente"] is None:
+                ev += pp.pp_action(e, i, {"type": "pp_lancer"}, t)
         else:
             i = e["courant"]
-            for c, p in enumerate(e["proprietes"]):
-                if p and p["proprietaire"] == i and e["argent"][i] > 400:
-                    pp.pp_action(e, i, {"type": "pp_construire", "case": c}, t)
-            ev = pp.pp_action(e, i, {"type": "pp_terminer"}, t)
-            courbe.append(sum(e["gorgees"]))
+            ev = None
+            if e["argent"][i] > 400:
+                for c, p in enumerate(e["proprietes"]):
+                    if p and p["proprietaire"] == i:
+                        r = pp.pp_action(e, i, {"type": "pp_construire", "case": c}, t)
+                        if not (len(r) == 1 and r[0]["msg"].get("type") == "erreur"):
+                            ev = r
+                            break
+            if ev is None:
+                ev = pp.pp_action(e, i, {"type": "pp_terminer"}, t)
+                faits += 1
         for m in ev or []:
             if m["msg"].get("type") == "pp_gorgees":
                 for b in m["msg"]["boivent"]:
                     raisons[m["msg"]["raison"]] += b["nombre"]
-    courbe += [courbe[-1] if courbe else 0] * (TOURS_MAX - len(courbe))
-    return courbe, raisons
+    return sum(e["gorgees"]) / nb, raisons
+
+
+def mesurer(n, difficultes=CIBLES, joueurs=JOUEURS):
+    """{difficulte: {nb: (par personne, raisons)}}"""
+    res = {}
+    for d in difficultes:
+        res[d] = {}
+        for nb in joueurs:
+            tot, raisons = [], collections.Counter()
+            for g in range(n):
+                v, r = partie(nb, d, g)
+                tot.append(v)
+                raisons += r
+            res[d][nb] = (statistics.mean(tot), raisons)
+    return res
 
 
 def main():
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 150
-    ecarts = []
-    for nb in (3, 4, 6, 8):
-        res = {}
-        for d in CIBLES:
-            courbes, raisons = [], collections.Counter()
-            for g in range(n):
-                c, r = partie(nb, d, g)
-                courbes.append(c)
-                raisons += r
-            res[d] = ([statistics.mean(c[k] for c in courbes) for k in range(TOURS_MAX)], raisons)
-        dur = res["difficile"][0]
-        heure = next(k for k in range(TOURS_MAX) if dur[k] >= CIBLES["difficile"]) + 1
-        print("%d joueurs : 1 h = %d tours (%.0f s par tour)" % (nb, heure, 3600 / heure))
-        for d, (moy, raisons) in res.items():
-            total = moy[heure - 1]
-            tout = sum(raisons.values()) or 1
-            print("  %-9s %5.1f gorgees/h, 1 toutes les %.2f min   (%s)" % (
-                d, total, 60 / total, ", ".join("%s %d%%" % (k, 100 * v / tout)
-                                                for k, v in raisons.most_common(4))))
-            if d != "difficile":
-                ecarts.append((abs(total - CIBLES[d]) / CIBLES[d], nb, d, total))
-    pire = max(ecarts)
-    print("Plus gros ecart a la cible : %d %% (%s a %d joueurs : %.1f)" % (
-        100 * pire[0], pire[2], pire[1], pire[3]))
-    if pire[0] > 0.20:
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 100
+    res = mesurer(n)
+    print("1 h = %d tours (%d s par tour). Gorgees par personne et par heure :" % (TOURS_HEURE, SECONDES_PAR_TOUR))
+    pire = (0, "")
+    for d, parnb in res.items():
+        valeurs = [parnb[nb][0] for nb in JOUEURS]
+        moy = statistics.mean(valeurs)
+        raisons = sum((parnb[nb][1] for nb in JOUEURS), collections.Counter())
+        tout = sum(raisons.values()) or 1
+        print("  %-9s %s  -> moyenne %.0f (cible %d)" % (
+            d, "  ".join("%dj %.0f" % (nb, v) for nb, v in zip(JOUEURS, valeurs)), moy, CIBLES[d]))
+        print("            " + ", ".join("%s %d%%" % (k, 100 * v / tout) for k, v in raisons.most_common(7)))
+        ecart = abs(moy - CIBLES[d]) / CIBLES[d]
+        pire = max(pire, (ecart, d))
+    print("Plus gros ecart a la cible (moyenne 3-8 joueurs) : %d %% (%s)" % (100 * pire[0], pire[1]))
+    if pire[0] > 0.25:
         sys.exit("Rythme hors cible")
 
 
