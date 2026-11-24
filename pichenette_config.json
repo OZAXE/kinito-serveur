@@ -1,0 +1,55 @@
+{
+  "_note": "Pichenette FC : toutes les valeurs chiffrées du jeu (valeurs de départ, à régler en test). Longueurs en « terrain » (largeur = 1), durées en secondes. Les formations sont données pour l'équipe du bas (elle attaque vers les y positifs) ; l'équipe du haut les reçoit retournées (x, y -> -x, -y).",
+  "joueurs": {"min": 2, "max": 8},
+  "palets_par_equipe": 6,
+  "buts": {"defaut": 3, "choix": [3, 4, 5]},
+  "delais": {
+    "formation": 45,
+    "visee": 20,
+    "apres_tir": 2.0,
+    "apres_but": 3.5,
+    "absent": 2,
+    "retour": 8
+  },
+  "terrain": {
+    "largeur": 1.0,
+    "longueur": 1.6,
+    "but_largeur": 0.3,
+    "but_profondeur": 0.09
+  },
+  "palet": {"rayon": 0.047, "masse": 1.0},
+  "balle": {"rayon": 0.03, "masse": 0.5},
+  "physique": {
+    "_note": "Frottement : décélération constante (terrain/s²). Amorti : perte proportionnelle à la vitesse (par s). Rebonds : part de la vitesse gardée au choc.",
+    "pas": 0.004,
+    "frottement": 0.9,
+    "amorti": 0.45,
+    "rebond_disques": 0.9,
+    "rebond_bords": 0.75,
+    "rebond_filet": 0.2,
+    "vitesse_max": 3.4,
+    "arret": 0.012,
+    "duree_max": 8.0,
+    "images_par_s": 25
+  },
+  "gorgees": {
+    "but_encaisse": 1,
+    "contre_son_camp": 2,
+    "defaite": 5
+  },
+  "formations": [
+    {"id": "classique", "nom": "La Classique", "detail": "1-2-2-1 : équilibrée",
+     "palets": [[0, -0.72], [-0.22, -0.52], [0.22, -0.52], [-0.15, -0.31], [0.15, -0.31], [0, -0.15]]},
+    {"id": "bunker", "nom": "Le Bunker", "detail": "1-3-2 : un mur devant le but",
+     "palets": [[0, -0.73], [-0.2, -0.6], [0, -0.58], [0.2, -0.6], [-0.12, -0.4], [0.12, -0.4]]},
+    {"id": "offensive", "nom": "L'Offensive", "detail": "1-1-4 : tout le monde devant",
+     "palets": [[0, -0.72], [0, -0.48], [-0.34, -0.2], [-0.12, -0.15], [0.12, -0.15], [0.34, -0.2]]},
+    {"id": "losange", "nom": "Le Losange", "detail": "1-1-2-1-1 : tout dans l'axe",
+     "palets": [[0, -0.72], [0, -0.55], [-0.24, -0.38], [0.24, -0.38], [0, -0.26], [0, -0.12]]},
+    {"id": "ailes", "nom": "Les Ailes", "detail": "1-2-3 : attaque par les côtés",
+     "palets": [[0, -0.72], [-0.15, -0.5], [0.15, -0.5], [-0.38, -0.24], [0, -0.3], [0.38, -0.24]]},
+    {"id": "herse", "nom": "La Herse", "detail": "2-2-2 : deux gardiens",
+     "palets": [[-0.1, -0.71], [0.1, -0.71], [-0.28, -0.46], [0.28, -0.46], [-0.15, -0.2], [0.15, -0.2]]}
+  ],
+  "formation_defaut": {"attaque": "offensive", "defense": "classique"}
+}

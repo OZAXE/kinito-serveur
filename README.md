@@ -14,7 +14,8 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   `justepinte_config.json`, questions dans `justepinte_questions.py`), `quidenous.py` (Qui de nous ? : chiffres dans
   `quidenous_config.json`, cartes dans `quidenous_cartes.py`), `tournee.py` (La Tournée : chiffres dans
   `tournee_config.json`, plateaux dans `tournee_plateaux.json` fabriqués par `tournee_plateaux.py`, mini-jeux dans
-  `tournee_minijeux.json`), `loupgarou.py` (Loup-Garou : chiffres dans `loupgarou_config.json`).
+  `tournee_minijeux.json`), `loupgarou.py` (Loup-Garou : chiffres dans `loupgarou_config.json`), `pichenette.py`
+  (Pichenette FC : règles et physique, chiffres et formations dans `pichenette_config.json`).
 - `couches.py` : contrat des **couches parallèles** d'une soirée (l'Enquête), qui tournent à côté des jeux.
 - `stockage.py` : sauvegarde durable (Postgres Neon si `DATABASE_URL` est défini, sinon mémoire).
 
@@ -422,6 +423,41 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   mort la nuit 2 (dévoré, brûlé, assassiné), abattu 2, éliminé au vote 2 (loup démasqué 3), mort de chagrin 2, chaque accusateur d'un innocent éliminé 1, en fin de
   partie 2 pour chaque joueur du camp perdant (seules celles-ci partent dans `signaler`).
 
+## Pichenette FC (foot de comptoir à pichenettes, préfixe `pf_`)
+
+- 2 à 8 joueurs, page `pichenette-3d-jeu.html`. Foot de table au tour par tour avec des capsules de bière
+  (6 par équipe) et un bouchon en guise de balle, sur une table de bistrot. Pas d'écran principal : chacun
+  joue sur son téléphone, son but en bas. Toutes les valeurs (délais, terrain, physique, gorgées,
+  formations) sont dans `pichenette_config.json`.
+- Équipes tirées au sort à chaque partie : **Les Blondes** (équipe 0, en bas, capsules 0 à 5, attaquent vers
+  les y positifs) et **Les Brunes** (équipe 1, en haut, capsules 6 à 11). Nombre impair : le dernier arrivé à la
+  table (ordre des places) regarde (`spectateurs`).
+- `pf_demarrer` : `buts` (3, 4 ou 5 ; défaut 3).
+- Phases (`pf_etat.phase`) :
+  - `formation` (45 s) : `pf_formation` (`attaque`, `defense` : identifiants parmi les 6 formations, `valider` :
+    booléen ; n'importe quel joueur de l'équipe, la dernière demande gagne). L'attaque sert après avoir marqué,
+    la défense après avoir encaissé et au premier coup d'envoi. Au chrono, les choix en cours valent.
+  - `visee` (20 s) : les deux équipes visent en secret et en même temps. `pf_viser` (`tirs` : liste de
+    `{palet, dx, dy, force}`, direction dans le repère du terrain, force de 0 à 1 ; `pret` : booléen) remplace
+    les visées du joueur. En 1 contre 1, 2 capsules par joueur, sinon 1. Une capsule n'est tirée qu'une fois par
+    tour (refus si un coéquipier l'a déjà prise). Une visée posée sans valider part quand même au chrono. La
+    phase finit dès que tous les joueurs présents ont validé.
+  - `tir` : toutes les capsules partent ensemble, le serveur calcule la physique (pas fixe de 4 ms, frottement,
+    chocs entre disques, rebonds sur les bandes, les poteaux et les filets) et diffuse `pf_tir` (`tir.images` :
+    une image toutes les 40 ms, `[x0, y0, x1, y1, ...]` en millièmes de terrain, capsules 0 à 11 puis le bouchon ;
+    `tirs` dévoilés, `but` : équipe qui marque ou null, `buteur`, `contre_son_camp`, `boit`). La phase dure le
+    temps du tir plus 2 s (3,5 s après un but), puis nouveau tour.
+  - `fin` : `final` (`gagnante`, `gagnants`, `perdants`, `derniers`, `score`).
+- But : le bouchon passe entièrement la ligne entre les poteaux. Chaque joueur présent de l'équipe qui encaisse
+  boit 1 gorgée ; si la dernière capsule à avoir touché le bouchon est de cette équipe et a été tirée ce tour,
+  son tireur boit 2 de plus (contre son camp). Replacement : formation d'attaque pour l'équipe qui a marqué,
+  de défense pour l'autre, bouchon au centre. Première équipe à `buts_victoire` : chaque joueur de l'équipe
+  perdante boit 5 gorgées (seules celles-ci partent dans `signaler`).
+- `pf_catalogue` (au démarrage et à la reprise) : formations, terrain, rayons. `pf_etat` (public) : équipes,
+  score, positions, `formations_validees`, `formations` (seulement après le coup d'envoi), `a_vise` (nombre de
+  capsules visées, jamais où), `prets`, `tir` (sans ses images), `buts`, `gorgees`. `pf_vue` (privé, à chaque joueur
+  après chaque coup) : `equipe`, `formation` et `visees` de son équipe seulement.
+
 ## Base de données
 
 `DATABASE_URL` (variable d'environnement Render, jamais dans le dépôt) : base Postgres Neon, Francfort.
@@ -439,6 +475,7 @@ python tests/casino_essai.py
 python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
 python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des votes, désignés, paris, gorgées
 python tests/loupgarou_essai.py 300      # Loup-Garou : composition, règles dirigées, non-fuite des rôles et de la nuit
+python tests/pichenette_essai.py 300     # Pichenette FC : formations, physique, non-fuite des visées, buts, gorgées
 python tests/tournee_essai.py 300        # La Tournée : plateaux, chemins, retournements, équipes, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/picolopoly_rythme.py          # Picopoly : gorgées par personne et par heure (cibles 100 / 40 / 30)
@@ -456,6 +493,7 @@ node tests/conquete_navigateur.js [captures]    # Royaumes : partie Flash à 3 n
 node tests/justepinte_navigateur.js [captures] # Le Juste Pinte : 5 questions à 3 navigateurs, dans le mille, classement, Rejouer
 node tests/quidenous_navigateur.js [captures]  # Qui de nous ? : 5 cartes à 3 navigateurs, vote, pari, à découvert, titre, Rejouer
 node tests/loupgarou_navigateur.js [captures]  # Loup-Garou : partie complète à 6 navigateurs, chaque rôle, vote, Rejouer
+node tests/pichenette_navigateur.js [captures] # Pichenette FC : partie 2 contre 2 à 4 navigateurs, formations, visée au doigt, buts, Rejouer
 node tests/tournee_navigateur.js [captures]    # La Tournée : 5 tours à 3 navigateurs, dés, plateau, mini-jeux au doigt, classement, Rejouer
 # Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte, quidenous et mode test)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard

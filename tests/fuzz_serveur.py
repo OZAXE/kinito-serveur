@@ -61,6 +61,8 @@ TYPES = [
     "tr_demarrer", "tr_lancer", "tr_chemin", "tr_score", "tr_suivant",
     # Loup-Garou
     "lg_demarrer", "lg_pret", "lg_nuit", "lg_potion", "lg_tir", "lg_voter", "lg_suivant",
+    # Pichenette FC
+    "pf_demarrer", "pf_formation", "pf_viser",
     # Casino
     "cs_demarrer", "cs_choisir", "cs_hall", "cs_pret", "cs_rl_miser", "cs_rl_annuler", "cs_bj_miser",
     "cs_bj_annuler", "cs_bj_tirer", "cs_bj_rester", "cs_bj_doubler", "cs_bj_splitter",
@@ -80,7 +82,7 @@ CHAMPS = ["argent_donne", "argent_recu", "arme", "cartes", "case", "categorie", 
           "famille", "undercover", "white", "mot", "contenu", "auto", "actif", "emoji", "album",
           "source", "etapes", "rang", "region", "pions", "fortin", "camp", "gardiens", "emissaire",
           "tours", "aleatoire", "vengeance", "soin", "poison", "loups", "speciaux", "cible2", "solo",
-          "infecter", "capitaine", "allumer"]
+          "infecter", "capitaine", "allumer", "buts", "attaque", "defense", "valider", "tirs", "pret"]
 
 
 def valeur_bizarre(rnd):
@@ -90,6 +92,7 @@ def valeur_bizarre(rnd):
         "normal", "cc_mains_nues", "pe", "gorgee",
         [], [0], [0, 1, 2], [-1], ["a"], [0, 0], [None], list(range(10)),
         {}, {"0": 3}, {"1": -2}, {"a": "b"}, [[1]], {"0": [1]},
+        [{"palet": 0, "dx": 0, "dy": 1, "force": 1}], [{"palet": 7, "dx": "x", "dy": None, "force": 9}],
     ])
 
 
@@ -126,6 +129,7 @@ DEMARRER = {
     "quidenous": {"type": "qn_demarrer", "manches": 5},
     "tournee": {"type": "tr_demarrer", "tours": 5},
     "loupgarou": {"type": "lg_demarrer"},
+    "pichenette": {"type": "pf_demarrer", "buts": 3},
 }
 
 
