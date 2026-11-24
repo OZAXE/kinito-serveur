@@ -14,11 +14,11 @@
   "terrain": {
     "largeur": 1.0,
     "longueur": 1.6,
-    "but_largeur": 0.3,
+    "but_largeur": 0.4,
     "but_profondeur": 0.09
   },
-  "palet": {"rayon": 0.047, "masse": 1.0},
-  "balle": {"rayon": 0.03, "masse": 0.8},
+  "palet": {"rayon": 0.052, "masse": 1.0},
+  "balle": {"rayon": 0.032, "masse": 0.8},
   "physique": {
     "_note": "Frottement : décélération constante (terrain/s²). Amorti : perte proportionnelle à la vitesse (par s). Rebonds : part de la vitesse gardée au choc.",
     "pas": 0.004,

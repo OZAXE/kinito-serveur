@@ -202,6 +202,7 @@ def simuler(palets, balle, tirs):
 
     images = [image()]
     dernier = None
+    touches = []          # capsules qui ont touche le bouchon, dans l ordre
     but = None
     etape = 0
     while etape < pas_max:
@@ -251,6 +252,8 @@ def simuler(palets, balle, tirs):
                     vit[j][1] += imp * inv[j] * ny
                 if j == n and i < n:
                     dernier = i
+                    if not touches or touches[-1] != i:
+                        touches.append(i)
         # Bandes, poteaux et filets.
         for i in range(tous):
             r = ray[i]
@@ -304,6 +307,7 @@ def simuler(palets, balle, tirs):
         "balle": [round(pos[n][0], 4), round(pos[n][1], 4)],
         "but": but,
         "dernier": dernier,
+        "touches": touches,
         "duree": round(etape * dt, 3),
     }
 
@@ -514,6 +518,17 @@ def _viser(etat, ev, i, message, maintenant):
     return ev
 
 
+def _passe(touches, tireurs):
+    """Belle passe : le bouchon finit sur une capsule de la meme equipe, pas tiree ce
+    tour, juste apres une capsule tiree de cette equipe. {"de": joueur, "vers": palet} ou None."""
+    if len(touches) < 2:
+        return None
+    vers, avant = touches[-1], touches[-2]
+    if vers in tireurs or avant not in tireurs or _equipe_du_palet(vers) != _equipe_du_palet(avant):
+        return None
+    return {"de": tireurs[avant], "palet": avant, "vers": vers, "equipe": _equipe_du_palet(vers)}
+
+
 def _tirer(etat, ev, maintenant):
     """Toutes les visees partent ensemble."""
     tirs, tireurs = [], {}
@@ -534,6 +549,7 @@ def _tirer(etat, ev, maintenant):
         "but": res["but"],
         "contre_son_camp": None,
         "boit": [],
+        "passe": _passe(res["touches"], tireurs),
     }
     pause = _D["apres_tir"]
     if res["but"] is not None:
@@ -578,6 +594,8 @@ def _tirer(etat, ev, maintenant):
                 _placer(etat, f[0]["defense"], f[1]["attaque"])
     else:
         etat["message"] = "Pas de but. On revise !" if tirs else "Personne n'a tiré !"
+        if tir["passe"]:
+            etat["message"] = f"Belle passe de {noms[tir['passe']['de']]} !"
     etat["tir"] = tir
     if etat["phase"] != "fin":
         etat["phase"] = "tir"

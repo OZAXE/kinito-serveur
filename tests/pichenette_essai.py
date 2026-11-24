@@ -76,6 +76,13 @@ def verifier_physique():
     # Le bouchon frappe la bande et revient (il ne la traverse pas).
     r = P.simuler([[0.3, 0]], [0.4, 0], [(0, 1.0, 0.0, 1.0)])
     verifier_positions(r["palets"], r["balle"])
+    # Belle passe : la capsule tiree envoie le bouchon sur une coequipiere immobile.
+    r = P.simuler([[0, -0.3], [0, 0.25]], [0, -0.18], [(0, 0.0, 1.0, 0.45)])
+    assert r["touches"] == [0, 1], r["touches"]
+    assert P._passe(r["touches"], {0: 7}) == {"de": 7, "palet": 0, "vers": 1, "equipe": 0}
+    assert P._passe(r["touches"], {0: 7, 1: 8}) is None, "une capsule tiree ne recoit pas de passe"
+    assert P._passe([0, P.NB_PALETS], {0: 7}) is None, "toucher un adversaire n est pas une passe"
+    assert P._passe([1], {}) is None
     # Une capsule arretee dans sa propre cage ressort juste devant la ligne.
     pal = P.positions_formation("classique", 0) + P.positions_formation("classique", 1)
     pal[0] = [0.0, -0.84]
