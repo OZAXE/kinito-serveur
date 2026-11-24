@@ -45,30 +45,36 @@ PP_INTERET_LEVEE = 10         # % ajoutes pour lever une hypotheque
 PP_GORGEES_DISTRIBUTION = 1   # carte "Distribution generale", par adversaire
 PP_RETOUR_DEFAUT = 2          # "Retour de baton" sans penalite precedente
 # Difficulte, choisie par le createur du salon. Elle ne fait pas que
-# multiplier : elle decide aussi QUAND on boit.
+# multiplier : elle decide aussi QUAND on boit. Chaque gorgee vient d un
+# moment du jeu (pas de toast gratuit pour toute la table).
 #   tranche / plafond  loyers, taxes, cartes : 1 gorgee par tranche de
 #                      "tranche" EUR, au moins 1, au plus "plafond"
 #   depart             passage au Depart : toute la table trinque ("tous"),
 #                      celui qui passe seulement ("joueur"), ou personne
-#   miroir             le proprietaire qui encaisse un loyer fait boire N
-#                      gorgees a qui il veut (0 = il ne distribue rien)
-#   prison / echange   entree en prison ; toast collectif d un echange conclu
+#   miroir             le proprietaire qui encaisse un loyer distribue
+#   maison / hotel     cremaillere : construire une maison (un hotel)
+#   double             un double aux des : son lanceur distribue
+#                      (ces trois-la : N gorgees PAR ADVERSAIRE, reparties
+#                      comme il veut entre eux, voir _faire_servir)
+#   prison             entree en prison
+#   prison_tour        chaque tour passe en prison sans en sortir
+#   echange            toast collectif d un echange conclu
 #   duel / cadeau / sommelier   les cartes speciales ({n} dans leur texte)
 # La cagnotte et la roulette ne bougent pas : ce sont des choix, pas des
-# penalites. "difficile" est la partie d origine, et le defaut quand un
-# client n envoie rien.
-# Rythme vise sur une partie d 1 h (total de la table, simule par
-# tests/picolopoly_rythme.py) : difficile ~100 gorgees (1 toutes les 0,6 min),
-# normal ~40 (1 toutes les 1,5 min), facile ~30 (1 toutes les 2 min).
-# Le gros vient des loyers (au moins 1 gorgee chacun) : c est le Depart,
-# le proprio qui distribue et la tranche qui font la difference.
+# penalites. "difficile" est le defaut quand un client n envoie rien.
+# Rythme vise PAR PERSONNE sur une partie d 1 h (simule par
+# tests/picolopoly_rythme.py, roulette comprise) : difficile ~100 gorgees
+# (1 toutes les 0,6 min), normal ~40 (1/1,5 min), facile ~30 (1/2 min).
 PP_DIFFICULTES = {
-    "facile": {"tranche": 150, "plafond": 3, "depart": "personne", "miroir": 0,
-               "prison": 0, "echange": 0, "duel": 2, "cadeau": 2, "sommelier": 3},
-    "normal": {"tranche": 50, "plafond": 3, "depart": "personne", "miroir": 0,
-               "prison": 1, "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 5},
-    "difficile": {"tranche": 50, "plafond": 5, "depart": "tous", "miroir": 1,
-                  "prison": 1, "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 6},
+    "facile": {"tranche": 150, "plafond": 3, "depart": "personne", "miroir": 0.5,
+               "maison": 0.5, "hotel": 1, "double": 0, "prison": 0, "prison_tour": 0,
+               "echange": 0, "duel": 2, "cadeau": 2, "sommelier": 3},
+    "normal": {"tranche": 150, "plafond": 3, "depart": "personne", "miroir": 0.75,
+               "maison": 0.5, "hotel": 1, "double": 0.5, "prison": 1, "prison_tour": 0,
+               "echange": 1, "duel": 3, "cadeau": 3, "sommelier": 5},
+    "difficile": {"tranche": 25, "plafond": 10, "depart": "joueur", "miroir": 2.5,
+                  "maison": 2, "hotel": 3, "double": 1.5, "prison": 3, "prison_tour": 2,
+                  "echange": 2, "duel": 5, "cadeau": 5, "sommelier": 10},
 }
 PP_DIFFICULTE_DEFAUT = "difficile"
 # Cagnotte du Parc Blossac : taxes, amendes des cartes et sorties de prison
@@ -674,11 +680,11 @@ def _executer(etat, ev, etape):
     elif t == "payer":
         _payer(etat, ev, i, etape["montant"], etape["creancier"], etape["motif"])
     elif t == "miroir":
-        o = etape["proprio"]
-        if not etat["faillite"][o]:
-            _demander_cible(etat, o, "miroir", pp_regle(etat)["miroir"], par_carte=False)
+        _faire_servir(etat, etape["proprio"], "miroir", pp_regle(etat)["miroir"])
     elif t == "monopoly":
         _monsieur_monopoly(etat, ev, i)
+    elif t == "double":
+        _faire_servir(etat, i, "double", pp_regle(etat)["double"])
 
 
 def _arrivee(etat, ev):
@@ -752,6 +758,26 @@ def _demander_cible(etat, qui, raison, nombre, par_carte=True):
         return
     etat["attente"] = {"type": "cible", "joueur": qui, "raison": raison,
                        "nombre": nombre, "cibles": cibles}
+
+
+def _faire_servir(etat, qui, raison, par_adversaire):
+    """
+    Miroir, double, cremaillere : le joueur repartit comme il veut
+    round(par_adversaire x adversaires) gorgees (au moins 1) entre ses
+    adversaires. Plus la table est grande, plus il y a de verres a remplir :
+    chacun boit a peu pres autant quel que soit le nombre de joueurs.
+    """
+    if par_adversaire <= 0 or etat["faillite"][qui]:
+        return
+    cibles = _adversaires(etat, qui, False)
+    if not cibles:
+        return
+    total = max(1, int(par_adversaire * len(cibles) + 0.5))
+    if len(cibles) == 1:
+        _demander_cible(etat, qui, raison, total, par_carte=False)
+    else:
+        etat["attente"] = {"type": "sommelier", "joueur": qui, "raison": raison,
+                           "total": total, "cibles": cibles}
 
 
 def _piocher(etat, ev, i, paquet):
@@ -863,6 +889,7 @@ def _lancer(etat, ev, i, message=None):
             else:
                 etat["message"] = _nom(etat, i) + " reste en prison."
                 etat["suite"] = []
+                _boire(etat, ev, [(i, pp_regle(etat)["prison_tour"])], "prison_tour")
         _derouler(etat, ev)
         return None
 
@@ -879,6 +906,8 @@ def _lancer(etat, ev, i, message=None):
         etat["message"] = "Triple ! " + _nom(etat, i) + " va où il veut."
         return None
 
+    # Un double se fete : son lanceur distribue, une fois le deplacement fini.
+    bonus = [{"t": "double"}] if d1 == d2 and pp_regle(etat)["double"] > 0 else []
     if d1 == d2:
         etat["doubles"] += 1
         if etat["doubles"] >= 3:
@@ -893,6 +922,7 @@ def _lancer(etat, ev, i, message=None):
             options = list(range(40))
         else:
             options = sorted({(pos + d1) % 40, (pos + d2) % 40, (pos + d1 + d2) % 40})
+        etat["suite"] = bonus
         etat["attente"] = {"type": "deplacement", "joueur": i, "raison": "bus", "options": options}
         etat["message"] = "Bus ! " + _nom(etat, i) + " choisit sa case."
         return None
@@ -901,6 +931,7 @@ def _lancer(etat, ev, i, message=None):
     etat["suite"] = [{"t": "avancer", "n": n}]
     if rapide == "monopoly":
         etat["suite"].append({"t": "monopoly"})
+    etat["suite"] += bonus
     _derouler(etat, ev)
     return None
 
@@ -1001,6 +1032,9 @@ def _construire(etat, ev, i, message):
     p["maisons"] += 1
     ev.append(_tous({"type": "pp_construction", "joueur": i, "case": c, "maisons": p["maisons"]}))
     etat["message"] = _nom(etat, i) + (" pose un hôtel sur " if p["maisons"] == 5 else " construit sur ") + case["nom"] + "."
+    # Cremaillere : la construction se fete aux frais d un adversaire.
+    r = pp_regle(etat)
+    _faire_servir(etat, i, "cremaillere", r["hotel"] if p["maisons"] == 5 else r["maison"])
     return None
 
 
@@ -1405,7 +1439,7 @@ def _choix(etat, ev, i, message):
             _boire(etat, ev, [(v, a["nombre"])], a["raison"])
     elif t == "sommelier":
         etat["message"] = _nom(etat, i) + " fait le service."
-        _boire(etat, ev, sorted(v.items()), "sommelier")
+        _boire(etat, ev, sorted(v.items()), a.get("raison", "sommelier"))
     elif t == "deplacement":
         _avancer_vers(etat, ev, i, v, a["raison"])
         etat["suite"].insert(0, {"t": "arrivee"})

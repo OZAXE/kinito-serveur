@@ -230,8 +230,56 @@ def essai_roulette():
     print("roulette : OK")
 
 
+def essai_leviers():
+    """Gorgees justifiees : double, cremaillere, tour en prison (difficile)."""
+    def partie4():
+        e = pp.pp_initialiser(["A", "B", "C", "D"], 1000.0, "difficile")
+        return e, e["courant"]
+    r = pp.PP_DIFFICULTES["difficile"]
+    # Double : apres le deplacement, le lanceur repartit double x 3 adversaires.
+    e, i = partie4()
+    e["positions"][i] = 0
+    des = iter([2, 2])
+    ancien_ri, ancien_ch = pp.random.randint, pp.random.choice
+    pp.random.randint = lambda a, b: next(des)
+    try:
+        pp.pp_action(e, i, {"type": "pp_lancer"}, 1000.0)
+    finally:
+        pp.random.randint, pp.random.choice = ancien_ri, ancien_ch
+    while e["attente"] and e["attente"]["type"] != "sommelier":
+        a = e["attente"]
+        pp.pp_action(e, a["joueur"], {"type": "pp_choix", "valeur": pp._valeur_defaut(e, a)}, 1000.0)
+    a = e["attente"]
+    verifier(a and a.get("raison") == "double" and a["total"] == int(r["double"] * 3 + 0.5),
+             "le double doit faire distribuer : " + json.dumps(a))
+    avant = sum(e["gorgees"])
+    pp.pp_action(e, i, {"type": "pp_choix", "valeur": {str(a["cibles"][0]): a["total"]}}, 1000.0)
+    verifier(sum(e["gorgees"]) == avant + a["total"], "gorgees du double pas bues")
+    # Cremaillere : une maison fait distribuer maison x adversaires.
+    e, i = partie4()
+    for c in pp.PP_GROUPES[pp.PP_CASES[1]["groupe"]]:
+        e["proprietes"][c]["proprietaire"] = i
+    ev = pp.pp_action(e, i, {"type": "pp_construire", "case": 1}, 1000.0)
+    a = e["attente"]
+    verifier(a and a.get("raison") == "cremaillere" and a["total"] == int(r["maison"] * 3 + 0.5),
+             "la maison doit faire distribuer : " + json.dumps(a))
+    # Tour en prison sans double : prison_tour gorgees.
+    e, i = partie4()
+    e["en_prison"][i] = True
+    e["positions"][i] = pp.PP_CASE_PRISON
+    des = iter([1, 2])
+    pp.random.randint = lambda a, b: next(des)
+    try:
+        pp.pp_action(e, i, {"type": "pp_lancer"}, 1000.0)
+    finally:
+        pp.random.randint = ancien_ri
+    verifier(e["gorgees"][i] == r["prison_tour"], "tour en prison : " + str(e["gorgees"][i]))
+    print("leviers : OK")
+
+
 def main():
     essai_roulette()
+    essai_leviers()
     nb_parties = int(sys.argv[1]) if len(sys.argv) > 1 else 300
     fins = {"faillites": 0, "chrono": 0}
     for g in range(nb_parties):
