@@ -187,8 +187,13 @@ def simuler(palets, balle, tirs):
     vmax = _P["vitesse_max"]
     for k, dx, dy, f in tirs:
         vit[k] = [dx * vmax * f, dy * vmax * f]
+    tires = {k for k, _, _, _ in tirs}
+    controle = _P.get("controle_passe", True)
     dt = _P["pas"]
-    frott, amorti = _P["frottement"] * dt, max(0.0, 1.0 - _P["amorti"] * dt)
+    # Glisse : les capsules (lourdes) freinent plus que le bouchon.
+    fr_c, fr_b = _P["frottement"] * dt, _P.get("frottement_balle", _P["frottement"]) * dt
+    am_c = max(0.0, 1.0 - _P["amorti"] * dt)
+    am_b = max(0.0, 1.0 - _P.get("amorti_balle", _P["amorti"]) * dt)
     e_d = _P["rebond_disques"]
     arret = _P["arret"]
     tous = n + 1
@@ -215,7 +220,7 @@ def simuler(palets, balle, tirs):
             pos[i][0] += vx * dt
             pos[i][1] += vy * dt
             v = math.hypot(vx, vy)
-            nv = v * amorti - frott
+            nv = v * am_b - fr_b if i == n else v * am_c - fr_c
             if nv <= 0:
                 vit[i] = [0.0, 0.0]
             else:
@@ -237,6 +242,21 @@ def simuler(palets, balle, tirs):
                     nx, ny, d = 1.0, 0.0, 0.0
                 else:
                     nx, ny = dx / d, dy / d
+                # Controle : le bouchon arrive sur une coequipiere immobile, pas tiree
+                # ce tour, juste apres une capsule tiree de son equipe : il s arrete
+                # colle a elle (la passe est recue), sans la pousser.
+                if (j == n and i < n and controle and dernier in tires and i not in tires
+                        and not bouge[i] and _equipe_du_palet(i) == _equipe_du_palet(dernier)):
+                    bx, by = pos[n][0] + nx * (r - d), pos[n][1] + ny * (r - d)
+                    # Seulement s il y a la place (sinon, choc normal).
+                    if all((bx - pos[q][0]) ** 2 + (by - pos[q][1]) ** 2 >= (ray[n] + ray[q]) ** 2
+                           for q in range(n) if q != i):
+                        pos[n] = [bx, by]
+                        vit[n] = [0.0, 0.0]
+                        dernier = i
+                        if not touches or touches[-1] != i:
+                            touches.append(i)
+                        continue
                 # On les separe (au prorata des masses).
                 rec = (r - d) / (inv[i] + inv[j])
                 pos[i][0] -= nx * rec * inv[i]
