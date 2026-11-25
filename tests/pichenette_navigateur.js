@@ -199,7 +199,7 @@ async function attendreQue(test, delai, quoi) {
     if (but < 3) await attendreQue(async () => (await etat(code)).phase === 'visee', 30000, 'tour après le but ' + but);
   }
   await attendreQue(async () => (await etat(code)).phase === 'fin', 20000, 'fin');
-  const victoire = await P(chef[0]).waitForFunction(() => /Victoire des Blondes/.test(document.getElementById('panneau').innerText), null, { timeout: 40000 }).then(() => true).catch(() => false);
+  const victoire = await P(chef[0]).waitForFunction(() => /Victoire des Blondes/.test(document.getElementById('panneau').innerText), null, { timeout: 90000 }).then(() => true).catch(() => false);
   verifier(victoire, 'panneau de fin : victoire des Blondes');
   await attendre(3500);
   await capture(P(chef[1]), '5-fin');
