@@ -117,6 +117,138 @@ def verifier_physique():
     assert P.simuler(pal, [0, 0], tirs) == P.simuler(pal, [0, 0], tirs)
 
 
+def etat_objets(n=4):
+    etat = P.pf_initialiser([f"J{k}" for k in range(n)], 1000.0, rng=random.Random(3), mode="objets")
+    for e in (0, 1):
+        etat["formations"][e]["valide"] = True
+    P.pf_expirer(etat, 2000.0)
+    assert etat["phase"] == "visee", etat["phase"]
+    return etat
+
+
+def jouer(etat, tirs_par_joueur, objets=None, t=3000.0):
+    """tirs_par_joueur : {joueur: [(palet, dx, dy, force)]}. objets : {joueur: (id, cible)}."""
+    for j, (oid, cible) in (objets or {}).items():
+        etat["reserves"][etat["equipe_de"][j]].append(oid)
+        P.pf_action(etat, j, {"type": "pf_objet", "objet": oid, "cible": cible}, t)
+        assert etat["activations"][str(etat["equipe_de"][j])]["objet"] == oid, oid
+    for j in P._joueurs_actifs(etat):
+        tirs = [{"palet": k, "dx": dx, "dy": dy, "force": f} for k, dx, dy, f in tirs_par_joueur.get(j, [])]
+        P.pf_action(etat, j, {"type": "pf_viser", "tirs": tirs, "pret": True}, t)
+    assert etat["phase"] in ("tir", "fin"), etat["phase"]
+    return etat["tir"]
+
+
+def verifier_objets():
+    C_O = P._O
+    assert len(P.OBJETS) == 11 and set(P.pf_catalogue()["modes"]) == {"pur", "objets"}
+    # Mode pur : ni pastille ni action d objet.
+    pur = P.pf_initialiser(["A", "B"], 0, rng=random.Random(1))
+    assert pur["mode"] == "pur"
+    for e in (0, 1):
+        pur["formations"][e]["valide"] = True
+    P.pf_expirer(pur, 100)
+    assert pur["pastille"] is None and P.pf_action(pur, 0, {"type": "pf_objet", "objet": "mousse"}, 100) == []
+    # Mode objets : une pastille au milieu des le premier tour, secrete pour personne.
+    etat = etat_objets()
+    assert etat["pastille"] is not None
+    a, b = etat["equipes"][0][0], etat["equipes"][1][0]
+    # Pas dans la reserve : refuse. Puis activation secrete : l autre equipe ne voit rien.
+    assert P.pf_action(etat, a, {"type": "pf_objet", "objet": "mousse"}, 0)[0]["msg"]["type"] == "erreur"
+    etat["reserves"][0].append("glacon")
+    assert P.pf_action(etat, a, {"type": "pf_objet", "objet": "glacon", "cible": 0}, 0)[0]["msg"]["type"] == "erreur"
+    k_b = P.NB_PALETS + 2
+    P.pf_action(etat, a, {"type": "pf_objet", "objet": "glacon", "cible": k_b}, 0)
+    assert P.pf_vue(etat, a)["activation"]["objet"] == "glacon" and P.pf_vue(etat, b)["activation"] is None
+    pub = P.pf_etat_public(etat, 0)
+    assert "glacon" not in json.dumps(pub["effets"]) and pub["objet_active"] == [True, False]
+    # Glacon : la capsule gelee ne part pas ce tour, ni le suivant.
+    tir = jouer(etat, {b: [(k_b, 0, -1, 1.0)]})
+    assert tir["objets"][0]["objet"] == "glacon" and not tir["tirs"], tir["tirs"]
+    assert etat["reserves"][0] == [], "l objet n a pas ete consomme"
+    P.pf_expirer(etat, 9999)
+    assert etat["phase"] == "visee" and k_b in P._geles(etat)
+    assert P.pf_action(etat, b, {"type": "pf_viser", "tirs": [{"palet": k_b, "dx": 0, "dy": -1, "force": 1}]}, 0)[0]["msg"]["type"] == "erreur"
+    jouer(etat, {})
+    P.pf_expirer(etat, 99999)
+    assert k_b not in P._geles(etat), "le glacon dure trop"
+
+    # Mousse : meme tir, la capsule va plus loin.
+    def distance(objets):
+        e = etat_objets(2)
+        e["pastille"] = None
+        k = 2
+        avant = list(e["palets"][k])
+        jouer(e, {e["equipes"][0][0]: [(k, 0, 1, 0.3)]}, objets)
+        return math.dist(avant, e["palets"][k]), e
+    d0, e0 = distance({})
+    j0 = e0["equipes"][0][0]
+    d1, _ = distance({j0: ("mousse", None)})
+    assert d1 > d0 * 1.2, (d0, d1)
+    # La Tournee : un tir de plus pour ce joueur, retire si on l annule.
+    e = etat_objets(4)
+    j = e["equipes"][0][0]
+    e["reserves"][0].append("tournee")
+    assert P.tirs_par_joueur(e, j) == 1
+    P.pf_action(e, j, {"type": "pf_objet", "objet": "tournee"}, 0)
+    assert P.tirs_par_joueur(e, j) == 2
+    P.pf_action(e, j, {"type": "pf_viser", "tirs": [{"palet": 0, "dx": 0, "dy": 1, "force": 0.3},
+                                                     {"palet": 1, "dx": 0, "dy": 1, "force": 0.3}]}, 0)
+    P.pf_action(e, j, {"type": "pf_objet", "objet": None}, 0)
+    assert P.tirs_par_joueur(e, j) == 1 and len(e["visees"][str(j)]) == 1
+    # Cul sec : 2 gorgees a l adversaire choisi, devoile au tir.
+    e = etat_objets(4)
+    a, b = e["equipes"][0][0], e["equipes"][1][1]
+    g = e["gorgees"][b]
+    e["reserves"][0].append("cul_sec")
+    assert P.pf_action(e, a, {"type": "pf_objet", "objet": "cul_sec", "cible": a}, 0)[0]["msg"]["type"] == "erreur"
+    e["reserves"][0].clear()
+    tir = jouer(e, {}, {a: ("cul_sec", b)})
+    assert e["gorgees"][b] == g + C_O["cul_sec"] and tir["objets"][0]["cible"] == b
+    # Echange : deux capsules permutent apres le tir.
+    e = etat_objets(2)
+    a = e["equipes"][0][0]
+    p0, p4 = list(e["palets"][0]), list(e["palets"][4])
+    tir = jouer(e, {}, {a: ("echange", [0, 4])})
+    assert e["palets"][0] == p4 and e["palets"][4] == p0
+    assert tir["images"][-1][0] == round(p4[0] * 1000)
+    # Sous-bock : un mur pose sur la route du bouchon l arrete avant le but.
+    r = P.simuler([[0, -0.1]], [0, 0], [(0, 0.0, 1.0, 1.0)], {"murs": [(0, 0.3, C_O["mur_rayon"])]})
+    assert r["but"] is None and r["balle"][1] < 0.3, r["balle"]
+    # Flaque : la balle s y englue.
+    r0 = P.simuler([[0, -0.4]], [0, -0.3], [(0, 0.0, 1.0, 0.5)])
+    r1 = P.simuler([[0, -0.4]], [0, -0.3], [(0, 0.0, 1.0, 0.5)], {"flaques": [(0, 0, C_O["flaque_rayon"])]})
+    assert r1["balle"][1] < r0["balle"][1], (r0["balle"], r1["balle"])
+    # Fantome : la capsule traverse une adversaire sans la pousser.
+    pal = [[0, -0.4]] + [[0.4, -0.6 + 0.1 * k] for k in range(1, P.NB_PALETS)] + [[0, -0.2]]
+    r = P.simuler(pal, [0.3, 0.5], [(0, 0.0, 1.0, 0.6)], {"fantomes": {0}})
+    assert r["palets"][P.NB_PALETS] == [0, -0.2] and r["palets"][0][1] > -0.2
+    # XXL : la capsule la plus proche de son but grossit pour 2 tours.
+    e = etat_objets(2)
+    a = e["equipes"][0][0]
+    tir = jouer(e, {}, {a: ("xxl", None)})
+    k = tir["objets"][0]["cible"]
+    assert 0 <= k < P.NB_PALETS and any(x["type"] == "xxl" and x["palet"] == k for x in e["effets"])
+    # Pastille : la premiere capsule qui la touche donne un objet a son equipe.
+    e = etat_objets(2)
+    a = e["equipes"][0][0]
+    e["palets"][0] = [0.0, -0.3]
+    e["balle"] = [0.35, 0.5]
+    e["pastille"] = [0.0, -0.1]
+    tir = jouer(e, {a: [(0, 0, 1, 0.5)]})
+    assert tir["ramasse"] and tir["ramasse"]["equipe"] == 0 and len(e["reserves"][0]) == 1
+    assert e["pastille"] is None and e["pastille_tour"] == e["tour"] + C_O["pastille"]["delai"]
+    # Reserve pleine : on ne ramasse pas.
+    e = etat_objets(2)
+    a = e["equipes"][0][0]
+    e["reserves"][0] = ["mousse", "aimant"]
+    e["palets"][0] = [0.0, -0.3]
+    e["balle"] = [0.35, 0.5]
+    e["pastille"] = [0.0, -0.1]
+    tir = jouer(e, {a: [(0, 0, 1, 0.5)]})
+    assert tir["ramasse"] is None and e["pastille"] == [0.0, -0.1]
+
+
 def verifier_public(etat):
     pub = P.pf_etat_public(etat, 0)
     texte = json.dumps(pub)
@@ -133,6 +265,11 @@ def verifier_public(etat):
             continue
         for j in vue["visees"]:
             assert etat["equipe_de"][int(j)] == e, "un joueur voit les visees adverses"
+        assert vue["activation"] == etat["activations"].get(str(e)), "activation de l equipe"
+    if etat["phase"] == "visee":
+        assert "activation" not in texte and "cible" not in texte, "un objet active fuit"
+    if etat["mode"] == "objets":
+        assert all(len(r) <= P._O["reserve_max"] for r in etat["reserves"])
     assert all(g >= 0 for g in etat["gorgees"])
     verifier_positions(etat["palets"], etat["balle"])
 
@@ -154,10 +291,49 @@ def visee_au_hasard(etat, i, rng):
     return tirs
 
 
+def cible_au_hasard(etat, i, oid, rng):
+    e = etat["equipe_de"][i]
+    c = P.OBJETS[oid]["cible"]
+    if c == "palet_adverse":
+        return rng.randrange((1 - e) * P.NB_PALETS, (2 - e) * P.NB_PALETS)
+    if c == "palets_miens":
+        return rng.sample(range(e * P.NB_PALETS, (e + 1) * P.NB_PALETS), 2)
+    if c == "point":
+        return [rng.uniform(-0.4, 0.4), rng.uniform(-0.6, 0.6)]
+    if c == "joueur_adverse":
+        return rng.choice(etat["equipes"][1 - e])
+    return None
+
+
+def objet_au_hasard(etat, i, rng, t):
+    e = etat["equipe_de"][i]
+    res = etat["reserves"][e]
+    v = etat["version"]
+    if rng.random() < 0.1 or not res:
+        # Absurde : objet absent de la reserve, cible de travers.
+        autre = [o for o in P.OBJETS if o not in res]
+        if autre:
+            P.pf_action(etat, i, {"type": "pf_objet", "objet": rng.choice(autre), "cible": 0}, t)
+            assert etat["version"] == v, "objet absent active"
+        return
+    oid = rng.choice(res)
+    if P.OBJETS[oid]["cible"] and rng.random() < 0.1:
+        P.pf_action(etat, i, {"type": "pf_objet", "objet": oid, "cible": "x"}, t)
+        assert etat["version"] == v, "cible absurde acceptee"
+        return
+    if rng.random() < 0.1:
+        P.pf_action(etat, i, {"type": "pf_objet", "objet": None}, t)
+        assert str(e) not in etat["activations"]
+        return
+    P.pf_action(etat, i, {"type": "pf_objet", "objet": oid, "cible": cible_au_hasard(etat, i, oid, rng)}, t)
+    assert etat["activations"][str(e)]["objet"] == oid
+
+
 def partie(rng, n):
     noms = [f"J{k}" for k in range(n)]
     t = 1000.0
-    etat = P.pf_initialiser(noms, t, buts=rng.choice([3, 4, 5, None, "x"]), rng=rng)
+    etat = P.pf_initialiser(noms, t, buts=rng.choice([3, 4, 5, None, "x"]), rng=rng,
+                            mode=rng.choice(["objets", "objets", "pur", None, "x"]))
     # Equipes : tout le monde joue sauf le dernier arrive si impair.
     joueurs = sorted(etat["equipes"][0] + etat["equipes"][1])
     assert abs(len(etat["equipes"][0]) - len(etat["equipes"][1])) == 0
@@ -215,6 +391,8 @@ def partie(rng, n):
                 elif x < 0.15:
                     continue      # il dort : le chrono tirera pour lui
                 else:
+                    if etat["mode"] == "objets" and rng.random() < 0.4:
+                        objet_au_hasard(etat, i, rng, t)
                     P.pf_action(etat, i, {"type": "pf_viser", "tirs": visee_au_hasard(etat, i, rng),
                                           "pret": rng.random() < 0.85}, t)
             # Une capsule deja prise par un coequipier est refusee.
@@ -277,6 +455,10 @@ def verifier_tir(etat, tir, score_avant, gorgees_avant):
             moi = etat["palets"][m * P.NB_PALETS:(m + 1) * P.NB_PALETS]
             lui = etat["palets"][(1 - m) * P.NB_PALETS:(2 - m) * P.NB_PALETS]
             assert moi == a and lui == d and etat["balle"] == [0.0, 0.0]
+    for o in tir.get("objets") or []:
+        if o["objet"] == "cul_sec":
+            assert etat["equipe_de"][o["cible"]] == 1 - o["equipe"]
+            attendu[o["cible"]] += P._O["cul_sec"]
     if etat["phase"] == "fin":
         for j in etat["final"]["perdants"]:
             attendu[j] += C["gorgees"]["defaite"]
@@ -298,6 +480,7 @@ def main():
     parties = int(sys.argv[1]) if len(sys.argv) > 1 else 100
     verifier_formations()
     verifier_physique()
+    verifier_objets()
     rng = random.Random(1234)
     total = 0
     for k in range(parties):

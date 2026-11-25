@@ -607,8 +607,8 @@ def cerveau_casino(etat, i, mem):
 # =============================================================
 @jeu("pichenette")
 def cerveau_pichenette(etat, i, mem):
-    from pichenette import (FORMATIONS, NB_PALETS, PF_CONFIG, simuler, tirs_par_joueur,
-                            _visees_equipe)
+    from pichenette import (FORMATIONS, NB_PALETS, OBJETS, PF_CONFIG, simuler, tirs_par_joueur,
+                            _visees_equipe, _geles)
     if i >= etat["nb_joueurs"]:
         return None
     e = etat["equipe_de"][i]
@@ -627,8 +627,27 @@ def cerveau_pichenette(etat, i, mem):
         return lent({"type": "pf_formation", "valider": True}, 8.0, 15.0)
     if phase != "visee" or etat["prets"][i]:
         return None
+    # Mode objets : une fois par tour, il tente parfois un objet de la reserve.
+    if etat.get("mode") == "objets" and etat["reserves"][e] and str(e) not in etat["activations"] \
+            and mem.get("pf_objet_tour") != etat["tour"]:
+        mem["pf_objet_tour"] = etat["tour"]
+        if random.random() < 0.6:
+            oid = random.choice(etat["reserves"][e])
+            c = OBJETS[oid]["cible"]
+            cible = None
+            if c == "palet_adverse":
+                cible = random.randrange((1 - e) * NB_PALETS, (2 - e) * NB_PALETS)
+            elif c == "palets_miens":
+                cible = random.sample(range(e * NB_PALETS, (e + 1) * NB_PALETS), 2)
+            elif c == "point":
+                bx, by = etat["balle"]
+                cible = [round(bx, 3), round(by + (0.15 if e == 1 else -0.15), 3)]
+            elif c == "joueur_adverse":
+                cible = random.choice(etat["equipes"][1 - e])
+            return lent({"type": "pf_objet", "objet": oid, "cible": cible}, 1.0, 4.0)
     palets, balle = etat["palets"], etat["balle"]
     pris = {v["palet"] for j, vs in _visees_equipe(etat, e).items() if j != i for v in vs}
+    pris |= _geles(etat)
     miens = [k for k in range(e * NB_PALETS, (e + 1) * NB_PALETS) if k not in pris]
     if not miens:
         return lent({"type": "pf_viser", "tirs": [], "pret": True})

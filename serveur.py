@@ -3595,7 +3595,8 @@ async def pf_demarrer(code_salon, message):
     for i, j in enumerate(salon["joueurs"]):
         j["index"] = i
     # Ordre d arrivee a la table : si on est impair, le dernier regarde.
-    salon["etat"] = pf_initialiser([j["nom"] for j in salon["joueurs"]], time.time(), buts=message.get("buts"))
+    salon["etat"] = pf_initialiser([j["nom"] for j in salon["joueurs"]], time.time(), buts=message.get("buts"),
+        mode=message.get("mode"))
     salon["jeu"] = "pichenette"
     await diffuser(code_salon, {"type": "pf_demarree", "joueurs": [j["nom"] for j in salon["joueurs"]]})
     await diffuser(code_salon, pf_catalogue())

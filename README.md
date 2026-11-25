@@ -464,7 +464,7 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
 - Équipes tirées au sort à chaque partie : **Les Blondes** (équipe 0, en bas, capsules 0 à 4, attaquent vers
   les y positifs) et **Les Brunes** (équipe 1, en haut, capsules 5 à 9). Nombre impair : le dernier arrivé à la
   table (ordre des places) regarde (`spectateurs`).
-- `pf_demarrer` : `buts` (3, 4 ou 5 ; défaut 3).
+- `pf_demarrer` : `buts` (3, 4 ou 5 ; défaut 3), `mode` (`"pur"` par défaut, ou `"objets"`).
 - Phases (`pf_etat.phase`) :
   - `formation` (45 s) : `pf_formation` (`attaque`, `defense` : identifiants parmi les 6 formations, `valider` :
     booléen ; n'importe quel joueur de l'équipe, la dernière demande gagne). L'attaque sert après avoir marqué,
@@ -491,7 +491,34 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
   son tireur boit 2 de plus (contre son camp). Replacement : formation d'attaque pour l'équipe qui a marqué,
   de défense pour l'autre, bouchon au centre. Première équipe à `buts_victoire` : chaque joueur de l'équipe
   perdante boit 5 gorgées (seules celles-ci partent dans `signaler`).
-- `pf_catalogue` (au démarrage et à la reprise) : formations, terrain, rayons. `pf_etat` (public) : équipes,
+- **Mode objets** (`mode: "objets"`, chiffres dans `pichenette_config.json` → `objets`) :
+  - Une **pastille** (une tireuse) apparaît au milieu du terrain dès le premier tour. La première capsule
+    tirée qui la touche donne un objet tiré au sort (pondéré par `poids`) à son équipe, si sa réserve n'est
+    pas pleine. Elle réapparaît `pastille.delai` tours plus tard, à une place libre (tirage déterministe).
+  - **Réserve** commune à l'équipe, `reserve_max` objets (2), publique (`pf_etat.reserves`).
+  - `pf_objet` pendant la visée (`objet` : identifiant ou null pour annuler ; `cible` selon l'objet :
+    capsule adverse, deux de ses capsules `[a, b]`, point `[x, y]` du terrain, joueur adverse). Un seul
+    objet par équipe et par tour, la dernière demande d'un coéquipier gagne. **Secret** jusqu'au tir : seule
+    l'équipe le voit (`pf_vue.activation`) ; le public sait seulement qu'une équipe en a activé un
+    (`pf_etat.objet_active`). Au tir, l'objet est consommé et dévoilé (`tir.objets`), et un ramassage est
+    donné dans `tir.ramasse` (`palet`, `equipe`, `objet`, `image`, `joueur`).
+  - Effets en cours, publics : `pf_etat.effets` (`type`, `equipe`, `jusqu` = dernier tour, `palet`, `x`/`y`/`r`).
+  - Les 11 objets :
+    - `mousse` 🍺 **Mousse** : Tes tirs partent 40 % plus fort ce tour-ci.
+    - `glacon` 🧊 **Glaçon** : Gèle une capsule adverse : ce tour et le suivant, elle ne bouge plus et ne se tire pas.
+    - `tournee` 🍻 **Tournée** : Tu tires une capsule de plus ce tour-ci.
+    - `flaque` 🫗 **Bière renversée** : Une flaque collante où tu veux, pendant 2 tirs : tout ce qui passe dessus freine fort.
+    - `sous_bock` 🟤 **Sous-bock** : Un petit mur rond où tu veux, pendant 2 tirs.
+    - `fantome` 👻 **Capsule fantôme** : Ce tour-ci, tes capsules tirées traversent les autres capsules et ne touchent que le bouchon.
+    - `aimant` 🧲 **Décapsuleur aimanté** : Ce tour-ci, le bouchon colle à la première capsule immobile de ton équipe qu'il touche.
+    - `xxl` 🧤 **Gardien XXL** : Ta capsule la plus proche de ton but grossit pendant 2 tirs.
+    - `echange` 🔄 **Échange** : Après le tir, deux de tes capsules échangent leur place.
+    - `tete` 🥴 **Tête qui tourne** : Au tour suivant, l'écran des adversaires tangue pendant qu'ils visent.
+    - `cul_sec` 🥃 **Cul sec** : L'adversaire de ton choix boit 2 gorgées.
+  - Physique : `simuler(palets, balle, tirs, opts)` reçoit les effets (forces, fantômes, gelés, rayons,
+    sous-bocks, flaques, aimant, pastille). Un fantôme arrêté dans une capsule est posé à la place libre la
+    plus proche. Les bots du mode test utilisent aussi les objets.
+- `pf_catalogue` (au démarrage et à la reprise) : formations, terrain, rayons, `modes`, `objets` (catalogue et chiffres). `pf_etat` (public) : équipes,
   score, positions, `formations_validees`, `formations` (seulement après le coup d'envoi), `a_vise` (nombre de
   capsules visées, jamais où), `prets`, `tir` (sans ses images), `buts`, `gorgees`. `pf_vue` (privé, à chaque joueur
   après chaque coup) : `equipe`, `formation` et `visees` de son équipe seulement.
@@ -513,7 +540,7 @@ python tests/casino_essai.py
 python tests/justepinte_essai.py 300     # Juste Pinte : banque de questions, non-fuite, classement, gorgées
 python tests/quidenous_essai.py 300      # Qui de nous ? : cartes, non-fuite des votes, désignés, paris, gorgées
 python tests/loupgarou_essai.py 300      # Loup-Garou : composition, règles dirigées, non-fuite des rôles et de la nuit
-python tests/pichenette_essai.py 300     # Pichenette FC : formations, physique, non-fuite des visées, buts, gorgées
+python tests/pichenette_essai.py 300     # Pichenette FC : formations, physique, objets, non-fuite des visées et des objets, buts, gorgées
 python tests/tournee_essai.py 300        # La Tournée : plateaux, chemins, retournements, équipes, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/picolopoly_rythme.py          # Picopoly : gorgées par personne et par heure (cibles 100 / 40 / 30)

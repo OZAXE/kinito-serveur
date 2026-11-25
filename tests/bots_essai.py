@@ -192,6 +192,9 @@ PARTIES = {
     "pichenette_equipes": lambda: partie(
         "PICE", "pichenette", {"type": "pf_demarrer", "buts": 3}, 3,
         lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=240),
+    "pichenette_objets": lambda: partie(
+        "PICO", "pichenette", {"type": "pf_demarrer", "buts": 3, "mode": "objets"}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=240),
     "tournee": lambda: partie(
         "TOUR", "tournee", {"type": "tr_demarrer", "tours": 5}, 3,
         lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=120),
