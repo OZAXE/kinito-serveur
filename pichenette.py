@@ -171,6 +171,56 @@ def _sortir_des_cages(pos, n, ray):
     return bouge
 
 
+def _pivoter_vers_but(pos, n, ray, k):
+    """Positions successives du bouchon, de sa place actuelle (collee a la capsule k)
+    jusqu a la place face au but adverse la plus proche possible. [] si rien a faire."""
+    cx, cy = pos[k]
+    bx, by = pos[n]
+    rr = ray[k] + ray[n]
+    if abs(math.hypot(bx - cx, by - cy) - rr) > 0.01:
+        return []                       # le bouchon n est plus colle a elle
+    ly, lx = _T["longueur"] / 2, _T["largeur"] / 2
+    gy = ly if _equipe_du_palet(k) == 0 else -ly
+    a0 = math.atan2(by - cy, bx - cx)
+    cible = math.atan2(gy - cy, 0.0 - cx)
+    d = rr + 0.002
+
+    def libre(a):
+        x, y = cx + d * math.cos(a), cy + d * math.sin(a)
+        if abs(x) > lx - ray[n] or abs(y) > ly - ray[n]:
+            return False
+        return all((x - pos[q][0]) ** 2 + (y - pos[q][1]) ** 2 >= (ray[n] + ray[q]) ** 2
+                   for q in range(n) if q != k)
+
+    def ecart(a, b):
+        return (b - a + math.pi) % (2 * math.pi) - math.pi
+
+    # Angle libre le plus proche du but, en ne passant que par des places libres.
+    meilleur = a0
+    for sens in (1, -1):
+        tour = ecart(a0, cible)
+        if (tour >= 0) != (sens > 0):
+            tour = tour - sens * 2 * math.pi
+        pas = sens * math.radians(5)
+        a, fait = a0, 0.0
+        while abs(fait + pas) <= abs(tour) + 1e-9:
+            if not libre(a + pas):
+                break
+            a += pas
+            fait += pas
+        if abs(ecart(a, cible)) < abs(ecart(meilleur, cible)):
+            meilleur = a
+    total = ecart(a0, meilleur)
+    if abs(total) < math.radians(3):
+        return []
+    # Fin precise sur le but si elle est libre.
+    if libre(cible) and abs(ecart(meilleur, cible)) < math.radians(5):
+        total = ecart(a0, cible)
+    nb = max(2, min(10, int(abs(total) / math.radians(18)) + 1))
+    return [[cx + d * math.cos(a0 + total * t / nb), cy + d * math.sin(a0 + total * t / nb)]
+            for t in range(1, nb + 1)]
+
+
 def simuler(palets, balle, tirs):
     """
     palets : [[x, y]] (2 x NB_PALETS), balle : [x, y].
@@ -208,6 +258,7 @@ def simuler(palets, balle, tirs):
     images = [image()]
     dernier = None
     touches = []          # capsules qui ont touche le bouchon, dans l ordre
+    receveuse = None      # capsule qui a controle une passe
     but = None
     etape = 0
     while etape < pas_max:
@@ -254,6 +305,7 @@ def simuler(palets, balle, tirs):
                         pos[n] = [bx, by]
                         vit[n] = [0.0, 0.0]
                         dernier = i
+                        receveuse = i
                         if not touches or touches[-1] != i:
                             touches.append(i)
                         continue
@@ -321,6 +373,12 @@ def simuler(palets, balle, tirs):
     # pour qu elle ne bouche pas le but (image en plus pour le replay).
     if but is None and _sortir_des_cages(pos, n, ray):
         images.append(image())
+    # Passe recue : le bouchon pivote autour de la receveuse pour se placer face
+    # au but adverse, si la place le permet (quelques images pour le replay).
+    if but is None and receveuse is not None and dernier == receveuse:
+        for xy in _pivoter_vers_but(pos, n, ray, receveuse):
+            pos[n] = xy
+            images.append(image())
     return {
         "images": images,
         "palets": [[round(p[0], 4), round(p[1], 4)] for p in pos[:n]],
