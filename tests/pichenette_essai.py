@@ -80,10 +80,16 @@ def verifier_physique():
     r = P.simuler([[0, -0.3], [0, 0.25]], [0, -0.18], [(0, 0.0, 1.0, 0.7)])
     assert r["touches"] == [0, 1], r["touches"]
     assert P._passe(r["touches"], {0: 7}) == {"de": 7, "palet": 0, "vers": 1, "equipe": 0}
-    # Controle : le bouchon s arrete colle a la receveuse, qui ne bouge pas.
+    # Controle : le bouchon s arrete colle a la receveuse, qui ne bouge pas, puis il
+    # pivote autour d elle pour se placer face au but adverse (en haut pour l equipe 0).
     rr = C["palet"]["rayon"] + C["balle"]["rayon"]
     assert r["palets"][1] == [0, 0.25], "la receveuse a ete poussee"
-    assert abs(r["balle"][0]) < 1e-3 and abs(r["balle"][1] - (0.25 - rr)) < 2e-3, r["balle"]
+    assert abs(r["balle"][0]) < 1e-3 and abs(r["balle"][1] - (0.25 + rr)) < 4e-3, r["balle"]
+    assert r["images"][-1][-1] == round(r["balle"][1] * 1000), "le replay ne montre pas le pivot"
+    # Pivot bloque par une capsule juste au-dessus : il s arrete avant, sans chevauchement.
+    r3 = P.simuler([[0, -0.3], [0, 0.25], [0, 0.36]], [0, -0.18], [(0, 0.0, 1.0, 0.7)])
+    verifier_positions(r3["palets"], r3["balle"])
+    assert r3["balle"][1] > 0.25 - 0.01, "le pivot n a pas avance du tout"
     # Sur une adversaire, pas de controle : le bouchon rebondit et la pousse.
     k_adv = P.NB_PALETS
     pal = [[0, -0.3]] + [[0.4, -0.6 + 0.1 * k] for k in range(1, P.NB_PALETS)] + [[0, 0.25]]

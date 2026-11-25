@@ -483,7 +483,8 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
     cage est ressortie juste devant la ligne de but (première place libre ; dernière image du tir en plus).
     Belle passe (`tir.passe` : `{de, palet, vers, equipe}` ou null) : le bouchon finit sur une capsule de la
     même équipe, pas tirée ce tour, juste après une capsule tirée de cette équipe. Contrôle
-    (`physique.controle_passe`, vrai par défaut) : le bouchon s'arrête alors collé à la receveuse, sans la pousser.
+    (`physique.controle_passe`, vrai par défaut) : le bouchon s'arrête alors collé à la receveuse, sans la pousser. Puis il pivote autour d'elle (quelques
+    images en plus) pour se placer face au but adverse, ou le plus près possible si une capsule ou une bande gêne.
   - `fin` : `final` (`gagnante`, `gagnants`, `perdants`, `derniers`, `score`).
 - But : le bouchon passe entièrement la ligne entre les poteaux. Chaque joueur présent de l'équipe qui encaisse
   boit 1 gorgée ; si la dernière capsule à avoir touché le bouchon est de cette équipe et a été tirée ce tour,
