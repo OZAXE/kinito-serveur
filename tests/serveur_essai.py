@@ -108,7 +108,9 @@ async def etat(code: str):
         "pf": {"equipes": e.get("equipes"), "spectateurs": e.get("spectateurs"), "score": e.get("score"),
                "palets": e.get("palets"), "balle": e.get("balle"), "visees": e.get("visees"),
                "prets": e.get("prets"), "tour": e.get("tour"), "gorgees": e.get("gorgees"),
-               "formations": e.get("formations"), "buts_victoire": e.get("buts_victoire")}
+               "formations": e.get("formations"), "buts_victoire": e.get("buts_victoire"),
+               "mode": e.get("mode"), "reserves": e.get("reserves"), "effets": e.get("effets"),
+               "pastille": e.get("pastille"), "activations": e.get("activations")}
               if salon.get("jeu") == "pichenette" else None,
     }
 
@@ -128,6 +130,26 @@ async def pf_preparer(code: str):
         e["version"] += 1
         await serveur.pf_publier(code, [])
     return {"ok": True, "palet": 5}
+
+
+@serveur.app.get("/test/pf_objets/{code}")
+async def pf_objets(code: str, blondes: str = "", brunes: str = "", pastille: int = 0):
+    """Pichenette FC, mode objets : remplit les reserves (identifiants separes par des virgules).
+    pastille=1 : la tireuse juste devant la capsule 0 des Blondes, le reste sur les cotes."""
+    salon = serveur.salons.get(code)
+    e = (salon or {}).get("etat")
+    if not e or salon.get("jeu") != "pichenette" or e.get("phase") != "visee" or e.get("mode") != "objets":
+        return {"ok": False}
+    async with serveur.verrou(salon):
+        e["reserves"] = [[x for x in blondes.split(",") if x], [x for x in brunes.split(",") if x]]
+        if pastille:
+            e["palets"] = ([[0.0, -0.45]] + [[-0.4, -0.6 + 0.15 * k] for k in range(1, 5)]
+                           + [[0.4, 0.6 - 0.15 * k] for k in range(5)])
+            e["balle"] = [0.3, 0.55]
+            e["pastille"] = [0.0, -0.25]
+        e["version"] += 1
+        await serveur.pf_publier(code, [])
+    return {"ok": True}
 
 
 @serveur.app.get("/test/tr_preparer/{code}")

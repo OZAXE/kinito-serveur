@@ -560,6 +560,7 @@ node tests/justepinte_navigateur.js [captures] # Le Juste Pinte : 5 questions à
 node tests/quidenous_navigateur.js [captures]  # Qui de nous ? : 5 cartes à 3 navigateurs, vote, pari, à découvert, titre, Rejouer
 node tests/loupgarou_navigateur.js [captures]  # Loup-Garou : partie complète à 6 navigateurs, chaque rôle, vote, Rejouer
 node tests/pichenette_navigateur.js [captures] # Pichenette FC : partie 2 contre 2 à 4 navigateurs, formations, visée au doigt, buts, Rejouer
+node tests/pichenette_objets_navigateur.js [captures] # Pichenette FC, mode objets : tireuse, Glaçon, Sous-bock, Cul sec, secret jusqu au tir
 node tests/tournee_navigateur.js [captures]    # La Tournée : 5 tours à 3 navigateurs, dés, plateau, mini-jeux au doigt, classement, Rejouer
 # Machine sans accès aux CDN : CDN_LOCAL=<dossier des paquets npm three et qrious décompressés> (tests justepinte, quidenous et mode test)
 python tests/banc_reconnexions.py --jeu tous --duree 20   # les sept jeux, coupures et retours au hasard
