@@ -65,7 +65,7 @@ def verifier_physique():
     r = P.simuler([[0, -0.1]], [0, 0], [(0, 0.0, 1.0, 1.0)])
     assert r["but"] == 0 and r["dernier"] == 0, r
     # Contre son camp : une capsule du bas pousse le bouchon dans son propre but.
-    r = P.simuler([[0, 0.1]], [0, 0], [(0, 0.0, -1.0, 0.7)])
+    r = P.simuler([[0, 0.1]], [0, 0], [(0, 0.0, -1.0, 1.0)])
     assert r["but"] == 1 and r["dernier"] == 0, r
     # Tir doux : rien ne bouge assez pour marquer, tout s arrete.
     r = P.simuler([[0.3, -0.6]], [0, 0.5], [(0, 0.0, 1.0, 0.2)])
@@ -77,9 +77,18 @@ def verifier_physique():
     r = P.simuler([[0.3, 0]], [0.4, 0], [(0, 1.0, 0.0, 1.0)])
     verifier_positions(r["palets"], r["balle"])
     # Belle passe : la capsule tiree envoie le bouchon sur une coequipiere immobile.
-    r = P.simuler([[0, -0.3], [0, 0.25]], [0, -0.18], [(0, 0.0, 1.0, 0.45)])
+    r = P.simuler([[0, -0.3], [0, 0.25]], [0, -0.18], [(0, 0.0, 1.0, 0.7)])
     assert r["touches"] == [0, 1], r["touches"]
     assert P._passe(r["touches"], {0: 7}) == {"de": 7, "palet": 0, "vers": 1, "equipe": 0}
+    # Controle : le bouchon s arrete colle a la receveuse, qui ne bouge pas.
+    rr = C["palet"]["rayon"] + C["balle"]["rayon"]
+    assert r["palets"][1] == [0, 0.25], "la receveuse a ete poussee"
+    assert abs(r["balle"][0]) < 1e-3 and abs(r["balle"][1] - (0.25 - rr)) < 2e-3, r["balle"]
+    # Sur une adversaire, pas de controle : le bouchon rebondit et la pousse.
+    k_adv = P.NB_PALETS
+    pal = [[0, -0.3]] + [[0.4, -0.6 + 0.1 * k] for k in range(1, P.NB_PALETS)] + [[0, 0.25]]
+    r2 = P.simuler(pal, [0, -0.18], [(0, 0.0, 1.0, 0.7)])
+    assert k_adv in r2["touches"] and r2["palets"][k_adv] != [0, 0.25], "une adversaire ne controle pas"
     assert P._passe(r["touches"], {0: 7, 1: 8}) is None, "une capsule tiree ne recoit pas de passe"
     assert P._passe([0, P.NB_PALETS], {0: 7}) is None, "toucher un adversaire n est pas une passe"
     assert P._passe([1], {}) is None

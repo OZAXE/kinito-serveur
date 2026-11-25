@@ -20,17 +20,20 @@
   "palet": {"rayon": 0.052, "masse": 1.0},
   "balle": {"rayon": 0.032, "masse": 0.8},
   "physique": {
-    "_note": "Frottement : décélération constante (terrain/s²). Amorti : perte proportionnelle à la vitesse (par s). Rebonds : part de la vitesse gardée au choc.",
+    "_note": "Frottement : décélération constante (terrain/s²), _balle pour le bouchon (il glisse plus loin que les capsules). Amorti : perte proportionnelle à la vitesse (par s). Rebonds : part de la vitesse gardée au choc.",
     "pas": 0.004,
-    "frottement": 0.9,
-    "amorti": 0.45,
+    "frottement": 1.6,
+    "amorti": 0.9,
+    "frottement_balle": 0.9,
+    "amorti_balle": 0.6,
     "rebond_disques": 0.8,
     "rebond_bords": 0.75,
     "rebond_filet": 0.2,
-    "vitesse_max": 2.4,
+    "vitesse_max": 2.2,
     "arret": 0.012,
     "duree_max": 8.0,
-    "images_par_s": 25
+    "images_par_s": 25,
+    "controle_passe": true
   },
   "gorgees": {
     "but_encaisse": 1,

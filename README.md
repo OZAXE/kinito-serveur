@@ -443,14 +443,15 @@ Toutes les valeurs sont dans `conquete_config.json` (valeurs de départ, à rég
     tour (refus si un coéquipier l'a déjà prise). Une visée posée sans valider part quand même au chrono. La
     phase finit dès que tous les joueurs présents ont validé.
   - `tir` : toutes les capsules partent ensemble, le serveur calcule la physique (pas fixe de 4 ms, frottement,
-    chocs entre disques, rebonds sur les bandes, les poteaux et les filets) et diffuse `pf_tir` (`tir.images` :
+    chocs entre disques, rebonds sur les bandes, les poteaux et les filets ; les capsules freinent plus que
+    le bouchon : `frottement`/`amorti` pour elles, `frottement_balle`/`amorti_balle` pour lui) et diffuse `pf_tir` (`tir.images` :
     une image toutes les 40 ms, `[x0, y0, x1, y1, ...]` en millièmes de terrain, capsules 0 à 9 puis le bouchon ;
     `tirs` dévoilés, `but` : équipe qui marque ou null, `buteur`, `contre_son_camp`, `boit`, `passe`). La phase dure le
     temps du tir plus 2 s (3,5 s après un but), puis nouveau tour. Une capsule arrêtée avec le centre dans une
     cage est ressortie juste devant la ligne de but (première place libre ; dernière image du tir en plus).
     Belle passe (`tir.passe` : `{de, palet, vers, equipe}` ou null) : le bouchon finit sur une capsule de la
-    même équipe, pas tirée ce tour, juste après une capsule tirée de cette équipe. Pour l'instant, rien de plus
-    qu'une annonce.
+    même équipe, pas tirée ce tour, juste après une capsule tirée de cette équipe. Contrôle
+    (`physique.controle_passe`, vrai par défaut) : le bouchon s'arrête alors collé à la receveuse, sans la pousser.
   - `fin` : `final` (`gagnante`, `gagnants`, `perdants`, `derniers`, `score`).
 - But : le bouchon passe entièrement la ligne entre les poteaux. Chaque joueur présent de l'équipe qui encaisse
   boit 1 gorgée ; si la dernière capsule à avoir touché le bouchon est de cette équipe et a été tirée ce tour,
