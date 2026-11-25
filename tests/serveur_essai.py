@@ -44,6 +44,24 @@ if os.environ.get("JOURNAL"):
     serveur.depart, serveur.arrivee = _depart_j, _arrivee_j
 
 
+@serveur.app.get("/test/jouer/{code}/{nom}")
+async def jouer_comme_bot(code: str, nom: str):
+    """Fait jouer UNE action au joueur nom avec le cerveau de bot du jeu (mode test)."""
+    import bots
+    salon = serveur.salons.get(code)
+    if salon is None or salon.get("etat") is None or salon.get("jeu") not in bots.CERVEAUX:
+        return {"joue": None}
+    joueur = next((j for j in salon["joueurs"] if serveur.meme_prenom(j["nom"], nom)), None)
+    if joueur is None:
+        return {"joue": None}
+    async with serveur.verrou(salon):
+        action = bots.CERVEAUX[salon["jeu"]](salon["etat"], joueur["index"], {"vus": []})
+        if action:
+            action = {k: v for k, v in action.items() if not k.startswith("_")}
+            await serveur.traiter_message(code, joueur, action)
+    return {"joue": action and action.get("type")}
+
+
 @serveur.app.get("/test/etat/{code}")
 async def etat(code: str):
     salon = serveur.salons.get(code)
@@ -55,7 +73,8 @@ async def etat(code: str):
         "jeu": salon.get("jeu"),
         "en_partie": salon.get("etat") is not None,
         "joueurs": [{"nom": j["nom"], "index": j["index"], "parti": bool(j.get("parti")),
-                     "battement": bool(j.get("battement"))} for j in salon["joueurs"]],
+                     "battement": bool(j.get("battement")),
+                     "bot": bool(j.get("bot")), "actions": j.get("actions", 0)} for j in salon["joueurs"]],
         "phase": e.get("phase"),
         "resync": RESYNC["n"],
         # Undercover : roles et mots, pour verifier ce que montrent les pages.

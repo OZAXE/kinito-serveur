@@ -93,6 +93,7 @@ from casino import (
 
 # Stockage durable (base Neon si DATABASE_URL est defini) et couches
 # paralleles d une soiree (l Enquete).
+import bots
 from stockage import creer_stockage, Sauvegarde
 from couches import Contexte, TYPES_COUCHES
 from protection import Debit, Fenetre, Connexions, ip_client
@@ -354,6 +355,11 @@ def verrou(salon):
     if v is None:
         v = salon["verrou"] = asyncio.Lock()
     return v
+
+
+def personne_a_table(salon):
+    """Plus aucun humain present : les bots (mode test) ne retiennent pas le salon."""
+    return all(j.get("parti") or j.get("bot") for j in salon["joueurs"])
 
 
 def meme_prenom(a, b):
@@ -1208,7 +1214,7 @@ async def depart(code_salon, joueur, ws):
             await jeu.joueur_parti(code_salon, index_parti)
 
     # Plus personne de connecte : le salon sera libere s il le reste.
-    if all(j.get("parti") for j in salon["joueurs"]):
+    if personne_a_table(salon):
         programmer_liberation(code_salon)
 
 
@@ -1232,7 +1238,7 @@ def programmer_liberation(code_salon):
 
     async def liberer():
         await asyncio.sleep(DELAI_SALON_VIDE)
-        if salons.get(code_salon) is salon and all(j.get("parti") for j in salon["joueurs"]):
+        if salons.get(code_salon) is salon and personne_a_table(salon):
             arreter_minuteurs(salon)
             # Les couches de la soiree (l Enquete) survivent au salon : elles
             # restent attachees au code, qui ne sera pas redonne.
@@ -2979,7 +2985,7 @@ async def mt_minuteur(code_salon, salon, echeance):
         salon["mt_minuteur"] = None
         etat = salon["etat"]
         # Plus personne a table : on ne joue pas toute la partie a leur place.
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = mt_expirer(etat, time.time())
@@ -3091,7 +3097,7 @@ async def uc_minuteur(code_salon, salon, echeance):
             return
         salon["uc_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = uc_expirer(etat, time.time())
@@ -3202,7 +3208,7 @@ async def jp_minuteur(code_salon, salon, echeance):
             return
         salon["jp_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = jp_expirer(etat, time.time())
@@ -3314,7 +3320,7 @@ async def qn_minuteur(code_salon, salon, echeance):
             return
         salon["qn_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = qn_expirer(etat, time.time())
@@ -3426,7 +3432,7 @@ async def tr_minuteur(code_salon, salon, echeance):
             return
         salon["tr_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = tr_expirer(etat, time.time())
@@ -3539,7 +3545,7 @@ async def lg_minuteur(code_salon, salon, echeance):
             return
         salon["lg_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = lg_expirer(etat, time.time())
@@ -3650,7 +3656,7 @@ async def pf_minuteur(code_salon, salon, echeance):
             return
         salon["pf_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = pf_expirer(etat, time.time())
@@ -3775,7 +3781,7 @@ async def td_minuteur(code_salon, salon, echeance):
             return
         salon["td_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = td_expirer(etat, time.time())
@@ -3896,7 +3902,7 @@ async def sw_minuteur(code_salon, salon, echeance):
             return
         salon["sw_minuteur"] = None
         etat = salon["etat"]
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = sw_expirer(etat, time.time())
@@ -3998,7 +4004,7 @@ async def cs_minuteur(code_salon, salon, echeance):
         salon["cs_minuteur"] = None
         etat = salon["etat"]
         # Plus personne a table : la roue ne tourne pas dans le vide.
-        if all(j.get("parti") for j in salon["joueurs"]):
+        if personne_a_table(salon):
             return
         version = etat["version"]
         evenements = cs_expirer(etat, time.time())
@@ -4439,7 +4445,8 @@ def _noms_presents(soiree):
     """Les presents de TOUTES les tables de la soiree."""
     noms = []
     for code in tables_de(soiree):
-        noms += [j["nom"] for j in salons[code]["joueurs"] if not j.get("parti")]
+        # Sans les bots : l Enquete ne doit pas en faire des suspects.
+        noms += [j["nom"] for j in salons[code]["joueurs"] if not j.get("parti") and not j.get("bot")]
     return noms
 
 
@@ -4811,6 +4818,204 @@ async def connexion_soiree(ws, code, nom_joueur, page=""):
 # Les joueurs font une requete HTTP pour obtenir un code de salon.
 # =============================================================
 
+# =============================================================
+# BOTS (mode test du pseudo Admin01)
+# Un pseudo de test assis a une table peut y ajouter des bots : des joueurs
+# que le serveur fait jouer tout seuls. Pour les jeux, ce sont des joueurs
+# comme les autres (une place, un index) ; leur « connexion » est un faux
+# WebSocket qui reveille leur boucle de reflexion a chaque message. Les
+# decisions sont dans bots.py (un cerveau par jeu). Un jeu sans cerveau :
+# le bot reste assis sans jouer (les minuteurs du jeu jouent pour lui).
+# =============================================================
+PSEUDOS_TEST = ("admin01",)
+BOT_TICK = 1.5            # le bot revoit la table au moins toutes les 1,5 s
+BOT_PAUSE_ERREUR = 3.0    # apres un refus du jeu, il ne reessaie pas tout de suite
+
+
+def est_pseudo_test(nom):
+    return " ".join((nom or "").split()).casefold() in PSEUDOS_TEST
+
+
+class WsBot:
+    """La connexion d un bot : garde ses messages et reveille sa boucle."""
+    query_params = {}
+
+    def __init__(self):
+        self.reveil = asyncio.Event()
+        self.recus = []
+
+    async def send_text(self, texte):
+        try:
+            self.recus.append(json.loads(texte))
+        except ValueError:
+            return
+        del self.recus[:-200]
+        self.reveil.set()
+
+    async def close(self, code=1000):
+        pass
+
+
+def humain_test_assis(salon, par):
+    return any(meme_prenom(j["nom"], par) and not j.get("parti") and not j.get("bot")
+               for j in salon["joueurs"])
+
+
+def prenom_bot(code_salon):
+    """Un prenom de bot libre dans toute la soiree (un prenom = une table)."""
+    pris = {" ".join(j["nom"].split()).casefold()
+            for c in tables_de(soiree_de(code_salon)) for j in salons[c]["joueurs"]}
+    libres = [p for p in bots.PRENOMS if ("bot " + p).casefold() not in pris]
+    if libres:
+        return "Bot " + random.choice(libres)
+    k = 2
+    while f"bot {k}" in pris:
+        k += 1
+    return f"Bot {k}"
+
+
+async def ajouter_bot(code_salon):
+    """A appeler sous le verrou du salon. Rend le bot, ou None (table pleine)."""
+    salon = salons[code_salon]
+    if len(salon["joueurs"]) >= PLACES_MAX:
+        return None
+    ws = WsBot()
+    joueur = {
+        "nom": prenom_bot(code_salon),
+        "ws": ws,
+        "index": len(salon["joueurs"]),
+        "jeton": secrets.token_hex(16),
+        "parti": False,
+        "vu": time.time(),
+        "battement": False,
+        "bot": True,
+    }
+    salon["joueurs"].append(joueur)
+    arrivee_en_partie(salon, joueur)
+    await diffuser(code_salon, {
+        "type": "joueur_rejoint",
+        "nom": joueur["nom"],
+        "retour": False,
+        "joueurs": [j["nom"] for j in salon["joueurs"]],
+    })
+    await envoyer_indices(code_salon)
+    await envoyer_instantane(code_salon, joueur, complet=True, nouveau=True)
+    joueur["tache"] = asyncio.ensure_future(vie_bot(code_salon, salon, joueur))
+    return joueur
+
+
+async def retirer_bot(code_salon, joueur):
+    """A appeler sous le verrou du salon : le bot quitte la table comme un joueur."""
+    joueur["retire"] = True
+    await depart(code_salon, joueur, joueur.get("ws"))
+    t = joueur.get("tache")
+    if t is not None and not t.done() and t is not asyncio.current_task():
+        t.cancel()
+
+
+async def vie_bot(code_salon, salon, joueur):
+    """La boucle d un bot : il regarde la table, reflechit, joue."""
+    ws = joueur["ws"]
+    mem = {"vus": []}
+
+    def toujours_la():
+        return (salons.get(code_salon) is salon and joueur in salon["joueurs"]
+                and not joueur.get("parti") and not joueur.get("retire"))
+
+    def reflechir():
+        jeu = salon.get("jeu")
+        etat = salon.get("etat")
+        observer = bots.OBSERVATEURS.get(jeu)
+        for m in ws.recus:
+            if m.get("type") == "erreur":
+                mem["erreur"] = time.time()
+            if observer is not None:
+                observer(mem, m)
+        mem["vus"] = ws.recus
+        ws.recus = []
+        cerveau = bots.CERVEAUX.get(jeu)
+        if etat is None or cerveau is None or personne_a_table(salon):
+            return None
+        if time.time() - mem.get("erreur", 0) < BOT_PAUSE_ERREUR:
+            return None
+        try:
+            return cerveau(etat, joueur["index"], mem)
+        except Exception:
+            journal.exception("Bot %s (%s) : erreur de reflexion", joueur["nom"], jeu)
+            mem["erreur"] = time.time()
+            return None
+
+    while toujours_la():
+        try:
+            await asyncio.wait_for(ws.reveil.wait(), BOT_TICK)
+        except asyncio.TimeoutError:
+            pass
+        ws.reveil.clear()
+        if not toujours_la():
+            return
+        action = reflechir()
+        if not action:
+            continue
+        await asyncio.sleep(max(0.0, float(action.get("_delai", 1.0))))
+        if not toujours_la():
+            return
+        async with verrou(salon):
+            if not toujours_la():
+                return
+            # L etat a pu changer pendant la reflexion : on revoit la table.
+            action = reflechir()
+            if not action:
+                continue
+            action = {k: v for k, v in action.items() if not k.startswith("_")}
+            joueur["actions"] = joueur.get("actions", 0) + 1
+            try:
+                await traiter_message(code_salon, joueur, action)
+            except Exception:
+                journal.exception("Bot %s : action %r refusee", joueur["nom"], action.get("type"))
+                mem["erreur"] = time.time()
+
+
+def _salon_test(code, par):
+    """Le salon si un pseudo de test y est assis, sinon une reponse d erreur."""
+    code = (code or "").upper()
+    salon = salons.get(code)
+    if salon is None or not est_pseudo_test(par) or not humain_test_assis(salon, par):
+        return None, JSONResponse({"detail": "Réservé au mode test, assis à cette table."}, status_code=403)
+    return salon, None
+
+
+def _liste_bots(salon):
+    return {"bots": [j["nom"] for j in salon["joueurs"] if j.get("bot") and not j.get("parti")],
+            "bots_jeux": sorted(bots.CERVEAUX), "jeu": salon.get("jeu")}
+
+
+@app.get("/salon/{code}/bots/ajouter")
+async def route_ajouter_bot(code: str, par: str = ""):
+    salon, refus = _salon_test(code, par)
+    if refus:
+        return refus
+    async with verrou(salon):
+        if salons.get(code.upper()) is not salon:
+            return JSONResponse({"detail": "Table fermée."}, status_code=404)
+        bot = await ajouter_bot(code.upper())
+    if bot is None:
+        return JSONResponse({"detail": f"Table complète ({PLACES_MAX} places)."}, status_code=409)
+    return {"ajoute": bot["nom"], **_liste_bots(salon)}
+
+
+@app.get("/salon/{code}/bots/retirer")
+async def route_retirer_bot(code: str, par: str = "", nom: str = ""):
+    salon, refus = _salon_test(code, par)
+    if refus:
+        return refus
+    async with verrou(salon):
+        for j in list(salon["joueurs"]):
+            if j.get("bot") and not j.get("parti") and meme_prenom(j["nom"], nom):
+                await retirer_bot(code.upper(), j)
+                break
+    return _liste_bots(salon)
+
+
 @app.get("/creer-salon")
 async def creer_salon(request: Request = None):
     """Cree un nouveau salon vide et retourne son code."""
@@ -4843,6 +5048,8 @@ async def info_salon(code: str, request: Request = None):
         "depuis": round(time.time() - salon["debut_jeu"]) if salon.get("etat") is not None and salon.get("debut_jeu") else None,
         "fini": bool(jeu and salon.get("etat") is not None and jeu.peut_relancer(salon["etat"])),
         "couches": sorted(couches.get(soiree_de(code), {})),
+        "bots": [j["nom"] for j in salon["joueurs"] if j.get("bot") and not j.get("parti")],
+        "bots_jeux": sorted(bots.CERVEAUX),
     }
 
 

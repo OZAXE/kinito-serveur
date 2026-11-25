@@ -34,6 +34,8 @@ Serveur FastAPI + WebSocket des jeux de soirée (`serveur.py`).
   (règles et physique, chiffres et formations `pichenette_config.json`), `enquete.py`, `bingo.py`.
 - `stockage.py` : Postgres Neon si `DATABASE_URL` est défini (variable Render, jamais dans le
   dépôt), sinon mémoire. Le serveur ne doit jamais planter à cause de la base.
+- `bots.py` : cerveaux des bots du mode test (pseudo `Admin01`), un par jeu, purs. La place à table et la
+  boucle de jeu des bots sont dans `serveur.py` (section BOTS). Un nouveau jeu devrait avoir son cerveau.
 - `protection.py` : garde-fous (débit, taille, connexions par IP).
 
 ## Soirée, tables et lancement
@@ -60,6 +62,7 @@ Une couche survit à la libération du salon et au redémarrage (sauvegardée pa
 Hors ligne, à lancer après toute modification du moteur ou du serveur concerné :
 ```
 python tests/fondations_essai.py      # salons, soirée, lancement, couches
+python tests/bots_essai.py            # bots du mode test (parties complètes contre des bots)
 python tests/menteur_essai.py
 python tests/bingo_essai.py
 python tests/enquete_essai.py

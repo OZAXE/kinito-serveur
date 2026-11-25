@@ -22,6 +22,7 @@ jobs:
       matrix:
         test:
           - fondations_essai.py
+          - bots_essai.py
           - menteur_essai.py
           - bingo_essai.py
           - enquete_essai.py

@@ -44,7 +44,39 @@ Serveur multijoueur des jeux de soirée (FastAPI + WebSocket), publié sur Rende
   est vérifié avant, pour ne pas détruire la partie en cours). Le serveur diffuse alors
   `{"type": "salon_jeu", "jeu", "titre", "page"}`.
 - `{"type": "retour_salon"}` ramène tout le monde en salle d'attente (`salon_retour`).
-- `GET /salon/{code}` : joueurs, jeu en cours, page à ouvrir, couches actives.
+- `GET /salon/{code}` : joueurs, jeu en cours, page à ouvrir, couches actives, bots (voir plus bas).
+
+## Bots du mode test (pseudo Admin01)
+
+Un pseudo de test (`PSEUDOS_TEST` dans `serveur.py`, aujourd'hui `Admin01`, majuscules indifférentes)
+assis à une table peut y ajouter des bots qui jouent contre lui. Le site le fait depuis l'onglet 🧪.
+
+- `GET /salon/{code}/bots/ajouter?par=Admin01` : un bot (« Bot Léa », prénom libre dans toute la soirée)
+  s'assoit à la table. En pleine partie, il entre comme n'importe quel arrivant (si le jeu le permet).
+- `GET /salon/{code}/bots/retirer?par=Admin01&nom=Bot%20Léa` : il part comme un joueur qui ferme sa page.
+- Les deux répondent `{"bots": [...], "bots_jeux": [...], "jeu"}` (403 si `par` n'est pas un pseudo de test
+  assis à cette table, 409 si la table est pleine). `GET /salon/{code}` donne aussi `bots` et `bots_jeux`.
+- Pour les jeux, un bot est un joueur ordinaire (une place, un index) dont la « connexion » est un faux
+  WebSocket (`WsBot`) : chaque message reçu réveille sa boucle (`vie_bot`), qui demande au cerveau du jeu
+  (`bots.py`) quoi faire, attend un temps de réflexion, puis joue sous le verrou du salon par
+  `traiter_message`, exactement comme un téléphone.
+- Un cerveau ne lit que ce que le joueur voit (l'état public, sa main, ses dés, ses messages privés) ;
+  exception assumée au Juste Pinte, où le bot connaît la réponse à un bruit près (joueur plus ou moins cultivé).
+- Tous les jeux de table ont un cerveau (`bots.CERVEAUX`). Quelques choix :
+  - Loup-Garou : tous les rôles, à partir de sa seule vue secrète (`lg_vue`) ; la meute s'accorde sur une proie.
+  - Casino : c'est Admin01 qui choisit la table (roulette, blackjack, poker), les bots misent et jouent.
+  - Pichenette FC : le bot essaie quelques tirs avec la vraie physique (sans connaître les visées adverses),
+    garde le meilleur et le joue avec un peu de maladresse ; avec un coéquipier, il valide sa formation sans la changer.
+  - La Tournée : les mini-jeux se jouent sur les téléphones, le bot envoie un score crédible (fourchette de
+    joueur moyen) à la fin du temps du mini-jeu.
+  - Undercover : un bot ne parle pas, il touche « J'ai parlé » puis vote au hasard ; Mr White tente un mot.
+  - Gribouillophone : phrases de la banque, gribouillis au hasard, votes au hasard ; Admin01 (l'hôte) mène
+    la révélation.
+  - Kinito, BeerBattle, Buckshot : certaines étapes reviennent à un humain (« Nouvelle manche » du Kinito).
+  Un jeu sans cerveau laisserait ses bots assis sans jouer (le panneau du site le signale).
+- Les bots ne retiennent pas un salon : sans humain présent (`personne_a_table`), ils arrêtent de jouer, les
+  minuteurs s'arrêtent et le salon se libère comme d'habitude. Ils ne comptent pas parmi les présents de la
+  soirée pour les couches (l'Enquête n'en fait pas des suspects).
 
 ## Couches parallèles
 
@@ -484,13 +516,14 @@ python tests/pichenette_essai.py 300     # Pichenette FC : formations, physique,
 python tests/tournee_essai.py 300        # La Tournée : plateaux, chemins, retournements, équipes, mini-jeux, non-fuite des scores
 python tests/picolopoly_essai.py 300       # parties au hasard (coups absurdes, absents, faillites) : invariants du plateau
 python tests/picolopoly_rythme.py          # Picopoly : gorgées par personne et par heure (cibles 100 / 40 / 30)
+python tests/bots_essai.py [jeu ...]        # bots du mode test : parties complètes contre des bots, accès, libération
 python tests/fondations_essai.py            # + TEST_DATABASE_URL=postgresql://... pour la base
 python tests/enquete_essai.py
 python tests/non_fuite_essai.py 300         # parties au hasard : rien ne trahit le tueur, à chaque étape
 python tests/simulation.py --partage 0.5    # équilibre : victoires du tueur, accusations, gorgées/h
 node tests/enquete_navigateur.js            # 4 joueurs : salle d attente, rôles, onglet par-dessus un jeu
 node tests/solo_navigateur.js               # un seul joueur et des joueurs fictifs
-node tests/mode_test_navigateur.js          # mode test du site (pseudo Admin01) : bots dans chaque jeu
+node tests/mode_test_navigateur.js          # mode test du site (pseudo Admin01) : panneau 🧪, bots dans chaque jeu
 node tests/presents_navigateur.js           # accueil : qui est dans la soirée, annonce des arrivées
 node tests/menteur_annonces_navigateur.js   # Cal 12 (ex-Menteur) : MENTEUR !, VRAI / MENSONGE, tir, visibles de tous
 node tests/undercover_navigateur.js [captures]  # Undercover : partie complète à 5 navigateurs (un par joueur)

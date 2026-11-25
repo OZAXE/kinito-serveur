@@ -1,12 +1,11 @@
-// Mode test (pseudo Admin01) : jouer seul avec des joueurs test, dans chaque jeu.
+// Mode test (pseudo Admin01) : jouer seul contre des bots, dans chaque jeu.
 // Prérequis : serveur d'essai (tests/serveur_essai.py) et site sur le port 8765.
 // Usage : node tests/mode_test_navigateur.js [jeu ...]
 //
-// Pour chaque jeu : Admin01 ouvre la page, ajoute deux joueurs test par
-// l'onglet 🧪, ils rejoignent la table (3 joueurs côté serveur), Admin01
-// lance la partie, puis joue à la place d'un bot (sa page est bien dans la
-// partie). On vérifie aussi que la session d'Admin01 n'est pas écrasée par
-// celles des bots, et qu'un prénom ordinaire n'a pas l'onglet.
+// Pour chaque jeu : Admin01 ouvre la page, ajoute deux bots par le panneau
+// de l'onglet 🧪, ils s'assoient à la table (côté serveur), Admin01 lance la
+// partie, et les bots jouent tout seuls (jeux qui ont un cerveau de bot).
+// On vérifie aussi qu'un prénom ordinaire n'a pas l'onglet.
 const { chromium } = require('playwright');
 const SITE = 'http://localhost:8765/';
 const API = 'http://127.0.0.1:8000';
@@ -17,7 +16,10 @@ const PAGES = {
   justepinte: 'justepinte-3d-jeu.html', quidenous: 'quidenous-3d-jeu.html', tournee: 'tournee-3d-jeu.html',
   loupgarou: 'loupgarou-3d-jeu.html', pichenette: 'pichenette-3d-jeu.html',
 };
-// Joueurs test ajoutés (le Loup-Garou se joue à 4 au moins).
+// Jeux dont les bots savent jouer (bots.CERVEAUX côté serveur).
+// (Casino exclu : la partie s'ouvre au hall, c'est Admin01 qui choisit la table avant que les bots jouent.)
+const CERVEAUX = Object.keys(PAGES).filter(j => j !== 'casino');
+// Bots ajoutés (le Loup-Garou se joue à 4 au moins).
 const NB_BOTS = { loupgarou: 3 };
 const JEUX = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PAGES);
 const attendre = ms => new Promise(r => setTimeout(r, ms));
@@ -70,16 +72,16 @@ async function tester(nav, jeu) {
   verifier(onglet, 'onglet 🧪 présent pour Admin01');
   if (!onglet) { await ctx.close(); return; }
   await p.click('#onglet-test');
+  verifier(await p.evaluate(() => document.getElementById('mode-test').style.display === 'flex'), 'l’onglet ouvre le panneau des bots');
   const nbBots = NB_BOTS[jeu] || 2;
-  for (let i = 0; i < nbBots; i++) { await cliquerTexte(p.mainFrame(), /＋ Bot/); await attendre(400); }
-  const trois = await attendreQue(async () => { const e = await etat(code); return e.joueurs && e.joueurs.filter(j => !j.parti).length === nbBots + 1 && e.joueurs.map(j => j.nom); }, 60000);
-  verifier(!!trois, nbBots + ' joueurs test rejoignent la table : ' + JSON.stringify(trois));
-  const session = await p.evaluate(() => Object.keys(localStorage).filter(k => /session/.test(k) && !k.startsWith('siege:')).map(k => [k, localStorage.getItem(k)]));
-  verifier(session.every(([, v]) => !/Bot/.test(v)), 'la session d’Admin01 n’est pas écrasée par les bots');
-  verifier(await p.evaluate(() => JSON.parse(localStorage.getItem('shield.nom')) === 'Admin01'), 'le prénom d’Admin01 reste le sien');
-  // Retour à « Moi » et lancement
-  await cliquerTexte(p.mainFrame(), /^Moi$/);
-  verifier(await p.evaluate(() => document.getElementById('mode-test').style.visibility === 'hidden'), '« Moi » montre sa propre partie');
+  for (let i = 0; i < nbBots; i++) { await cliquerTexte(p.mainFrame(), /Ajouter un bot/); await attendre(600); }
+  const assis = await attendreQue(async () => { const e = await etat(code); const b = (e.joueurs || []).filter(j => j.bot && !j.parti); return b.length === nbBots && b.map(j => j.nom); }, 30000);
+  verifier(!!assis, nbBots + ' bots s’assoient à la table : ' + JSON.stringify(assis));
+  if (!assis) console.log('   panneau : ' + await p.evaluate(() => document.getElementById('mode-test').innerText.replace(/\s+/g, ' ')));
+  const liste = await attendreQue(() => p.evaluate(n => document.querySelectorAll('#mode-test [title^="Faire partir"]').length === n, nbBots), 10000);
+  verifier(!!liste, '  le panneau les liste');
+  verifier(await p.evaluate(() => document.querySelectorAll('iframe').length === 0), '  plus de cadres de joueurs test (les bots sont sur le serveur)');
+  await cliquerTexte(p.mainFrame(), /^Fermer$/);
   const lance = await attendreQue(async () => {
     if ((await etat(code)).en_partie) return true;
     await cliquerTexte(p.mainFrame(), /D.marrer la partie|D.marrer le quiz|Ouvrir le casino|Lancer la partie|Coup d.envoi/);
@@ -88,28 +90,22 @@ async function tester(nav, jeu) {
     return false;
   }, 60000);
   verifier(lance, 'Admin01 lance la partie à ' + (nbBots + 1));
-  // Jouer à la place de Bot 1
-  await p.click('#onglet-test');
-  await cliquerTexte(p.mainFrame(), /^Bot 1$/);
-  const cadre = p.frames().find(f => /siege_test=Bot(%20| )1/.test(f.url()));
-  verifier(!!cadre, 'la page de Bot 1 est là');
-  if (cadre) {
-    const visible = await p.evaluate(() => { const c = document.querySelector('iframe[data-siege="Bot 1"]'); return c && c.getBoundingClientRect().height > 300; });
-    verifier(visible, '  elle s’affiche en grand quand on touche « Bot 1 »');
-    const nom = await cadre.evaluate(() => Soiree.nom());
-    verifier(nom === 'Bot 1', '  elle joue sous le nom « Bot 1 » (' + nom + ')');
+  if (CERVEAUX.includes(jeu)) {
+    // Admin01 joue aussi (par le cerveau de bot, route d essai) : certains jeux commencent par lui.
+    const joue = await attendreQue(async () => {
+      if ((await etat(code)).joueurs.some(j => j.bot && j.actions > 0)) return true;
+      await fetch(`${API}/test/jouer/${code}/Admin01`);
+      return false;
+    }, 60000);
+    verifier(!!joue, '  les bots jouent tout seuls');
   }
   if (jeu === JEUX[0] && JEUX.length > 1) {
-    // La table change de jeu : la nouvelle page recrée les bots, qui la rejoignent.
+    // La table change de jeu : les bots restent assis.
     const suivant = JEUX[1];
     await p.goto(SITE + PAGES[suivant] + '?salon=' + code, { timeout: 120000 });
-    const suivent = await attendreQue(() => p.evaluate(n => document.querySelectorAll('iframe[data-siege]').length === n, nbBots), 30000);
-    verifier(suivent, 'changement de jeu (' + suivant + ') : les ' + nbBots + ' bots suivent');
-    const tous = await attendreQue(async () => {
-      const ifr = p.frames().filter(f => /siege_test=/.test(f.url()));
-      return ifr.length === nbBots && (await Promise.all(ifr.map(f => f.evaluate(() => !!window.Soiree).catch(() => false)))).every(Boolean);
-    }, 60000);
-    verifier(tous, '  et leurs pages sont chargées');
+    await attendre(3000);
+    const e = await etat(code);
+    verifier(e.joueurs.filter(j => j.bot && !j.parti).length === nbBots, 'changement de jeu (' + suivant + ') : les ' + nbBots + ' bots restent à la table');
   }
   if (erreurs.length) console.log('   erreurs JS : ' + erreurs.slice(0, 5).join(' | '));
   verifier(erreurs.length === 0, 'aucune erreur JavaScript');
