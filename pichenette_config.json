@@ -3,6 +3,7 @@
   "joueurs": {"min": 2, "max": 8},
   "palets_par_equipe": 5,
   "buts": {"defaut": 3, "choix": [3, 4, 5]},
+  "modes": ["pur", "objets"],
   "delais": {
     "formation": 45,
     "visee": 20,
@@ -39,6 +40,29 @@
     "but_encaisse": 1,
     "contre_son_camp": 2,
     "defaite": 5
+  },
+  "objets": {
+    "_note": "Mode objets : une pastille « tireuse » sur le terrain, la premiere capsule qui la touche la ramasse pour son equipe (objet tire au sort, poids). Reserve commune a l equipe, 1 objet active en secret par equipe et par tour, devoile au tir. cible : rien, palet_adverse, palets_miens (2), point, joueur_adverse. duree : nombre de tirs ou l effet compte (1 = ce tir seulement).",
+    "reserve_max": 2,
+    "pastille": {"rayon": 0.035, "delai": 2, "zone": [0.38, 0.45]},
+    "flaque_rayon": 0.12,
+    "mur_rayon": 0.055,
+    "xxl_facteur": 1.6,
+    "mousse_facteur": 1.4,
+    "cul_sec": 2,
+    "catalogue": [
+      {"id": "mousse", "nom": "Mousse", "icone": "🍺", "cible": null, "duree": 1, "poids": 1, "detail": "Tes tirs partent 40 % plus fort ce tour-ci."},
+      {"id": "glacon", "nom": "Glaçon", "icone": "🧊", "cible": "palet_adverse", "duree": 2, "poids": 1, "detail": "Gèle une capsule adverse : ce tour et le suivant, elle ne bouge plus et ne se tire pas."},
+      {"id": "tournee", "nom": "Tournée", "icone": "🍻", "cible": null, "duree": 1, "poids": 1, "detail": "Tu tires une capsule de plus ce tour-ci."},
+      {"id": "flaque", "nom": "Bière renversée", "icone": "🫗", "cible": "point", "duree": 2, "poids": 1, "detail": "Une flaque collante où tu veux, pendant 2 tirs : tout ce qui passe dessus freine fort."},
+      {"id": "sous_bock", "nom": "Sous-bock", "icone": "🟤", "cible": "point", "duree": 2, "poids": 1, "detail": "Un petit mur rond où tu veux, pendant 2 tirs."},
+      {"id": "fantome", "nom": "Capsule fantôme", "icone": "👻", "cible": null, "duree": 1, "poids": 1, "detail": "Ce tour-ci, tes capsules tirées traversent les autres capsules et ne touchent que le bouchon."},
+      {"id": "aimant", "nom": "Décapsuleur aimanté", "icone": "🧲", "cible": null, "duree": 1, "poids": 1, "detail": "Ce tour-ci, le bouchon colle à la première capsule immobile de ton équipe qu'il touche."},
+      {"id": "xxl", "nom": "Gardien XXL", "icone": "🧤", "cible": null, "duree": 2, "poids": 1, "detail": "Ta capsule la plus proche de ton but grossit pendant 2 tirs."},
+      {"id": "echange", "nom": "Échange", "icone": "🔄", "cible": "palets_miens", "duree": 1, "poids": 1, "detail": "Après le tir, deux de tes capsules échangent leur place."},
+      {"id": "tete", "nom": "Tête qui tourne", "icone": "🥴", "cible": null, "duree": 1, "poids": 1, "detail": "Au tour suivant, l'écran des adversaires tangue pendant qu'ils visent."},
+      {"id": "cul_sec", "nom": "Cul sec", "icone": "🥃", "cible": "joueur_adverse", "duree": 1, "poids": 1, "detail": "L'adversaire de ton choix boit 2 gorgées."}
+    ]
   },
   "formations": [
     {"id": "classique", "nom": "La Classique", "detail": "1-2-2 : équilibrée",

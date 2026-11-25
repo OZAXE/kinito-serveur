@@ -51,6 +51,8 @@ _G = PF_CONFIG["gorgees"]
 _T = PF_CONFIG["terrain"]
 _P = PF_CONFIG["physique"]
 FORMATIONS = {f["id"]: f for f in PF_CONFIG["formations"]}
+_O = PF_CONFIG["objets"]
+OBJETS = {o["id"]: o for o in _O["catalogue"]}
 NOMS_EQUIPES = ["Les Blondes", "Les Brunes"]
 
 
@@ -82,7 +84,11 @@ def tirs_par_joueur(etat, i):
     e = etat["equipe_de"][i]
     if e is None:
         return 0
-    return 2 if len(etat["equipes"][e]) == 1 else 1
+    base = 2 if len(etat["equipes"][e]) == 1 else 1
+    act = (etat.get("activations") or {}).get(str(e))
+    if act and act["objet"] == "tournee" and act["par"] == i:
+        base += 1
+    return base
 
 
 def _equipe_du_palet(k):
@@ -171,7 +177,74 @@ def _sortir_des_cages(pos, n, ray):
     return bouge
 
 
-def _pivoter_vers_but(pos, n, ray, k):
+def dt_pas():
+    return _P["pas"]
+
+
+def _place_libre(pos, ray, i, murs):
+    """None si i ne chevauche rien, sinon la place libre la plus proche."""
+    lx, ly = _T["largeur"] / 2, _T["longueur"] / 2
+    r = ray[i]
+
+    def libre(x, y):
+        if abs(x) > lx - r or abs(y) > ly - r:
+            return False
+        for j, p in enumerate(pos):
+            if j != i and (p[0] - x) ** 2 + (p[1] - y) ** 2 < (ray[j] + r + 1e-4) ** 2:
+                return False
+        return all((mx - x) ** 2 + (my - y) ** 2 >= (mr + r + 1e-4) ** 2 for mx, my, mr in murs)
+
+    x0, y0 = pos[i]
+    if libre(x0, y0):
+        return None
+    for anneau in range(1, 40):
+        d = anneau * r * 0.25
+        for a in range(0, 360, 15):
+            x, y = x0 + d * math.cos(math.radians(a)), y0 + d * math.sin(math.radians(a))
+            if libre(x, y):
+                return [x, y]
+    return None
+
+
+def _separer(pos, ray, inv, murs, tours=4):
+    """Avant le tir : on decolle ce qui se chevauche (gardien XXL qui grossit...)."""
+    m = len(pos)
+    for _ in range(tours):
+        bouge = False
+        for i in range(m):
+            for j in range(i + 1, m):
+                if inv[i] + inv[j] == 0.0:
+                    continue
+                dx, dy = pos[j][0] - pos[i][0], pos[j][1] - pos[i][1]
+                r = ray[i] + ray[j]
+                d2 = dx * dx + dy * dy
+                if d2 >= r * r:
+                    continue
+                d = math.sqrt(d2)
+                nx, ny = (dx / d, dy / d) if d > 1e-9 else (1.0, 0.0)
+                rec = (r - d + 1e-4) / (inv[i] + inv[j])
+                pos[i][0] -= nx * rec * inv[i]
+                pos[i][1] -= ny * rec * inv[i]
+                pos[j][0] += nx * rec * inv[j]
+                pos[j][1] += ny * rec * inv[j]
+                bouge = True
+            if inv[i] == 0.0:
+                continue
+            for mx, my, mr in murs:
+                dx, dy = pos[i][0] - mx, pos[i][1] - my
+                r = ray[i] + mr
+                d2 = dx * dx + dy * dy
+                if d2 < r * r:
+                    d = math.sqrt(d2)
+                    nx, ny = (dx / d, dy / d) if d > 1e-9 else (0.0, 1.0)
+                    pos[i][0] = mx + nx * (r + 1e-4)
+                    pos[i][1] = my + ny * (r + 1e-4)
+                    bouge = True
+        if not bouge:
+            return
+
+
+def _pivoter_vers_but(pos, n, ray, k, murs=()):
     """Positions successives du bouchon, de sa place actuelle (collee a la capsule k)
     jusqu a la place face au but adverse la plus proche possible. [] si rien a faire."""
     cx, cy = pos[k]
@@ -190,7 +263,8 @@ def _pivoter_vers_but(pos, n, ray, k):
         if abs(x) > lx - ray[n] or abs(y) > ly - ray[n]:
             return False
         return all((x - pos[q][0]) ** 2 + (y - pos[q][1]) ** 2 >= (ray[n] + ray[q]) ** 2
-                   for q in range(n) if q != k)
+                   for q in range(n) if q != k) and \
+            all((x - mx) ** 2 + (y - my) ** 2 >= (ray[n] + mr) ** 2 for mx, my, mr in murs)
 
     def ecart(a, b):
         return (b - a + math.pi) % (2 * math.pi) - math.pi
@@ -221,22 +295,47 @@ def _pivoter_vers_but(pos, n, ray, k):
             for t in range(1, nb + 1)]
 
 
-def simuler(palets, balle, tirs):
+def simuler(palets, balle, tirs, opts=None):
     """
+    opts (mode objets, tout est facultatif) : "force" {palet: multiplicateur},
+    "fantomes" (palets qui traversent les autres capsules), "geles" (palets
+    immobiles, comme des poteaux), "rayons" {palet: rayon}, "murs" [(x, y, r)]
+    (sous-bocks fixes), "flaques" [(x, y, r)] (zones qui freinent), "aimant"
+    (equipes dont les capsules immobiles controlent le bouchon), "pastille"
+    (x, y, r) et "ramasseurs" (equipes qui peuvent la ramasser).
     palets : [[x, y]] (2 x NB_PALETS), balle : [x, y].
     tirs : [(palet, dx, dy, force)] avec (dx, dy) unitaire, force dans [0, 1].
     Renvoie {"images": [[x0, y0, x1, y1, ...]], "palets", "balle", "but": None|0|1
     (equipe qui MARQUE), "dernier": palet qui a touche la balle en dernier ou None,
-    "duree": secondes}.
+    "duree": secondes, "ramasse": {"palet", "image"} ou None}.
     """
+    opts = opts or {}
+    mult = opts.get("force") or {}
+    fantomes = set(opts.get("fantomes") or ())
+    geles = set(opts.get("geles") or ())
+    murs = list(opts.get("murs") or ())
+    flaques = list(opts.get("flaques") or ())
+    aimant = set(opts.get("aimant") or ())
+    pastille = opts.get("pastille")
+    ramasseurs = set(opts.get("ramasseurs") or ())
+    ramasse = None
     n = len(palets)
     pos = [list(map(float, p)) for p in palets] + [list(map(float, balle))]
     vit = [[0.0, 0.0] for _ in range(n + 1)]
     ray = [PF_CONFIG["palet"]["rayon"]] * n + [PF_CONFIG["balle"]["rayon"]]
     inv = [1.0 / PF_CONFIG["palet"]["masse"]] * n + [1.0 / PF_CONFIG["balle"]["masse"]]
+    for k, r_k in (opts.get("rayons") or {}).items():
+        ray[k] = r_k
+    for k in geles:
+        inv[k] = 0.0
     vmax = _P["vitesse_max"]
     for k, dx, dy, f in tirs:
-        vit[k] = [dx * vmax * f, dy * vmax * f]
+        if k in geles:
+            continue
+        v = vmax * f * mult.get(k, 1.0)
+        vit[k] = [dx * v, dy * v]
+    fl_fr = _P.get("flaque_frottement", 4.0) * _P["frottement"] * dt_pas()
+    fl_am = max(0.0, 1.0 - _P.get("flaque_amorti", 2.0) * dt_pas())
     tires = {k for k, _, _, _ in tirs}
     controle = _P.get("controle_passe", True)
     dt = _P["pas"]
@@ -247,6 +346,7 @@ def simuler(palets, balle, tirs):
     e_d = _P["rebond_disques"]
     arret = _P["arret"]
     tous = n + 1
+    _separer(pos, ray, inv, murs)
     ly, g = _T["longueur"] / 2, _T["but_largeur"] / 2
     lx_libre, ly_libre = _T["largeur"] / 2 - 0.01, ly - 0.01
     pas_image = max(1, round(1.0 / (_P["images_par_s"] * dt)))
@@ -272,6 +372,8 @@ def simuler(palets, balle, tirs):
             pos[i][1] += vy * dt
             v = math.hypot(vx, vy)
             nv = v * am_b - fr_b if i == n else v * am_c - fr_c
+            if flaques and any((pos[i][0] - fx) ** 2 + (pos[i][1] - fy) ** 2 < fr * fr for fx, fy, fr in flaques):
+                nv = nv * fl_am - fl_fr
             if nv <= 0:
                 vit[i] = [0.0, 0.0]
             else:
@@ -281,6 +383,10 @@ def simuler(palets, balle, tirs):
         for i in range(tous):
             for j in range(i + 1, tous):
                 if not (bouge[i] or bouge[j]):
+                    continue
+                if j < n and (i in fantomes or j in fantomes):
+                    continue        # capsule fantome : elle traverse les capsules
+                if inv[i] + inv[j] == 0.0:
                     continue
                 dx = pos[j][0] - pos[i][0]
                 dy = pos[j][1] - pos[i][1]
@@ -296,8 +402,10 @@ def simuler(palets, balle, tirs):
                 # Controle : le bouchon arrive sur une coequipiere immobile, pas tiree
                 # ce tour, juste apres une capsule tiree de son equipe : il s arrete
                 # colle a elle (la passe est recue), sans la pousser.
-                if (j == n and i < n and controle and dernier in tires and i not in tires
-                        and not bouge[i] and _equipe_du_palet(i) == _equipe_du_palet(dernier)):
+                passe_ok = (controle and dernier in tires and i not in tires
+                            and _equipe_du_palet(i) == _equipe_du_palet(dernier))
+                aimante = dernier is not None and _equipe_du_palet(i) in aimant
+                if j == n and i < n and not bouge[i] and (passe_ok or aimante):
                     bx, by = pos[n][0] + nx * (r - d), pos[n][1] + ny * (r - d)
                     # Seulement s il y a la place (sinon, choc normal).
                     if all((bx - pos[q][0]) ** 2 + (by - pos[q][1]) ** 2 >= (ray[n] + ray[q]) ** 2
@@ -326,6 +434,32 @@ def simuler(palets, balle, tirs):
                     dernier = i
                     if not touches or touches[-1] != i:
                         touches.append(i)
+        # Sous-bocks : des disques fixes.
+        for i in range(tous):
+            if not murs or (vit[i][0] == 0.0 and vit[i][1] == 0.0):
+                continue
+            for mx, my, mr in murs:
+                dx, dy = pos[i][0] - mx, pos[i][1] - my
+                r = ray[i] + mr
+                d2 = dx * dx + dy * dy
+                if d2 >= r * r:
+                    continue
+                d = math.sqrt(d2) or 1e-9
+                nx, ny = dx / d, dy / d
+                pos[i][0] += nx * (r - d)
+                pos[i][1] += ny * (r - d)
+                vn = vit[i][0] * nx + vit[i][1] * ny
+                if vn < 0:
+                    vit[i][0] -= (1 + e_d) * vn * nx
+                    vit[i][1] -= (1 + e_d) * vn * ny
+        # Pastille : la premiere capsule (d une equipe qui a de la place) qui la touche.
+        if pastille and ramasse is None:
+            px, py, pr = pastille
+            for i in range(n):
+                if (vit[i][0] or vit[i][1]) and _equipe_du_palet(i) in ramasseurs and \
+                        (pos[i][0] - px) ** 2 + (pos[i][1] - py) ** 2 < (ray[i] + pr) ** 2:
+                    ramasse = {"palet": i, "image": len(images)}
+                    break
         # Bandes, poteaux et filets.
         for i in range(tous):
             r = ray[i]
@@ -369,6 +503,17 @@ def simuler(palets, balle, tirs):
             if etape % pas_image != 0:
                 images.append(image())
             break
+    # Fantome arrete dans une autre capsule : il redevient solide, on le pose
+    # a la place libre la plus proche (dans le terrain).
+    if fantomes and but is None:
+        bouge = False
+        for i in sorted(fantomes):
+            xy = _place_libre(pos, ray, i, murs)
+            if xy is not None:
+                pos[i] = xy
+                bouge = True
+        if bouge:
+            images.append(image())
     # Capsule arretee dans une cage : on la ressort juste devant la ligne,
     # pour qu elle ne bouche pas le but (image en plus pour le replay).
     if but is None and _sortir_des_cages(pos, n, ray):
@@ -376,7 +521,7 @@ def simuler(palets, balle, tirs):
     # Passe recue : le bouchon pivote autour de la receveuse pour se placer face
     # au but adverse, si la place le permet (quelques images pour le replay).
     if but is None and receveuse is not None and dernier == receveuse:
-        for xy in _pivoter_vers_but(pos, n, ray, receveuse):
+        for xy in _pivoter_vers_but(pos, n, ray, receveuse, murs):
             pos[n] = xy
             images.append(image())
     return {
@@ -387,13 +532,14 @@ def simuler(palets, balle, tirs):
         "dernier": dernier,
         "touches": touches,
         "duree": round(etape * dt, 3),
+        "ramasse": ramasse,
     }
 
 
 # =============================================================
 # CREATION
 # =============================================================
-def pf_initialiser(noms, maintenant, buts=None, rng=None):
+def pf_initialiser(noms, maintenant, buts=None, rng=None, mode=None):
     """noms : dans l ordre d arrivee a la table (le dernier regarde si impair)."""
     rng = rng or random.Random()
     n = len(noms)
@@ -439,6 +585,15 @@ def pf_initialiser(noms, maintenant, buts=None, rng=None):
         "final": None,
         "echeance": None,
         "message": "Choisissez vos formations !",
+        # Mode objets
+        "mode": "objets" if mode == "objets" else "pur",
+        "graine": rng.randrange(1 << 30),
+        "reserves": [[], []],     # objets de chaque equipe (publics)
+        "effets": [],             # effets en cours sur le terrain (publics)
+        "pastille": None,         # [x, y] ou None
+        "pastille_tour": 1,       # tour a partir duquel une pastille peut reapparaitre
+        # SECRET (visible de la seule equipe) : str(equipe) -> {objet, par, cible}
+        "activations": {},
     }
     _placer(etat, d["defense"], d["defense"])
     _armer(etat, maintenant)
@@ -487,6 +642,12 @@ def pf_etat_public(etat, maintenant):
                 if phase in ("tir", "fin") and etat["tir"] else None),
         "buts": etat["buts"],
         "final": etat["final"],
+        "mode": etat.get("mode", "pur"),
+        "reserves": etat.get("reserves", [[], []]),
+        "effets": etat.get("effets", []),
+        "pastille": etat.get("pastille"),
+        # Qui a active un objet ce tour : jamais lequel.
+        "objet_active": [str(e) in (etat.get("activations") or {}) for e in (0, 1)],
         "delai": delai,
         "message": etat["message"],
     }
@@ -502,7 +663,8 @@ def pf_vue(etat, i):
     f = etat["formations"][e]
     return {"type": "pf_vue", "index": i, "equipe": e, "tour": etat["tour"],
             "formation": {"attaque": f["attaque"], "defense": f["defense"], "valide": f["valide"]},
-            "visees": {str(j): v for j, v in _visees_equipe(etat, e).items()}}
+            "visees": {str(j): v for j, v in _visees_equipe(etat, e).items()},
+            "activation": (etat.get("activations") or {}).get(str(e))}
 
 
 def pf_catalogue():
@@ -510,7 +672,8 @@ def pf_catalogue():
     return {"type": "pf_catalogue", "formations": PF_CONFIG["formations"], "terrain": _T,
             "palet": PF_CONFIG["palet"]["rayon"], "balle": PF_CONFIG["balle"]["rayon"],
             "palets_par_equipe": NB_PALETS, "images_par_s": _P["images_par_s"],
-            "force_max": _P["vitesse_max"], "gorgees": _G}
+            "force_max": _P["vitesse_max"], "gorgees": _G,
+            "modes": PF_CONFIG["modes"], "objets": _O}
 
 
 # =============================================================
@@ -524,6 +687,11 @@ def _coup_envoi(etat, ev, maintenant):
     etat["tir"] = None
     if etat["tour"] == 1:
         etat["message"] = "Coup d'envoi ! Visez en secret."
+    if etat.get("mode") == "objets":
+        etat["activations"] = {}
+        etat["effets"] = [x for x in etat["effets"] if x["jusqu"] >= etat["tour"]]
+        if etat["pastille"] is None and etat["tour"] >= etat["pastille_tour"]:
+            etat["pastille"] = _placer_pastille(etat)
     _armer(etat, maintenant)
 
 
@@ -576,6 +744,8 @@ def _viser(etat, ev, i, message, maintenant):
             return _erreur(i, "Ce n'est pas une de tes capsules.")
         if k in pris:
             return _erreur(i, "Un coéquipier tire déjà cette capsule.")
+        if k in _geles(etat):
+            return _erreur(i, "Cette capsule est gelée.")
         if any(p["palet"] == k for p in propres):
             return _erreur(i, "Une capsule ne se tire qu'une fois par tour.")
         dx, dy = _nombre(t.get("dx"), -1e6, 1e6), _nombre(t.get("dy"), -1e6, 1e6)
@@ -594,6 +764,157 @@ def _viser(etat, ev, i, message, maintenant):
     if all(etat["prets"][j] for j in _joueurs_actifs(etat)):
         _tirer(etat, ev, maintenant)
     return ev
+
+
+# =============================================================
+# OBJETS (mode « objets »)
+# =============================================================
+def _rng(etat, quoi):
+    return random.Random(f"{etat['graine']}:{etat['tour']}:{quoi}")
+
+
+def _geles(etat, tour=None):
+    tour = etat["tour"] if tour is None else tour
+    return {x["palet"] for x in etat.get("effets", []) if x["type"] == "glacon" and x["jusqu"] >= tour}
+
+
+def _placer_pastille(etat):
+    """Une place libre au milieu du terrain (loin des capsules, du bouchon, des sous-bocks)."""
+    rng = _rng(etat, "pastille")
+    zx, zy = _O["pastille"]["zone"]
+    rp = _O["pastille"]["rayon"]
+    corps = [(p[0], p[1], PF_CONFIG["palet"]["rayon"]) for p in etat["palets"]]
+    corps.append((etat["balle"][0], etat["balle"][1], PF_CONFIG["balle"]["rayon"]))
+    corps += [(x["x"], x["y"], x["r"]) for x in etat["effets"] if x["type"] == "sous_bock"]
+    for _ in range(80):
+        x, y = rng.uniform(-zx, zx), rng.uniform(-zy, zy)
+        if all((x - cx) ** 2 + (y - cy) ** 2 >= (cr + rp + 0.03) ** 2 for cx, cy, cr in corps):
+            return [round(x, 4), round(y, 4)]
+    return None
+
+
+def _tirer_objet(etat):
+    rng = _rng(etat, "objet")
+    cat = _O["catalogue"]
+    total = sum(o.get("poids", 1) for o in cat)
+    t = rng.uniform(0, total)
+    for o in cat:
+        t -= o.get("poids", 1)
+        if t <= 0:
+            return o["id"]
+    return cat[-1]["id"]
+
+
+def _objet(etat, ev, i, message, maintenant):
+    """{"objet": id ou None, "cible": ...} : active (ou annule) l objet de l equipe pour ce tour."""
+    if etat["phase"] != "visee" or etat.get("mode") != "objets":
+        return []
+    e = etat["equipe_de"][i]
+    if e is None:
+        return []
+    oid = message.get("objet")
+    avant = etat["activations"].get(str(e))
+    if oid is None:
+        etat["activations"].pop(str(e), None)
+        _rogner_tournee(etat, avant)
+        return ev
+    if oid not in OBJETS or oid not in etat["reserves"][e]:
+        return _erreur(i, "Ton équipe n'a pas cet objet.")
+    o = OBJETS[oid]
+    cible = message.get("cible")
+    propre = None
+    if o["cible"] == "palet_adverse":
+        if isinstance(cible, bool) or not isinstance(cible, int) or not 0 <= cible < 2 * NB_PALETS \
+                or _equipe_du_palet(cible) == e:
+            return _erreur(i, "Choisis une capsule adverse.")
+        propre = cible
+    elif o["cible"] == "palets_miens":
+        if not isinstance(cible, list) or len(cible) != 2 or any(
+                isinstance(k, bool) or not isinstance(k, int) or not 0 <= k < 2 * NB_PALETS
+                or _equipe_du_palet(k) != e for k in cible) or cible[0] == cible[1]:
+            return _erreur(i, "Choisis deux de tes capsules.")
+        propre = [cible[0], cible[1]]
+    elif o["cible"] == "point":
+        if not isinstance(cible, list) or len(cible) != 2:
+            return _erreur(i, "Choisis un endroit du terrain.")
+        x = _nombre(cible[0], -_T["largeur"] / 2, _T["largeur"] / 2)
+        y = _nombre(cible[1], -_T["longueur"] / 2, _T["longueur"] / 2)
+        if x is None or y is None:
+            return _erreur(i, "Choisis un endroit du terrain.")
+        propre = [round(x, 4), round(y, 4)]
+    elif o["cible"] == "joueur_adverse":
+        if isinstance(cible, bool) or not isinstance(cible, int) or cible not in etat["equipes"][1 - e]:
+            return _erreur(i, "Choisis un adversaire.")
+        propre = cible
+    etat["activations"][str(e)] = {"objet": oid, "par": i, "cible": propre}
+    _rogner_tournee(etat, avant if avant and (avant["objet"] != oid or avant["par"] != i) else None)
+    return ev
+
+
+def _rogner_tournee(etat, ancienne):
+    """La Tournee annulee : le joueur repasse a son nombre normal de tirs."""
+    if not ancienne or ancienne["objet"] != "tournee":
+        return
+    j = ancienne["par"]
+    vs = etat["visees"].get(str(j))
+    if vs and len(vs) > tirs_par_joueur(etat, j):
+        etat["visees"][str(j)] = vs[:tirs_par_joueur(etat, j)]
+
+
+def _preparer_objets(etat, tirs, tireurs):
+    """Consomme les objets actives, renvoie (opts de simuler, tirs, objets devoiles)."""
+    tour = etat["tour"]
+    devoiles = []
+    for e in (0, 1):
+        act = etat["activations"].get(str(e))
+        if not act or act["objet"] not in etat["reserves"][e]:
+            continue
+        etat["reserves"][e].remove(act["objet"])
+        o = OBJETS[act["objet"]]
+        info = {"equipe": e, "objet": act["objet"], "par": act["par"], "cible": act["cible"]}
+        fin = tour + o["duree"] - 1
+        oid = act["objet"]
+        if oid == "glacon":
+            etat["effets"].append({"type": "glacon", "equipe": e, "palet": act["cible"], "jusqu": fin})
+        elif oid == "flaque":
+            etat["effets"].append({"type": "flaque", "equipe": e, "x": act["cible"][0], "y": act["cible"][1],
+                                   "r": _O["flaque_rayon"], "jusqu": fin})
+        elif oid == "sous_bock":
+            etat["effets"].append({"type": "sous_bock", "equipe": e, "x": act["cible"][0], "y": act["cible"][1],
+                                   "r": _O["mur_rayon"], "jusqu": fin})
+        elif oid == "xxl":
+            gy = -_T["longueur"] / 2 if e == 0 else _T["longueur"] / 2
+            mes = range(e * NB_PALETS, (e + 1) * NB_PALETS)
+            k = min(mes, key=lambda q: (etat["palets"][q][0]) ** 2 + (etat["palets"][q][1] - gy) ** 2)
+            etat["effets"].append({"type": "xxl", "equipe": e, "palet": k,
+                                   "r": round(PF_CONFIG["palet"]["rayon"] * _O["xxl_facteur"], 4), "jusqu": fin})
+            info["cible"] = k
+        elif oid == "tete":
+            etat["effets"].append({"type": "tete", "equipe": 1 - e, "jusqu": tour + 1, "debut": tour + 1})
+        elif oid == "cul_sec":
+            etat["gorgees"][act["cible"]] += _O["cul_sec"]
+        elif oid in ("mousse", "fantome", "aimant", "echange", "tournee"):
+            etat["effets"].append({"type": oid, "equipe": e, "jusqu": tour,
+                                   **({"palets": act["cible"]} if oid == "echange" else {})})
+        devoiles.append(info)
+    actifs = [x for x in etat["effets"] if x["jusqu"] >= tour and x.get("debut", 0) <= tour]
+    geles = {x["palet"] for x in actifs if x["type"] == "glacon"}
+    tirs = [t for t in tirs if t[0] not in geles]
+    opts = {
+        "geles": geles,
+        "force": {k: _O["mousse_facteur"] for k, _, _, _ in tirs
+                  if any(x["type"] == "mousse" and x["equipe"] == _equipe_du_palet(k) for x in actifs)},
+        "fantomes": {k for k, _, _, _ in tirs
+                     if any(x["type"] == "fantome" and x["equipe"] == _equipe_du_palet(k) for x in actifs)},
+        "aimant": {x["equipe"] for x in actifs if x["type"] == "aimant"},
+        "rayons": {x["palet"]: x["r"] for x in actifs if x["type"] == "xxl"},
+        "murs": [(x["x"], x["y"], x["r"]) for x in actifs if x["type"] == "sous_bock"],
+        "flaques": [(x["x"], x["y"], x["r"]) for x in actifs if x["type"] == "flaque"],
+    }
+    if etat["pastille"]:
+        opts["pastille"] = (etat["pastille"][0], etat["pastille"][1], _O["pastille"]["rayon"])
+        opts["ramasseurs"] = {e for e in (0, 1) if len(etat["reserves"][e]) < _O["reserve_max"]}
+    return opts, tirs, devoiles
 
 
 def _passe(touches, tireurs):
@@ -615,8 +936,28 @@ def _tirer(etat, ev, maintenant):
             tirs.append((v["palet"], v["dx"], v["dy"], v["force"]))
             tireurs[v["palet"]] = int(j)
     tirs.sort()
-    res = simuler(etat["palets"], etat["balle"], tirs)
+    opts, devoiles = None, []
+    if etat.get("mode") == "objets":
+        opts, tirs, devoiles = _preparer_objets(etat, tirs, tireurs)
+    res = simuler(etat["palets"], etat["balle"], tirs, opts)
     etat["palets"], etat["balle"] = res["palets"], res["balle"]
+    ramasse = None
+    if res.get("ramasse"):
+        k = res["ramasse"]["palet"]
+        e = _equipe_du_palet(k)
+        oid = _tirer_objet(etat)
+        etat["reserves"][e].append(oid)
+        ramasse = {"palet": k, "equipe": e, "objet": oid, "image": res["ramasse"]["image"],
+                   "joueur": tireurs.get(k)}
+        etat["pastille"] = None
+        etat["pastille_tour"] = etat["tour"] + _O["pastille"]["delai"]
+    # Echange : apres le tir (s il n y a pas eu de but), deux capsules permutent.
+    if res["but"] is None:
+        for info in devoiles:
+            if info["objet"] == "echange":
+                a, b = info["cible"]
+                etat["palets"][a], etat["palets"][b] = etat["palets"][b], etat["palets"][a]
+                res["images"].append([round(c * 1000) for p in etat["palets"] + [etat["balle"]] for c in p])
     noms = etat["noms"]
     tir = {
         "tour": etat["tour"],
@@ -628,6 +969,8 @@ def _tirer(etat, ev, maintenant):
         "contre_son_camp": None,
         "boit": [],
         "passe": _passe(res["touches"], tireurs),
+        "objets": devoiles,
+        "ramasse": ramasse,
     }
     pause = _D["apres_tir"]
     if res["but"] is not None:
@@ -704,6 +1047,7 @@ def _terminer(etat, gagnante):
 PF_ACTIONS = {
     "pf_formation": _formation,
     "pf_viser": _viser,
+    "pf_objet": _objet,
 }
 
 
