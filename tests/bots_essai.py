@@ -27,6 +27,11 @@ import bots
 import menteur
 import justepinte
 import quidenous
+import loupgarou
+import pichenette
+import casino
+import tournee
+import undercover
 
 bots.VITESSE = 0.01
 serveur.BOT_TICK = 0.05
@@ -34,6 +39,15 @@ serveur.BOT_PAUSE_ERREUR = 0.3
 serveur.DELAI_SALON_VIDE = 0.3
 menteur.MT_DELAI_REVELATION = 0.05
 menteur.MT_DELAI_PAR_TIR = 0.02
+pichenette._D.update(apres_tir=0.05, apres_but=0.05)
+tournee._D.update(deplacement_base=0.05, deplacement_par_joueur=0.01, deplacement_par_case=0.0,
+                  deplacement_par_effet=0.0)
+undercover.UC_DELAI_REVELATION = 0.05
+casino.CS_DELAI_ROULETTE = 0.1
+casino.CS_DELAI_BJ_FIN = 0.1
+casino.CS_DELAI_PAR_CARTE = 0.01
+casino.CS_DELAI_POKER_FIN = 0.1
+casino.CS_DELAI_POKER_CARTE = 0.01
 
 ECHECS = []
 ERREURS_CERVEAU = []
@@ -95,11 +109,13 @@ async def jouer_humain(code, salon, humain, mem, extra=None):
             await serveur.traiter_message(code, humain, action)
 
 
-async def partie(code, jeu, demarrage, nb_bots, fini, extra=None, duree=40):
+async def partie(code, jeu, demarrage, nb_bots, fini, extra=None, duree=40, apres=None):
     erreurs_avant = len(ERREURS_CERVEAU)
     salon, humain, ws = await table(code, nb_bots)
     async with serveur.verrou(salon):
         await serveur.traiter_message(code, humain, demarrage)
+        if apres:
+            await serveur.traiter_message(code, humain, apres)
     verifier(salon.get("jeu") == jeu, f"{jeu} : la partie demarre avec {nb_bots} bots")
     mem = {"vus": []}
     fin = time.time() + duree
@@ -148,7 +164,63 @@ PARTIES = {
     "quidenous": lambda: partie(
         "QUID", "quidenous", {"type": "qn_demarrer", "manches": 5}, 4,
         lambda s, ws: (s.get("etat") or {}).get("phase") == "fin"),
+    "loupgarou": lambda: partie(
+        "LOUP", "loupgarou", {"type": "lg_demarrer"}, 7,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=120),
+    "loupgarou_roles": lambda: partie(
+        "LOUR", "loupgarou", {"type": "lg_demarrer", "loups": 3, "capitaine": True,
+                              "speciaux": list(loupgarou.LG_SPECIAUX)}, 15,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=180),
+    "picolopoly": lambda: partie(
+        "PICO", "picolopoly", {"type": "pp_demarrer", "difficulte": "normal"}, 3,
+        lambda s, ws: nb(ws, "pp_tour") >= 30, duree=120),
+    "casino_roulette": lambda: partie(
+        "CSRL", "casino", {"type": "cs_demarrer"}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("manche", 0) >= 4, apres={"type": "cs_choisir", "jeu": "roulette"},
+        extra=casino_humain),
+    "casino_blackjack": lambda: partie(
+        "CSBJ", "casino", {"type": "cs_demarrer"}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("manche", 0) >= 4, apres={"type": "cs_choisir", "jeu": "blackjack"},
+        extra=casino_humain),
+    "casino_poker": lambda: partie(
+        "CSPK", "casino", {"type": "cs_demarrer"}, 4,
+        lambda s, ws: (s.get("etat") or {}).get("manche", 0) >= 6, apres={"type": "cs_choisir", "jeu": "poker"},
+        duree=90),
+    "pichenette": lambda: partie(
+        "PICH", "pichenette", {"type": "pf_demarrer", "buts": 3}, 1,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=240),
+    "pichenette_equipes": lambda: partie(
+        "PICE", "pichenette", {"type": "pf_demarrer", "buts": 3}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=240),
+    "tournee": lambda: partie(
+        "TOUR", "tournee", {"type": "tr_demarrer", "tours": 5}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=120),
+    "conquete": lambda: partie(
+        "ROYA", "conquete", {"type": "sw_demarrer"}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=240),
+    "beerbattle": lambda: partie(
+        "BEER", "beerbattle", {"type": "bb_demarrer"}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fini", duree=240),
+    "undercover": lambda: partie(
+        "UNDE", "undercover", {"type": "uc_demarrer"}, 5,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=120),
+    "telephone": lambda: partie(
+        "TELE", "telephone", {"type": "td_demarrer", "vitesse": "rapide"}, 3,
+        lambda s, ws: (s.get("etat") or {}).get("phase") == "fin", duree=240, extra=hote_telephone),
 }
+
+
+def hote_telephone(etat):
+    """Admin01 est l hote du Gribouillophone : il lance et fait defiler la revelation."""
+    if etat["phase"] == "pret":
+        return {"type": "td_reveler"}
+    if etat["phase"] in ("revelation", "resultat_album"):
+        return {"type": "td_suivant"}
+    return None
+
+
+def casino_humain(etat):
+    return None
 
 
 async def essai_acces():

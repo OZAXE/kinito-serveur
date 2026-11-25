@@ -17,7 +17,8 @@ const PAGES = {
   loupgarou: 'loupgarou-3d-jeu.html', pichenette: 'pichenette-3d-jeu.html',
 };
 // Jeux dont les bots savent jouer (bots.CERVEAUX côté serveur).
-const CERVEAUX = ['kinito', 'menteur', 'buckshot', 'justepinte', 'quidenous'];
+// (Casino exclu : la partie s'ouvre au hall, c'est Admin01 qui choisit la table avant que les bots jouent.)
+const CERVEAUX = Object.keys(PAGES).filter(j => j !== 'casino');
 // Bots ajoutés (le Loup-Garou se joue à 4 au moins).
 const NB_BOTS = { loupgarou: 3 };
 const JEUX = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PAGES);
@@ -76,6 +77,7 @@ async function tester(nav, jeu) {
   for (let i = 0; i < nbBots; i++) { await cliquerTexte(p.mainFrame(), /Ajouter un bot/); await attendre(600); }
   const assis = await attendreQue(async () => { const e = await etat(code); const b = (e.joueurs || []).filter(j => j.bot && !j.parti); return b.length === nbBots && b.map(j => j.nom); }, 30000);
   verifier(!!assis, nbBots + ' bots s’assoient à la table : ' + JSON.stringify(assis));
+  if (!assis) console.log('   panneau : ' + await p.evaluate(() => document.getElementById('mode-test').innerText.replace(/\s+/g, ' ')));
   const liste = await attendreQue(() => p.evaluate(n => document.querySelectorAll('#mode-test [title^="Faire partir"]').length === n, nbBots), 10000);
   verifier(!!liste, '  le panneau les liste');
   verifier(await p.evaluate(() => document.querySelectorAll('iframe').length === 0), '  plus de cadres de joueurs test (les bots sont sur le serveur)');
@@ -89,7 +91,12 @@ async function tester(nav, jeu) {
   }, 60000);
   verifier(lance, 'Admin01 lance la partie à ' + (nbBots + 1));
   if (CERVEAUX.includes(jeu)) {
-    const joue = await attendreQue(async () => (await etat(code)).joueurs.some(j => j.bot && j.actions > 0), 60000);
+    // Admin01 joue aussi (par le cerveau de bot, route d essai) : certains jeux commencent par lui.
+    const joue = await attendreQue(async () => {
+      if ((await etat(code)).joueurs.some(j => j.bot && j.actions > 0)) return true;
+      await fetch(`${API}/test/jouer/${code}/Admin01`);
+      return false;
+    }, 60000);
     verifier(!!joue, '  les bots jouent tout seuls');
   }
   if (jeu === JEUX[0] && JEUX.length > 1) {

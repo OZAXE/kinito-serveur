@@ -44,6 +44,24 @@ if os.environ.get("JOURNAL"):
     serveur.depart, serveur.arrivee = _depart_j, _arrivee_j
 
 
+@serveur.app.get("/test/jouer/{code}/{nom}")
+async def jouer_comme_bot(code: str, nom: str):
+    """Fait jouer UNE action au joueur nom avec le cerveau de bot du jeu (mode test)."""
+    import bots
+    salon = serveur.salons.get(code)
+    if salon is None or salon.get("etat") is None or salon.get("jeu") not in bots.CERVEAUX:
+        return {"joue": None}
+    joueur = next((j for j in salon["joueurs"] if serveur.meme_prenom(j["nom"], nom)), None)
+    if joueur is None:
+        return {"joue": None}
+    async with serveur.verrou(salon):
+        action = bots.CERVEAUX[salon["jeu"]](salon["etat"], joueur["index"], {"vus": []})
+        if action:
+            action = {k: v for k, v in action.items() if not k.startswith("_")}
+            await serveur.traiter_message(code, joueur, action)
+    return {"joue": action and action.get("type")}
+
+
 @serveur.app.get("/test/etat/{code}")
 async def etat(code: str):
     salon = serveur.salons.get(code)

@@ -62,8 +62,18 @@ assis à une table peut y ajouter des bots qui jouent contre lui. Le site le fai
   `traiter_message`, exactement comme un téléphone.
 - Un cerveau ne lit que ce que le joueur voit (l'état public, sa main, ses dés, ses messages privés) ;
   exception assumée au Juste Pinte, où le bot connaît la réponse à un bruit près (joueur plus ou moins cultivé).
-- Jeux qui ont un cerveau (`bots.CERVEAUX`) : Kinito, Cal 12, Buckshot, Le Juste Pinte, Qui de nous ?.
-  Ailleurs le bot reste assis sans jouer (les minuteurs du jeu jouent pour lui quand il y en a).
+- Tous les jeux de table ont un cerveau (`bots.CERVEAUX`). Quelques choix :
+  - Loup-Garou : tous les rôles, à partir de sa seule vue secrète (`lg_vue`) ; la meute s'accorde sur une proie.
+  - Casino : c'est Admin01 qui choisit la table (roulette, blackjack, poker), les bots misent et jouent.
+  - Pichenette FC : le bot essaie quelques tirs avec la vraie physique (sans connaître les visées adverses),
+    garde le meilleur et le joue avec un peu de maladresse ; avec un coéquipier, il valide sa formation sans la changer.
+  - La Tournée : les mini-jeux se jouent sur les téléphones, le bot envoie un score crédible (fourchette de
+    joueur moyen) à la fin du temps du mini-jeu.
+  - Undercover : un bot ne parle pas, il touche « J'ai parlé » puis vote au hasard ; Mr White tente un mot.
+  - Gribouillophone : phrases de la banque, gribouillis au hasard, votes au hasard ; Admin01 (l'hôte) mène
+    la révélation.
+  - Kinito, BeerBattle, Buckshot : certaines étapes reviennent à un humain (« Nouvelle manche » du Kinito).
+  Un jeu sans cerveau laisserait ses bots assis sans jouer (le panneau du site le signale).
 - Les bots ne retiennent pas un salon : sans humain présent (`personne_a_table`), ils arrêtent de jouer, les
   minuteurs s'arrêtent et le salon se libère comme d'habitude. Ils ne comptent pas parmi les présents de la
   soirée pour les couches (l'Enquête n'en fait pas des suspects).
