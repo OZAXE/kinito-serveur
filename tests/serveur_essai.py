@@ -55,7 +55,8 @@ async def etat(code: str):
         "jeu": salon.get("jeu"),
         "en_partie": salon.get("etat") is not None,
         "joueurs": [{"nom": j["nom"], "index": j["index"], "parti": bool(j.get("parti")),
-                     "battement": bool(j.get("battement"))} for j in salon["joueurs"]],
+                     "battement": bool(j.get("battement")),
+                     "bot": bool(j.get("bot")), "actions": j.get("actions", 0)} for j in salon["joueurs"]],
         "phase": e.get("phase"),
         "resync": RESYNC["n"],
         # Undercover : roles et mots, pour verifier ce que montrent les pages.
